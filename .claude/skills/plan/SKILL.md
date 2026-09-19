@@ -8,6 +8,19 @@ You are running the **plan** gate. Read `CLAUDE.md`, then everything in `wiki/sp
 then `wiki/plan/plan.md`, `wiki/slices/README.md` and `wiki/slices/*.md` if they exist, then the current `src/` tree if any. Do not start before the spec gate is closed: if open-questions has
 non-deferred entries, stop and send the user back to `/spec`.
 
+## Branch first
+
+Before writing anything, put yourself on the branch the work belongs to, so that no plan
+file is ever written onto `main` (`CLAUDE.md §6`). Creating a branch lets nothing out of the
+working tree, so it needs no permission; committing it still does.
+
+- Check `git status`. If the tree is dirty, stop and ask: those changes are someone else's
+  work and must not be carried onto a new branch by accident.
+- The branch is `docs/plan-S-xx`, where `S-xx` is the first slice this run writes. In the
+  mode without ids, that is the first new slice number. Cut it from an up to date `main`.
+- If the branch already exists, switch to it and continue on it rather than failing.
+- Say which branch you created or switched to, in the report at the end.
+
 ## Two modes
 
 **Targeted: `$ARGUMENTS` holds AC and INV ids.** Marcin picked the requirements he wants
@@ -76,9 +89,10 @@ waiting for it.
 
 ## Hand-off
 
-Do not commit, push or open a PR. Report the files written and the branch name to use,
-`docs/plan-S-xx`, ask whether to commit, and remind the user that the ADR decisions are
-made in that PR's review before `/implement` may start.
+Do not commit, push or open a PR. The branch exists by now (see **Branch first**), the work
+sits in it uncommitted. Report the files written and the branch you are on, ask whether to
+commit, and remind the user that the ADR decisions are made in that PR's review before
+`/implement` may start.
 
 ## Output
 

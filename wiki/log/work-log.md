@@ -730,3 +730,20 @@ correct with a new one. Format:
   but not by an independent verify or review. The open items it carries are in the pull request
   description.
 - Nothing committed, pushed, opened, merged or tagged by this gate.
+
+## 2026-09-19, setup: the plan and implement gates cut their own branch, Opus
+- `/plan` and `/implement` now put themselves on the right branch before writing anything,
+  instead of reporting a branch name and leaving the files wherever the user happened to
+  stand. Marcin asked for it after S-01 shipped: with `main` checked out, `/plan S-02` would
+  have written the slice files onto `main`, which `CLAUDE.md §6` does not allow, and they
+  would have had to be moved afterwards.
+- The permission rule is unchanged and says so in the skills: creating a branch lets nothing
+  out of the working tree, so it needs no yes; committing, pushing, opening a PR, merging and
+  tagging each still need their own. `/plan` cuts `docs/plan-S-xx`, `/implement` cuts
+  `slice/S-xx-<slug>`, both from an up to date `main`, and both switch to the branch rather
+  than failing if it already exists.
+- One case is deliberately left as stop and ask: a dirty working tree. `git checkout -b`
+  would carry someone else's uncommitted work onto the new branch silently, which is rarely
+  what anyone wants and least of all at the start of a plan.
+- Found while shipping S-01, where the `slice/S-01-walking-skeleton` branch was created by
+  hand because neither skill said who creates it.
