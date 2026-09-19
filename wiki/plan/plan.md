@@ -9,7 +9,7 @@ Status: `planned`, `in progress`, `done`, `superseded by <id>`.
 
 | Id | Slice | Status | Test name | Level | Test file | Commit |
 |---|---|---|---|---|---|---|
-| AC-00 | S-01 | planned | `[AC-00] should start with docker compose up, turn ready and answer GET /health and both documentation views without a token` | cold start | | |
+| AC-00 | S-01 | done | `[AC-00] should start with docker compose up, turn ready and answer GET /health and both documentation views without a token` | cold start | `api/test/cold-start/stack.smoke-test.ts` | |
 | AC-01 | S-03 | planned | `[AC-01] should reserve within capacity and show the amounts, active status and reduced availability` | e2e | | |
 | AC-02 | S-03 | planned | `[AC-02] should reserve exactly the remaining capacity and leave availability at zero` | e2e | | |
 | AC-03 | S-03 | planned | `[AC-03] should reject a reservation that exceeds available capacity with CAPACITY_EXCEEDED and the available amount` | e2e | | |
@@ -50,7 +50,7 @@ Status: `planned`, `in progress`, `done`, `superseded by <id>`.
 | AC-38 | S-07 | planned | `[AC-38] should serve the demo page in the dev profile with generator, request log, ledger and treasury panel, and not in production` | e2e | | |
 | AC-39 | S-07 | planned | `[AC-39] should read the same availability and reservations after a restart` | e2e | | |
 | AC-40 | S-02 | planned | `[AC-40] should write JSON log lines sharing one correlation id per request and per message` | e2e | | |
-| AC-41 | S-01 | planned | `[AC-41] should link the README to the assumptions register, the decision records and the run instructions` | unit | | |
+| AC-41 | S-01 | done | `[AC-41] should link the README to the assumptions register, the decision records and the run instructions` | unit | `api/test/readme.test.ts` | |
 | INV-01 | S-03 | planned | `[INV-01] should never overcommit under parallel reservations on one program` | invariant (e2e) | | |
 | INV-02 | S-05 | planned | `[INV-02] should keep held between 0 and reservedAmount over random release sequences` | unit | | |
 | INV-03 | S-03 | planned | `[INV-03] should keep program reserved equal to the sum of held of active reservations after every scenario` | invariant (e2e) | | |
@@ -62,3 +62,22 @@ Status: `planned`, `in progress`, `done`, `superseded by <id>`.
 | INV-09 | S-03 | planned | `[INV-09] should reject a movement that carries neither clientId nor messageId` | integration | | |
 | INV-10 | S-02 | planned | `[INV-10] should answer 401 on every business route without a token` | invariant (e2e) | | |
 | INV-11 | S-03 | planned | `[INV-11] should keep available between 0 and limit over random sequences of reservations and limit changes` | unit | | |
+
+## Tests beyond the plan
+
+Written during a slice and not named by `/plan`, kept here so the traceability table is the
+whole picture. Marked `extra`: they prove the harness, infrastructure or a standard rather
+than closing a requirement of their own (`CLAUDE.md §4`).
+
+| Slice | Status | What it proves | Test file |
+|---|---|---|---|
+| S-01 | extra | The configuration loader reads a complete environment, names every missing variable at once, rejects an unknown profile, a non-numeric or out of range port and a blank web origin, and defaults what may default | `api/src/config/configuration.test.ts` |
+| S-01 | extra | A readiness probe that never answers, answers late or throws counts as unreachable, and a fast probe does not wait out its bound | `api/src/health/probe-within.test.ts` |
+| S-01 | extra | The JSON logger survives a `bigint` message (money, ADR-0001), logs an `Error` by its message and never writes an empty line | `api/src/common/logging/json-logger.test.ts` |
+| S-01 | extra | The database connection opens against a real PostgreSQL, reports itself reachable, reports itself unreachable when the database is not there, and survives a database that is missing at module start | `api/src/persistence/prisma.service.integration-test.ts` |
+| S-01 | extra | Liveness answers without a token, readiness reports both dependencies up, the correlation id the caller sends is echoed, and an unknown route answers with the error envelope | `api/test/health.e2e-test.ts` |
+| S-01 | extra | Readiness answers `503` naming the dependency that is down, for the broker and for the database, while liveness still answers `200` | `api/test/readiness.e2e-test.ts` |
+| S-01 | extra | Both documentation views and the OpenAPI document are served outside production and none of them in the production profile (A-16) | `api/test/docs.e2e-test.ts` |
+| S-01 | extra | CORS allows the `web` origin in the dev profile and no origin in production | `api/test/cors.e2e-test.ts` |
+| S-01 | extra | Compose and Testcontainers name the same PostgreSQL and Kafka images, so drift fails the gate (ADR-0004) | `api/test/support/images.test.ts` |
+| S-01 | extra | The `web` page renders its heading and links to the health endpoint and both documentation views of the api | `web/src/app.test.tsx` |
