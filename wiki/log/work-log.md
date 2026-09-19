@@ -762,3 +762,18 @@ correct with a new one. Format:
   [[../plan/plan]] with the merge commit `4215d1c`, which that step requires. Raised with
   Marcin rather than folded into this pull request, which is about skills and not about S-01's
   records.
+
+## 2026-09-19, docs: the S-01 merge commit in the requirement checklist, Opus
+- Filled the `Commit` column for AC-00 and AC-41 in [[../plan/plan]] with `4215d1c`, the merge
+  commit of pull request #16, tagged `S-01`. Until now both rows named a test and a test file
+  but not where the work landed, so the traceability the checklist exists to provide stopped
+  one step short of the history.
+- The `/ship` gate requires this ("afterwards fill the commit column in `wiki/plan/plan.md`
+  with the merge commit") and the S-01 run did not do it, because the merge happens after the
+  gate has finished writing its documents. Noticed while editing step 7 of that same skill for
+  pull request #17.
+- The tag is recorded next to the hash: a tag survives a rebase of the surrounding history and
+  means something to anyone opening the table months later, which a bare hash does not.
+- Open question left with Marcin rather than decided here: whether `/ship` should fill this
+  column as part of its new step 8, which already runs after the merge, so that the gate cannot
+  forget it the way it just did.
