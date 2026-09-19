@@ -1,7 +1,7 @@
 # ADR-0003: Kafka client library and topic layout
 
-- Status: proposed
-- Date: 2026-09-19
+- Status: accepted
+- Date: proposed 2026-09-19, accepted 2026-09-19
 - Slice: S-01 (broker in compose, readiness check), S-02 (consumer)
 - Related: A-03, A-04, A-11, A-13, AC-23, AC-24, AC-25, INV-05, INV-07
 
@@ -55,7 +55,18 @@ and tests: the official `apache/kafka` image in KRaft mode, single node.
 
 ## Decision
 
-(empty until Marcin decides)
+Option 1 with Option A: kafkajs used directly behind the `TreasuryMessageSource` port, one
+topic `treasury.capacity` with a `type` discriminator in the payload, key `programId`, single
+consumer group `capacity-service`, offset committed after the database transaction commits,
+dead letters to `treasury.capacity.dlq`. Broker: the official `apache/kafka` image in KRaft
+mode, single node, in compose and in Testcontainers.
+
+Considered and declined: the `@nestjs/microservices` Kafka transport is the easiest to wire
+in NestJS (a few lines and a decorator), but it wraps kafkajs and hides the consumer, so
+committing the offset after our database transaction, dead-lettering with source headers and
+pausing a partition on error become fights with the abstraction. The consumer loop we write
+ourselves is about fifty lines in one provider with `OnModuleInit` and `OnModuleDestroy`.
+Decided by Marcin on 2026-09-19 following the recommendation.
 
 ## Consequences
 
