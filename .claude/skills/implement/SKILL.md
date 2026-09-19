@@ -4,13 +4,14 @@ description: Implement one planned slice test-first (red, green, refactor) follo
 ---
 
 You are running the **implement** gate for slice `$ARGUMENTS`. Read `CLAUDE.md`, the
-slice's section in `wiki/plan/plan.md`, the AC/INV it covers in `wiki/spec/`, the
-relevant rows of `wiki/plan/traceability.md`, `wiki/testing/strategy.md`, and every ADR
+slice file `wiki/slices/$ARGUMENTS-*.md`, the AC/INV it covers in `wiki/spec/`, their
+rows in `wiki/plan/plan.md`, `wiki/testing/strategy.md`, and every ADR
 the slice references. Then read the current code you will touch.
 
 ## Preconditions, check before writing anything
 
-- The slice exists in the plan and its dependencies are marked done in `wiki/Home.md`.
+- The slice file exists and every slice it depends on has status `done` in its own file.
+  Set this slice's status to `in progress` and append a line to its `Log` section.
 - Every ADR the slice depends on has status `accepted`. If one is still `proposed`,
   stop and ask the user to decide it. Do not decide it yourself.
 - If the slice is `risk: high` and the current model is not Fable, tell the user and
@@ -39,7 +40,8 @@ Rules during the loop:
   judgement, and note the borderline ones in the work-log.
 - If an AC turns out to be ambiguous or wrong while implementing, stop and report it.
   Do not edit `wiki/spec/` here.
-- Do not touch the wiki except `wiki/log/work-log.md`.
+- Do not touch the wiki except `wiki/log/work-log.md` and the `Log` section and status of
+  this slice's file.
 - Commit only when the user asks. If asked: Conventional Commits, scope is the slice id,
   body lists AC/INV/ADR ids.
 
@@ -47,7 +49,7 @@ Rules during the loop:
 
 - `npm run gate:quick` green.
 - Every test name from the plan exists and passes; if you added tests beyond the plan,
-  list them so `/ship` can add them to traceability.
+  list them so `/ship` can add them to `wiki/plan/plan.md`.
 - Append a work-log entry: what was built, decisions made and why, anything deferred,
   proposed ADRs awaiting decision.
 - Report to the user, then hand off to `/verify`.
@@ -56,4 +58,4 @@ Rules during the loop:
 
 - Skip red. Write code before its test.
 - Weaken or delete a failing test to get green.
-- Edit spec, plan, traceability or ADR decisions.
+- Edit spec, the requirement checklist, slice content or ADR decisions.
