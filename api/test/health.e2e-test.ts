@@ -2,6 +2,8 @@ import {INestApplication} from '@nestjs/common';
 import request from 'supertest';
 import {createTestApp, httpServer} from './support/test-app';
 
+const CORRELATION_ID = 'correlation-from-the-caller';
+
 describe('Health endpoints', () => {
   let app: INestApplication;
 
@@ -13,7 +15,7 @@ describe('Health endpoints', () => {
     await app.close();
   });
 
-  it('should answer liveness with 200 and no business data, without a token', async () => {
+  it('[AC-00] should answer liveness with 200 and no business data, without a token', async () => {
     const response = await request(httpServer(app)).get('/health').expect(200);
 
     expect(response.body).toEqual({status: 'ok'});
@@ -29,8 +31,6 @@ describe('Health endpoints', () => {
   });
 
   it('should echo the correlation id the caller sent', async () => {
-    const CORRELATION_ID = 'correlation-from-the-caller';
-
     const response = await request(httpServer(app))
       .get('/health')
       .set('x-correlation-id', CORRELATION_ID)

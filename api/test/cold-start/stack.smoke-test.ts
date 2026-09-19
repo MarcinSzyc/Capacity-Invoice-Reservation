@@ -27,26 +27,33 @@ describe('Cold start', () => {
     const document = (await openapi.json()) as OpenApiDocument;
     expect(document.openapi).toMatch(/^3\./);
     expect(Object.keys(document.paths ?? {})).toContain('/health');
+    const title = document.info?.title ?? '';
+    expect(title).not.toBe('');
 
     const swaggerUi = await get(API_BASE_URL, '/docs');
     expect(swaggerUi.status).toBe(200);
     expect(swaggerUi.headers.get('content-type')).toContain('text/html');
+
+    // AC-00: two views over the same document. Swagger UI carries it in its init script, so
+    // that is where the two can be compared rather than trusting the page shell.
+    const swaggerUiInit = await get(API_BASE_URL, '/docs/swagger-ui-init.js');
+    expect(swaggerUiInit.status).toBe(200);
+    const initScript = await swaggerUiInit.text();
+    expect(initScript).toContain(title);
+    expect(initScript).toContain('"/health"');
 
     const redoc = await get(API_BASE_URL, '/redoc');
     expect(redoc.status).toBe(200);
     expect(redoc.headers.get('content-type')).toContain('text/html');
     expect(await redoc.text()).toContain('/openapi.json');
 
+    // The page is only as local as the script it pulls in (A-17: runnable offline).
+    const redocBundle = await get(API_BASE_URL, '/redoc/redoc.standalone.js');
+    expect(redocBundle.status).toBe(200);
+    expect(redocBundle.headers.get('content-type')).toContain('javascript');
+
     const page = await get(WEB_BASE_URL, '/');
     expect(page.status).toBe(200);
     expect(page.headers.get('content-type')).toContain('text/html');
-  });
-
-  it('[AC-00] should answer every documentation view without a token', async () => {
-    for (const path of ['/health', '/health/ready', '/openapi.json', '/docs', '/redoc']) {
-      const response = await get(API_BASE_URL, path);
-
-      expect(response.status).not.toBe(401);
-    }
   });
 });

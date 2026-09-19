@@ -60,7 +60,7 @@ api/
   src/common/        truly generic cross-cutting code only (filters, guards, logger).
   src/config/        typed configuration.
   src/persistence/   the database connection, one module, nothing business specific.
-  src/messaging/     the Kafka connection and the consumer loop.
+  src/messaging/     the Kafka connection: client, admin, subscribe and commit plumbing.
   src/health/        liveness and readiness. Owns no business data.
   test/              e2e tests (*.e2e-test.ts) and test infrastructure.
 web/
@@ -74,10 +74,18 @@ web/
   module health` produces exactly `src/health/`). They carry connections and process-level
   concerns, never a business rule. A new folder at this level needs a reason in review; a new
   business area always goes under `src/modules/`.
+- **A message is split between the two tiers.** `src/messaging/` owns the connection and the
+  loop that pulls bytes off a topic and commits offsets; it knows nothing about programs,
+  reservations or the shape of a payload. Validating a message, mapping it to a typed command
+  and calling a use case is message handling, so it is a consumer under
+  `src/modules/<area>/infrastructure/` like any other adapter, behind the port the module
+  defines. If a file names a business word, it does not belong in `src/messaging/`.
 - **Connections are not global.** Only `config` and `common` are `@Global()`. A module that
   needs the database or the broker imports `PersistenceModule` or `MessagingModule`, as the
-  NestJS documentation advises over global modules. The Prisma client is held, never extended
-  or exported, so injecting the persistence service does not hand the query API to a caller.
+  NestJS documentation advises over global modules. The Prisma client is held rather than
+  extended, so the ORM is reached through one named door instead of the service being the ORM.
+  That is for readability; the rule that actually keeps persistence out of `domain/` and
+  `application/` is the import boundary lint, and it is the one to fix if it can be evaded.
 - **Domain is framework-free.** Entities, value objects, domain services and domain
   errors are plain classes. Dependencies enter through interfaces (ports) defined in
   `domain/` and implemented in `infrastructure/`. Lint enforces the import boundary.
@@ -139,7 +147,12 @@ Strategy in detail: `wiki/testing/strategy.md`. The rules that matter every day:
 - **Contract tests for Kafka**: message schema, idempotency, out-of-order and
   duplicate delivery.
 - Naming: `describe('<Class|UseCase>')`, `it('[AC-03] should reject a reservation that
-  exceeds available capacity')`. Every e2e/invariant test carries its AC or INV id.
+  exceeds available capacity')`. An e2e or invariant test that closes a requirement carries
+  its AC or INV id, and that tag is what `/verify` counts. A supporting test that proves only
+  the harness or a piece of infrastructure (a health probe answering, a correlation id being
+  echoed, the error envelope having its shape) carries no tag, because tagging it would close
+  a requirement that a later slice owns. If a supporting test is the only proof a requirement
+  has, it is not supporting: give it the tag.
 - Fixture values in UPPERCASE constants. Tests read top-down, no shared mutable state.
 - Coverage is not a metric. Traceability is: `wiki/plan/plan.md` maps each AC and INV to
   a test, a test file and a commit, with its status.
