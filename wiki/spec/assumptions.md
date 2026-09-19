@@ -364,14 +364,17 @@ idempotency needs `releaseId` and `messageId` stored anyway, so the ledger costs
 table. Running balances make the current state an O(1) read. Data model sketch in the
 "Model danych" artifact.
 
-## A-16 Health is unauthenticated; Swagger is served outside production
+## A-16 Health is unauthenticated; Swagger UI and Redoc are served outside production
 
-- Status: accepted 2026-09-19
-- Source: Q24 (Marcin: "I want Swagger, health without auth")
+- Status: accepted 2026-09-19, amended 2026-09-19 (both documentation views, AC-00)
+- Source: Q24 (Marcin: "I want Swagger, health without auth"), AC-00
 
 **Statement.** Liveness and readiness endpoints need no token and expose no business
-data. Swagger UI and the OpenAPI document are served without a token when the profile is
-not production. All other endpoints require a token. Recorded because the brief
+data. The OpenAPI document is generated once from the DTOs (`@nestjs/swagger` decorators)
+and served in two views when the profile is not production: Swagger UI for trying
+requests against the running service, Redoc for reading the contract. Both views and the
+raw document are served without a token. One document, two renderers, no duplicated
+descriptions. All other endpoints require a token. Recorded because the brief
 says "all endpoints".
 
 ## A-17 Runnable locally means one command plus a demo page
@@ -408,3 +411,11 @@ built.
 currency, `asOf` of the last reconciliation, overcommitted flag) and a single
 reservation by id (all three amounts, rate, status, movements). Listing reservations of a
 program is not an acceptance criterion.
+
+## Changes
+
+| Date | Id | Change | Where |
+|---|---|---|---|
+| 2026-09-18 | A-01 to A-04 | written during the spec discussion | PR #5 |
+| 2026-09-19 | A-05 to A-19 | written from the answered questions; A-05 awaits wording confirmation | PR #5 |
+| 2026-09-19 | A-16 | amended: Swagger UI and Redoc, both views over one OpenAPI document | PR #10 |

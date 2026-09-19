@@ -9,6 +9,20 @@ libraries are not mentioned here.
 Money in examples: program `PRG-1` in USD, limit 10 000 000.00, written in major units for
 readability; the API uses integer minor units.
 
+## Setup
+
+## Baseline
+
+**AC-00 Project baseline (walking skeleton).** Given a clean checkout with Docker. When
+`docker compose up` is run. Then a NestJS service on Node 24 LTS starts together with its
+dependencies, readiness turns healthy, and `GET /health` answers `200` without a token.
+And `npm run lint`, `npm run format:check`, `npm run typecheck`, `npm run test`,
+`npm run gate:quick` and `npm run gate` exist and pass on the fresh project, with ESLint
+and Prettier configured as `CLAUDE.md §3` requires. And API documentation is served in
+the non-production profile in two views over the same OpenAPI document: Swagger UI for
+trying requests and Redoc for reading. And the README explains how to start the service,
+where the health endpoint is and where both documentation views are. [A-16, A-17]
+
 ## Reservations
 
 **AC-01 Reserve within capacity.** Given `PRG-1` has 10 000 000 available. When a client
@@ -158,8 +172,8 @@ snapshot's `asOf`. [A-12]
 Then the resulting movement carries that client's id. [A-14]
 
 **AC-35 Health and docs without token.** When liveness or readiness is called without a
-token. Then `200` with no business data. When the API documentation is requested without
-a token in a non-production profile. Then it is served. [A-16]
+token. Then `200` with no business data. When the API documentation (Swagger UI or Redoc) is
+requested without a token in a non-production profile. Then it is served. [A-16]
 
 ## Operations
 
@@ -186,3 +200,13 @@ line per step carries a correlation id shared across that request's or message's
 **AC-41 Assumptions documented.** The repository README links to the assumptions
 register, the decision records and the run instructions, and each is current at every
 shipped slice. [brief: "document them briefly"]
+
+## Changes
+
+Every addition, amendment or supersession of an AC, newest last. Ids never change.
+
+| Date | Id | Change | Where |
+|---|---|---|---|
+| 2026-09-19 | AC-01 to AC-41 | first version, output of the spec gate | PR #5 |
+| 2026-09-19 | AC-00 | added: project baseline (walking skeleton), Node 24, compose, gate scripts, README, API docs | PR #10 |
+| 2026-09-19 | AC-35 | amended: API documentation is Swagger UI and Redoc over one OpenAPI document | PR #10 |
