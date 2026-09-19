@@ -64,7 +64,8 @@ Existing ids never change; superseded items are marked, not rewritten.
 | Why is it built this way? | `wiki/decisions/` |
 | Which test proves which requirement, and is it done? | `wiki/plan/plan.md` |
 | What are we building next and in what order? | `wiki/slices/README.md` and one file per slice |
-| What happened, in order? | `wiki/log/work-log.md` |
+| What happened, in order, and why? | `wiki/log/work-log.md`, one entry per PR, enforced by CI |
+| How did a requirement change over time? | the `Changes` table at the end of each `wiki/spec/*.md` file |
 | What has shipped? | `wiki/log/changelog.md` |
 
 Open `wiki/` as an Obsidian vault for the linked view; the files are plain Markdown.
