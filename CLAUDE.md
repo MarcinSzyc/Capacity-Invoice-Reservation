@@ -170,6 +170,9 @@ wiki/testing/strategy.md        test pyramid and rules
   commit messages. Use a comma, a colon, a period or parentheses. Enforced by the prose
   check in the gate.
 - Work-log entries are never edited after the fact. Correct with a new entry.
+- Every PR, code or docs, appends at least one line to `wiki/log/work-log.md`: what
+  changed and why. Slice PRs get it from `/ship`; setup and docs PRs get it from whoever
+  opens them. CI fails a PR that does not touch the work-log.
 - Requirement changes are logged twice: a row in the `## Changes` table at the end of
   the spec file (acceptance criteria, invariants, assumptions) and a line in the work-log
   entry of the session. A new or amended AC without a Changes row is a review finding.
