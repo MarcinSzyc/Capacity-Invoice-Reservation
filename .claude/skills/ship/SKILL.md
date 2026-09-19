@@ -5,8 +5,8 @@ model: sonnet
 ---
 
 You are running the **ship** gate for slice `$ARGUMENTS`. Read `CLAUDE.md §6, §7, §9`,
-the slice in `wiki/plan/plan.md`, and the last `VERIFY` and `REVIEW` entries for this
-slice in `wiki/log/work-log.md`.
+the slice file `wiki/plan/slices/$ARGUMENTS-*.md`, and the last `VERIFY` and `REVIEW`
+entries for this slice in `wiki/log/work-log.md`.
 
 ## Preconditions
 
@@ -30,7 +30,9 @@ slice in `wiki/log/work-log.md`.
 5. **README.** Make sure the root `README.md` still runs the service from a clean
    checkout as the code now stands, and links to `wiki/spec/assumptions.md`,
    `wiki/decisions/`, and `wiki/Home.md`. Keep it short; it is the reviewer's entry point.
-6. **Home.** Mark the slice done in `wiki/Home.md`, name the next slice.
+6. **Slice file and index.** Set the slice file's status to `done`, append the ship line
+   to its `Log`, update the status column in `wiki/plan/plan.md`, mark the slice done in
+   `wiki/Home.md` and name the next slice.
 7. **Pull request.** Propose, do not execute: the PR title `feat(S-xx): <outcome>` and
    a description with outcome, AC/INV closed, ADRs accepted, how it was tested, known
    limitations. The slice branch is `slice/S-xx-<slug>`, rebased on `main`, merged with
