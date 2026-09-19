@@ -63,3 +63,9 @@ without a token. [A-14, A-16]
 **INV-11 Available is bounded.** `0 ≤ available ≤ limit` for every program at all
 times. Guards against: negative or inflated availability shown to clients. Test: unit
 property over random event sequences including limit reductions.
+
+## Changes
+
+| Date | Id | Change | Where |
+|---|---|---|---|
+| 2026-09-19 | INV-01 to INV-11 | first version, output of the spec gate | PR #5 |

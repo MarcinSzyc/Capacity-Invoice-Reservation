@@ -55,3 +55,25 @@ correct with a new one. Format:
 - PR #9: GitHub actions bumped to v7 (Node 24 runtime), gate job on Node 24 LTS, new CI job failing a PR that does not touch the work-log.
 ## 2026-09-19, setup/slice-files
 - PR #8: plan.md is the requirement checklist (traceability folded in), slices one file each under wiki/slices with README index, /plan accepts AC and INV ids, spec revisions add Changes rows, every PR appends to the work-log.
+## 2026-09-19, setup and process, Fable
+- Merged the setup PRs #1 to #7 (CLAUDE.md, skills, process docs, wiki skeleton, spec,
+  append-only PR branches, CI). Process rules agreed with Marcin and written into
+  CLAUDE.md §6 and CONTRIBUTING: he reviews on GitHub and gives the go-ahead as a PR
+  comment (Approve is disabled for the PR author), fixes after a PR is open are new
+  commits, never amend or force-push. Earlier force-pushes on #1 to #5 predate the rule.
+- CI: prose check (no long dashes in Markdown or commit messages) and the gate job, which
+  skips itself until package.json exists. Actions bumped to v7, Node 24 LTS (PR #9).
+- Plan restructured (PR #8): `wiki/plan/plan.md` is the list of every AC and INV with
+  slice, status, test and commit (traceability folded in); slices are one file each under
+  `wiki/slices/` with `README.md` as the ordered index; `/plan` accepts AC and INV ids to
+  plan one slice at a time. A `/plan` run from another session, made before this change,
+  produced a single 487-line plan.md on main; it was removed from the repo unmerged, a
+  copy kept outside the repo for reference.
+- Spec revision (PR #10): Marcin added AC-00, the project baseline (walking skeleton),
+  rewritten into testable clauses keeping every item: compose up, health without token,
+  lint/format/typecheck/test/gate scripts, README. API documentation: both Swagger UI and
+  Redoc over one OpenAPI document (A-16 and AC-35 amended, Marcin wants both views).
+- Removed every dedication wording from the repo; the source document is "the brief",
+  its PDF is not kept because its metadata carried an unwanted title.
+- Open: A-05 wording still awaits Marcin's confirmation. Next: merge #8, #9, #10, then
+  `/plan AC-00` in a fresh session.
