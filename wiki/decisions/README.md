@@ -10,9 +10,9 @@ Template: [[ADR-0000-template]].
 
 | Id | Title | Status | Slice |
 |---|---|---|---|
-| [[ADR-0002-storage-postgres-and-data-access]] | Storage engine and data access library | proposed | S-01 |
-| [[ADR-0003-kafka-client-and-topic-layout]] | Kafka client library and topic layout | proposed | S-01, S-02 |
-| [[ADR-0004-test-infrastructure-testcontainers]] | Test infrastructure for integration and e2e tests | proposed | S-01 |
+| [[ADR-0002-storage-postgres-and-data-access]] | Storage engine and data access library: PostgreSQL, Prisma, Prisma Studio in compose | accepted | S-01 |
+| [[ADR-0003-kafka-client-and-topic-layout]] | Kafka client library and topic layout: kafkajs behind a port, one topic keyed by programId | accepted | S-01, S-02 |
+| [[ADR-0004-test-infrastructure-testcontainers]] | Test infrastructure: Testcontainers for integration and e2e, compose for cold start, Jest | accepted | S-01 |
 | [[ADR-0005-authentication-bearer-jwt]] | Authentication with bearer JWT | proposed | S-02 |
 | [[ADR-0006-money-and-rate-representation]] | Money and rate representation across API, domain and storage | proposed | S-02, S-04 |
 | [[ADR-0007-program-currency-change-from-treasury]] | A treasury message with a different currency than the program | proposed | S-02, S-06 |

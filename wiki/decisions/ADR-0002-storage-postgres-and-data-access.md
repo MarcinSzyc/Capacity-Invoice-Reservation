@@ -1,7 +1,7 @@
 # ADR-0002: Storage engine and data access library
 
-- Status: proposed
-- Date: 2026-09-19
+- Status: accepted
+- Date: proposed 2026-09-19, accepted 2026-09-19
 - Slice: S-01 (decided before it starts; used from S-02 on)
 - Related: A-04, A-15, INV-01, INV-04, INV-08, INV-09
 
@@ -49,13 +49,28 @@ once as a raw statement inside `ProgramRepository.lockById` and covered by INV-0
 prefers to avoid raw SQL on the critical path, Option 2 is the alternative with no other
 change to the plan.
 
+## Inspection tooling
+
+Marcin wants to look into the database and change rows by hand from a UI, available as soon
+as the stack is up. Options: a desktop client (TablePlus, Postico, DBeaver, Beekeeper) that
+each developer installs; a web tool in compose (pgweb, Adminer, pgAdmin); or Prisma Studio,
+which comes with Prisma and edits rows through the same schema the code uses.
+
 ## Decision
 
-(empty until Marcin decides)
+Option 1, PostgreSQL with Prisma. The row lock is one raw statement in
+`ProgramRepository.lockById`, covered by INV-01.
+
+Prisma Studio is a fifth compose service, `studio`, built from the `api` image and running
+`prisma studio` against the same `DATABASE_URL`, on its own port `5555`, started by plain
+`docker compose up` in the dev profile and absent from production. If it disappoints, a
+web tool such as pgweb replaces it in the same slot with no other change. Decided by Marcin
+on 2026-09-19.
 
 ## Consequences
 
 Whichever library is chosen, it appears only under `infrastructure/`; the lint boundary
-forbids it in `domain/` and `application/`. Migrations live in the repo and run on container
-start before the app listens. Money columns are BIGINT, rates NUMERIC, message payloads
+forbids it in `domain/` and `application/`. Migrations live in the repo (`api/prisma/migrations`) and run on container start before the
+app listens. `studio` depends on `db` being healthy and on the migrations having run; it
+ships no data of its own. README lists its port next to `web`, `api` and the docs. Money columns are BIGINT, rates NUMERIC, message payloads
 JSONB.
