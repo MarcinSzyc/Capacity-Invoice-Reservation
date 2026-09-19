@@ -75,3 +75,4 @@ That is expected. The failure mode to avoid is inventing requirements silently.
   Those are `/plan` and ADR territory.
 - Resolve a question by picking an answer without the user's say-so.
 - Renumber or delete existing ids on a revision. Mark them `superseded` instead.
+- Commit, push or open a PR. Report the files written and ask.

@@ -127,3 +127,5 @@ correct with a new one. Format:
   strict, npm, with the alternatives not taken. Marcin asked why the baseline decisions in
   AC-00 had no ADR; lint, format and the documentation views stay where they already are
   (CLAUDE.md §3, A-16), the framework and runtime choice had no record until now.
+- PR for the rule above opened from `setup/ask-before-git`; its work-log section landed
+  earlier inside the plan PR (#12) because both sessions wrote the same file.
