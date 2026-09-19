@@ -9,6 +9,20 @@ libraries are not mentioned here.
 Money in examples: program `PRG-1` in USD, limit 10 000 000.00, written in major units for
 readability; the API uses integer minor units.
 
+## Setup
+
+## Baseline
+
+**AC-00 Project baseline (walking skeleton).** Given a clean checkout with Docker. When
+`docker compose up` is run. Then a NestJS service on Node 24 LTS starts together with its
+dependencies, readiness turns healthy, and `GET /health` answers `200` without a token.
+And `npm run lint`, `npm run format:check`, `npm run typecheck`, `npm run test`,
+`npm run gate:quick` and `npm run gate` exist and pass on the fresh project, with ESLint
+and Prettier configured as `CLAUDE.md §3` requires. And API documentation is served with
+Redoc (not Swagger UI) over the OpenAPI document in the non-production profile. And the
+README explains how to start the service, where the health endpoint is and where Redoc
+is. [A-16, A-17]
+
 ## Reservations
 
 **AC-01 Reserve within capacity.** Given `PRG-1` has 10 000 000 available. When a client
@@ -158,8 +172,8 @@ snapshot's `asOf`. [A-12]
 Then the resulting movement carries that client's id. [A-14]
 
 **AC-35 Health and docs without token.** When liveness or readiness is called without a
-token. Then `200` with no business data. When the API documentation is requested without
-a token in a non-production profile. Then it is served. [A-16]
+token. Then `200` with no business data. When the Redoc API documentation is requested
+without a token in a non-production profile. Then it is served. [A-16]
 
 ## Operations
 
