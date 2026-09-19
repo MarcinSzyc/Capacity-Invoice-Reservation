@@ -18,10 +18,10 @@ readability; the API uses integer minor units.
 dependencies, readiness turns healthy, and `GET /health` answers `200` without a token.
 And `npm run lint`, `npm run format:check`, `npm run typecheck`, `npm run test`,
 `npm run gate:quick` and `npm run gate` exist and pass on the fresh project, with ESLint
-and Prettier configured as `CLAUDE.md §3` requires. And API documentation is served with
-Redoc (not Swagger UI) over the OpenAPI document in the non-production profile. And the
-README explains how to start the service, where the health endpoint is and where Redoc
-is. [A-16, A-17]
+and Prettier configured as `CLAUDE.md §3` requires. And API documentation is served in
+the non-production profile in two views over the same OpenAPI document: Swagger UI for
+trying requests and Redoc for reading. And the README explains how to start the service,
+where the health endpoint is and where both documentation views are. [A-16, A-17]
 
 ## Reservations
 
@@ -172,8 +172,8 @@ snapshot's `asOf`. [A-12]
 Then the resulting movement carries that client's id. [A-14]
 
 **AC-35 Health and docs without token.** When liveness or readiness is called without a
-token. Then `200` with no business data. When the Redoc API documentation is requested
-without a token in a non-production profile. Then it is served. [A-16]
+token. Then `200` with no business data. When the API documentation (Swagger UI or Redoc) is
+requested without a token in a non-production profile. Then it is served. [A-16]
 
 ## Operations
 

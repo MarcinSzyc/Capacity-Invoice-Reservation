@@ -364,15 +364,17 @@ idempotency needs `releaseId` and `messageId` stored anyway, so the ledger costs
 table. Running balances make the current state an O(1) read. Data model sketch in the
 "Model danych" artifact.
 
-## A-16 Health is unauthenticated; Redoc is served outside production
+## A-16 Health is unauthenticated; Swagger UI and Redoc are served outside production
 
-- Status: accepted 2026-09-19, amended 2026-09-19 (Redoc instead of Swagger UI, AC-00)
-- Source: Q24 (Marcin: "I want Swagger, health without auth"), AC-00 (Redoc preferred)
+- Status: accepted 2026-09-19, amended 2026-09-19 (both documentation views, AC-00)
+- Source: Q24 (Marcin: "I want Swagger, health without auth"), AC-00
 
 **Statement.** Liveness and readiness endpoints need no token and expose no business
-data. The OpenAPI document is generated from the DTOs (`@nestjs/swagger` decorators) and
-rendered with Redoc; both are served without a token when the profile is not production.
-Marcin prefers Redoc's reading layout over Swagger UI. All other endpoints require a token. Recorded because the brief
+data. The OpenAPI document is generated once from the DTOs (`@nestjs/swagger` decorators)
+and served in two views when the profile is not production: Swagger UI for trying
+requests against the running service, Redoc for reading the contract. Both views and the
+raw document are served without a token. One document, two renderers, no duplicated
+descriptions. All other endpoints require a token. Recorded because the brief
 says "all endpoints".
 
 ## A-17 Runnable locally means one command plus a demo page
