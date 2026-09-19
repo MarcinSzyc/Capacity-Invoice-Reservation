@@ -43,21 +43,44 @@ Chosen. Lockfile understood by `actions/setup-node` cache, no extra install step
 Alternatives: pnpm (faster installs, needs corepack or a global install), yarn (no advantage
 here).
 
-### Deployment shape: everything in Docker, three services of ours plus Kafka
+### Deployment shape: everything in Docker, three services of ours plus the Kafka broker we consume from
 Chosen. Every process runs in a container, locally through one `docker compose up`. The
-compose file defines three services that are ours and one piece of infrastructure we only
-consume:
+compose file defines three services that are ours and one piece of infrastructure that is
+not ours but must exist for our consumer to have something to read:
 
 | Service | Container | Role |
 |---|---|---|
 | `api` | NestJS on Node 24 | the API and nothing else: HTTP endpoints, Kafka consumer, domain, ledger |
 | `web` | React (Vite, TypeScript) built to static files, served by nginx | a simple UI, a few tables, that shows what the system does: the demo from A-17, calling `api` over HTTP with a dev token |
 | `db` | Postgres | the database, its own container, its own volume |
-| `kafka` | single broker, KRaft | infrastructure the brief imposes; the treasury's channel, not a service of ours |
+| `kafka` | single broker, KRaft | not our service. Locally it stands in for the treasury's broker; in production we connect to theirs. We only consume from it (A-03, A-04) |
 
 `web` never contains business logic and never talks to `db` or `kafka` directly; everything
 it shows comes from `api`. `api` serves no HTML. In production the `web` container is simply
 not deployed; `api` keeps its dev-only endpoints out of the production profile.
+
+**Why a Kafka container when we only consume.** The brief says capacity data flows in
+from the treasury over Kafka, so `api` has a consumer. A consumer needs a broker to connect
+to. In production that broker belongs to the treasury or a shared platform and we only hold
+its address. On a laptop nobody provides it, so compose starts one, exactly as it starts
+Postgres although we do not build databases. Without it `api` cannot boot its consumer and
+AC-20 to AC-31 cannot be shown or tested.
+
+**Who publishes on the local broker.** There is no treasury locally, so we impersonate it,
+and only in the dev profile. The path is:
+
+```
+web  --HTTP-->  api: POST /dev/treasury  -->  kafka topic  -->  api: consumer  -->  ledger
+                (dev profile only, plays the treasury)          (the real production code)
+```
+
+`web` never talks to Kafka; a browser has no Kafka client and should not know the broker.
+It calls a dev-only `api` endpoint that carries a small producer. The same `api` then reads
+the message through its real consumer and processes it as if the treasury had sent it:
+dedup by `messageId`, `asOf` check, adjustments in the ledger. Only the sender is faked;
+the whole production path is exercised. The same producer feeds the integration and e2e
+tests of the consumer. In production the dev module is not registered, `/dev/*` answers
+`404`, no producer starts, and Kafka is consumed only, as the brief says.
 
 Repository layout follows the containers: `api/` and `web/` are separate folders with their
 own `package.json`, `Dockerfile`, lint and test setup, isolated from each other; the root
