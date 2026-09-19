@@ -77,3 +77,9 @@ correct with a new one. Format:
   its PDF is not kept because its metadata carried an unwanted title.
 - Open: A-05 wording still awaits Marcin's confirmation. Next: merge #8, #9, #10, then
   `/plan AC-00` in a fresh session.
+
+## 2026-09-19, docs/two-prs-per-slice
+- Rule written down: two PRs per slice. The plan (slice file, checklist rows, ADR drafts)
+  goes in `docs/plan-S-xx` and Marcin decides the ADRs in that review; the code goes in
+  `slice/S-xx-<slug>` via `/ship`. Small plan corrections found while implementing are
+  commits on the slice PR. CLAUDE.md §6, CONTRIBUTING and the plan skill hand-off updated.
