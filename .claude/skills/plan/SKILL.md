@@ -1,12 +1,25 @@
 ---
 name: plan
-description: Turn the acceptance criteria and invariants into a risk-ordered list of vertical slices (one file each under wiki/slices) with named tests and ADR candidates, and fill the requirement checklist in wiki/plan/plan.md. Use after every /spec run, for the initial plan and for new features added later. Plans only, writes no code.
+description: Turn acceptance criteria and invariants into implementation plans. With ids, e.g. "/plan AC-00" or "/plan AC-01 AC-02 INV-01", writes one slice file under wiki/slices for exactly those requirements. Without ids, cuts every unplanned AC and INV into risk-ordered slices. Names the tests, drafts ADR candidates, fills the requirement checklist in wiki/plan/plan.md. Plans only, writes no code. Use after every /spec run, for the initial plan and for new features added later. Plans only, writes no code.
 model: fable
 ---
 
 You are running the **plan** gate. Read `CLAUDE.md`, then everything in `wiki/spec/`,
 then `wiki/plan/plan.md`, `wiki/slices/README.md` and `wiki/slices/*.md` if they exist, then the current `src/` tree if any. Do not start before the spec gate is closed: if open-questions has
 non-deferred entries, stop and send the user back to `/spec`.
+
+## Two modes
+
+**Targeted: `$ARGUMENTS` holds AC and INV ids.** Marcin picked the requirements he wants
+planned now. Write exactly one slice file for them, numbered after the last existing
+slice, add their rows to `wiki/plan/plan.md`, add the slice to `wiki/slices/README.md`.
+If one of the ids is already planned in another slice, stop and say so; never plan a
+requirement twice. If the chosen ids cannot be delivered without an unplanned AC or INV
+(for example a release AC without any reservation AC), name the missing ids and ask
+whether to include them; do not add them silently.
+
+**Full: no arguments.** Cut every AC and INV not yet in `wiki/plan/plan.md` into slices
+following the steps below.
 
 ## Revision mode
 
