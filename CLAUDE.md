@@ -40,6 +40,14 @@ Two isolated folders joined by npm workspaces at the root (ADR-0001): `api/` is 
 service, `web/` is a small React UI. Nothing is imported across them; their only contract is
 the OpenAPI document `api` publishes.
 
+**Technology baseline (ADR-0001).** Node 24 LTS, NestJS 12, TypeScript 6 `strict`, npm
+workspaces; Prisma 7 on PostgreSQL (ADR-0002), kafkajs (ADR-0003), Jest 30 with Testcontainers
+(ADR-0004), ESLint 10 with `typescript-eslint` 8, Prettier 3; `web` is React with Vite and
+Vitest. Versions are pinned in each workspace `package.json`. The framework major moved from
+11 to 12 during S-01: 11 is tagged `legacy` on npm and carries an open `multer` advisory. A
+major upgrade is a setup PR with a work-log line and an amendment to ADR-0001, never a silent
+bump inside a slice.
+
 ```
 package.json                 workspaces: api, web. Root scripts fan out to both.
 docker-compose.yml           api, web, db, kafka

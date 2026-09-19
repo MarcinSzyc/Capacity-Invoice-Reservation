@@ -1,0 +1,12 @@
+// S-01 has no tables yet: the schema exists so the client can connect and so that the
+// migration pipeline is wired. S-02 adds programs, reservations, the ledger and the message
+// store (A-15, ADR-0002).
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}

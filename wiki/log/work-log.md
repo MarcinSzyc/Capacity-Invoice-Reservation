@@ -162,3 +162,84 @@ correct with a new one. Format:
 - ADR-0004 accepted by Marcin following the recommendation: Testcontainers for integration
   and e2e, compose stack only for the cold start smoke, Jest with three projects plus the
   cold start project. All three ADRs blocking S-01 are now accepted.
+
+## 2026-09-19, implement S-01, Opus
+- Started S-01 on branch `slice/S-01-walking-skeleton`. Slice status set to `in progress`.
+  All three blocking ADRs (ADR-0002, ADR-0003, ADR-0004) were already accepted.
+- Framework major moved from NestJS 11 to NestJS 12, decided by Marcin while the workspaces
+  were being installed. Two reasons: 12.0.3 carries the npm `latest` tag while the 11 line
+  ended at 11.2.5 and is now tagged `legacy`, so a service starting today would start one
+  major behind; and 11 has an open high severity advisory through `multer` in
+  `@nestjs/platform-express` (denial of service via crafted multipart field names) that is
+  fixed only in 12. The advisory is not reachable here, no route in the brief takes a file,
+  but a red `npm audit` on day one is noise every later slice inherits.
+- Recorded in four places at Marcin's request: [[../decisions/ADR-0001-technology-baseline]]
+  (amended status line, Framework section with the reasoning and the whole version matrix,
+  Decision paragraph), the ADR index row in `wiki/decisions/README.md`, the technology
+  baseline paragraph added to `CLAUDE.md §2`, and the scope line of
+  [[../slices/S-01-walking-skeleton]]. ADR-0001 already said a major upgrade is a setup
+  change with a work-log line rather than a new ADR, so no new ADR was drafted.
+- Version matrix pinned in `api/package.json`, each range written as the exact latest
+  resolved version: NestJS 12.0.3, TypeScript 6.0.3, ESLint 10.11.0 with `typescript-eslint`
+  8.70.0, Jest 30.5.2 with `ts-jest` 29.4.12, Testcontainers 12.1.0, Prisma 7.10.0 for client
+  and CLI. TypeScript 6 rather than the newer 7 because `@nestjs/schematics` 12 requires
+  `>=6` and `typescript-eslint` 8 supports `<6.1`, so 6 is the only version the whole
+  toolchain accepts. Prisma stays on 7: the `latest` tag of `prisma` is an 8.0.0 release
+  candidate and a baseline does not start on a prerelease.
+- Known audit noise, accepted and not fixed: the Prisma 7 CLI pulls a vulnerable `mysql2`
+  transitively (dev dependency, a driver we never load, Postgres is the only engine) and
+  `deepmerge-ts` through `@prisma/config`. Both clear when Prisma 8 ships stable, which is a
+  setup PR at that point.
+- Built the walking skeleton test first. Red then green, in this order: the config loader unit
+  test (missing variable names itself, boot fails fast), the AC-41 README test, the health e2e
+  test over supertest, the Prisma integration test against a Testcontainers Postgres, and last
+  the AC-00 cold start test against the compose stack. Both tagged tests from the plan exist
+  and pass with the names the plan gives them.
+- Shape of `api`: `src/config` (typed configuration, validated once at boot), `src/common`
+  (JSON logger with a correlation id in `AsyncLocalStorage`, one exception filter with the
+  `{statusCode, code, message, details?}` envelope where 5xx says only `INTERNAL_ERROR`, the
+  OpenAPI setup), `src/persistence` (Prisma), `src/messaging` (kafkajs, readiness only for
+  now), `src/health` (liveness, readiness over database and broker). No module under
+  `src/modules` yet, as the slice says. `src/app-setup.ts` holds the pipeline so `main.ts` and
+  the e2e tests configure the app the same way.
+- Consequence of NestJS 12 found while wiring the tests: the framework now ships as ES modules
+  only. Jest evaluates those only with Node's `--experimental-vm-modules`, which must be set
+  when the process starts, so `api/scripts/run-jest.mjs` re-executes Jest with the flag. That
+  keeps the four test scripts working on any operating system without an extra dependency.
+  The compiled service itself stays CommonJS and loads the ESM framework through Node 24's
+  `require(esm)`.
+- Prisma 7 no longer takes the connection URL from the schema: it lives in `api/prisma.config.ts`
+  with the `@prisma/adapter-pg` driver adapter. The URL is read leniently there so that
+  `prisma generate` runs during the image build, where no database exists.
+- `studio` is pgweb, not Prisma Studio. Prisma Studio 7 binds `127.0.0.1` inside its container
+  with no flag to change it, so its port cannot be published and a browser on the host never
+  reaches it. ADR-0002 had already named pgweb as the fallback "in the same slot with no other
+  change", so that is what happened: same service name, same port 5555, connected to the same
+  database on start. ADR-0002, ADR-0001, the S-01 scope line and the README now say pgweb.
+- Compose health checks address `127.0.0.1`, not `localhost`: in the nginx image `localhost`
+  resolves to `::1` first while the server listens on IPv4 only, which made `web` never turn
+  healthy. Every port is overridable (`API_PORT`, `WEB_PORT`, `DB_PORT`, `KAFKA_PORT`,
+  `STUDIO_PORT`) with the documented defaults, because a reviewer may already have something on
+  port 3000; plain `docker compose up` still needs no `.env`.
+- Testcontainers runs the same `apache/kafka:4.3.1` image as compose (ADR-0003, ADR-0004). The
+  `@testcontainers/kafka` module only drives Confluent images, so `test/support/kafka-container.ts`
+  performs the same starter script handshake by hand: the container idles until we write the
+  advertised listener with the mapped host port. Images are named once in `test/support/images.ts`
+  and mirrored in `docker-compose.yml`.
+- Definition of done checked by hand: a probe file under `src/modules/programs/domain/` importing
+  `@nestjs/common`, the generated Prisma client and a file from `infrastructure/` produced three
+  lint errors, one per rule, and was deleted afterwards. `docker compose down -v` followed by
+  `docker compose up --wait` turns the whole stack healthy in 22 to 37 seconds, well inside the
+  two minute budget.
+- Tests written beyond the two the plan names, for `/ship` to add to the checklist: the config
+  loader suite (7 cases), three Prisma integration cases, four health e2e cases, a second cold
+  start case (no documentation view answers 401), a second README case (health and both
+  documentation views are named in it) and two `web` render cases.
+- Local choices worth naming, none of them ADR material: Vitest for `web` (it is the Vite native
+  runner; ADR-0004 chose Jest for the NestJS side and its reasoning is about `@nestjs/testing`),
+  hand written health endpoints rather than `@nestjs/terminus` (the envelope stays ours, about
+  forty lines), Redoc loaded from its CDN bundle in the dev profile only, and the repository
+  README test living in `api/test/` because that is the only workspace with a test runner.
+- Known noise, not defects: kafkajs 2.2.4 prints a `TimeoutNegativeWarning` from its internal
+  request queue on Node 24, and npm 11 now withholds dependency install scripts behind
+  `npm approve-scripts`. Neither affects the gate, and both behave the same locally and in CI.

@@ -1,7 +1,7 @@
 # S-01 Walking skeleton
 
 - Outcome: a clean checkout runs `docker compose up`, the service and its dependencies turn healthy, `GET /health` and both API documentation views answer, and `npm run gate` exists and is green.
-- Status: planned
+- Status: in progress
 - AC: AC-00, AC-41
 - INV: none
 - Risk: low. Tooling and wiring only, no business rule. The cost of a mistake is friction in every later slice, so the gate and the layer lint must be exact from day one.
@@ -12,13 +12,13 @@
 
 What exists after this slice, nothing more:
 
-- NestJS 11 on Node 24 LTS, TypeScript `strict`, ESLint (`typescript-eslint` recommended-type-checked, `no-floating-promises: error`, `no-nested-ternary`, `max-depth: 2`, `curly: multi-line`, an import-boundary rule that forbids `@nestjs/*` and the data access library inside `src/modules/**/domain/**`), Prettier (`singleQuote`, `trailingComma: all`, `bracketSpacing: false`).
+- NestJS 12 on Node 24 LTS, TypeScript 6 `strict`, ESLint (`typescript-eslint` recommended-type-checked, `no-floating-promises: error`, `no-nested-ternary`, `max-depth: 2`, `curly: multi-line`, an import-boundary rule that forbids `@nestjs/*` and the data access library inside `src/modules/**/domain/**`), Prettier (`singleQuote`, `trailingComma: all`, `bracketSpacing: false`).
 - `src/config/`: typed configuration loaded once at boot and validated; boot fails fast on a missing variable. Profile is `NODE_ENV` with values `development`, `test`, `production`.
 - `src/common/`: global exception filter (envelope `{statusCode, code, message, details?}`, `5xx` bodies carry `code: INTERNAL_ERROR` and nothing else), global `ValidationPipe` (`whitelist`, `forbidNonWhitelisted`, `transform`), JSON logger with a per-request correlation id (`x-correlation-id` echoed or generated). The logger is infrastructure for AC-40, which closes in S-02 once Kafka messages exist too.
 - Health: `GET /health` (liveness, always `200 {status: 'ok'}`), `GET /health/ready` (readiness, checks the database and the Kafka broker connection, `503` until both answer). No business data.
 - API docs, served when `NODE_ENV !== 'production'`: `GET /openapi.json` (one document generated from DTO decorators), `GET /docs` (Swagger UI), `GET /redoc` (Redoc reading the same document).
 - Repository layout per ADR-0001: root `package.json` with npm workspaces `api` and `web`, root scripts fanning out to both; `api/` is the NestJS project, `web/` a Vite React TypeScript project with one placeholder screen that S-07 fills; each with its own `Dockerfile`, ESLint and Prettier config following `CLAUDE.md §3`.
-- `docker-compose.yml` per ADR-0001: `api` (multi-stage `Dockerfile`, Node 24), `web` (multi-stage: Vite build, then nginx serving `dist/`), `db` (Postgres, own volume), `kafka` (single broker, KRaft), `studio` (Prisma Studio from the `api` image, port 5555, dev profile, ADR-0002). `docker compose up` alone brings everything up with health checks; no `.env` editing needed for the default profile. `api` allows CORS from the `web` origin in the dev profile.
+- `docker-compose.yml` per ADR-0001: `api` (multi-stage `Dockerfile`, Node 24), `web` (multi-stage: Vite build, then nginx serving `dist/`), `db` (Postgres, own volume), `kafka` (single broker, KRaft), `studio` (pgweb, port 5555, dev profile, ADR-0002). `docker compose up` alone brings everything up with health checks; no `.env` editing needed for the default profile. `api` allows CORS from the `web` origin in the dev profile.
 - Scripts in `package.json`: `lint`, `format:check`, `typecheck`, `check:prose` (wraps `scripts/check-prose.sh`), `test` (unit), `test:integration`, `test:e2e`, `smoke` (cold start), `gate:quick`, `gate`. Husky pre-commit runs `gate:quick`.
 - Test harness: Jest, three configs by file pattern (`src/**/*.test.ts`, `src/**/*.integration-test.ts`, `test/**/*.e2e-test.ts`), Testcontainers helpers under `test/support/` that start Postgres and Kafka once per e2e run, and `test/cold-start/` tests that run against `BASE_URL` of the compose stack.
 - `README.md`: how to start, where health and both docs views are, links to assumptions, ADRs and Home.
@@ -57,3 +57,5 @@ Beyond `CLAUDE.md §9`:
 |---|---|---|
 | 2026-09-19 | plan | slice written |
 | 2026-09-19 | plan (revision) | compose shape per ADR-0001: api, web, db, kafka; demo in the web container |
+| 2026-09-19 | implement | slice started, branch `slice/S-01-walking-skeleton` |
+| 2026-09-19 | implement | walking skeleton built test first, `npm run gate` green from a clean install |
