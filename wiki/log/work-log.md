@@ -50,3 +50,6 @@ correct with a new one. Format:
 - Removed dedication wording across the repo: the source document is called "the brief",
   the original PDF is not kept in the repo (its metadata carried a title we do not want),
   the transcription in `wiki/spec/brief.md` stays.
+
+## 2026-09-19, setup/ci-actions-node24
+- PR #9: GitHub actions bumped to v7 (Node 24 runtime), gate job on Node 24 LTS, new CI job failing a PR that does not touch the work-log.
