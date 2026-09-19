@@ -22,6 +22,14 @@ never approve their own work.
 | `/review S-xx` | verify passed, and after every fix | a `REVIEW S-xx` entry in `wiki/log/work-log.md` with findings and a log line in the slice file, nothing else |
 | `/ship S-xx` | verify PASS and review clean | `wiki/log/changelog.md`, `wiki/plan/plan.md` (test files, commits and status filled), ADR statuses, slice file status `done`, `wiki/slices/README.md`, `wiki/Home.md`, `README.md`, and the pull request |
 
+## What a slice is
+
+A slice is the implementation plan for a group of acceptance criteria and invariants you
+chose to build together. One Markdown file under `wiki/slices/`, written by `/plan`,
+read by implement, verify, review and ship. Pick the requirements, run
+`/plan AC-01 AC-02 INV-01`, get the plan file, run `/implement S-xx` on it. The slice id
+is just the name of that plan.
+
 ## First run
 
 1. `/spec` with no arguments. It reads `wiki/spec/brief.md`, writes the glossary and
