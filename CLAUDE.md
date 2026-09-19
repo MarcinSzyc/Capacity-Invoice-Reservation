@@ -36,17 +36,25 @@ Rules that hold across gates:
 
 ## 2. Architecture standards
 
-Domain-oriented NestJS, one module per business area, three layers inside each module:
+Two isolated folders joined by npm workspaces at the root (ADR-0001): `api/` is the NestJS
+service, `web/` is a small React UI. Nothing is imported across them; their only contract is
+the OpenAPI document `api` publishes.
 
 ```
-src/modules/<area>/
-  domain/          pure TypeScript. No @nestjs/* imports, no decorators, no I/O.
-  application/     use cases. @Injectable services that orchestrate domain + ports.
-  infrastructure/  controllers, DTOs, repositories, Kafka consumers, mappers.
-  <area>.module.ts
-src/common/        truly generic cross-cutting code only (filters, guards, logger).
-src/config/        typed configuration.
-test/              e2e tests (*.e2e-test.ts) and test infrastructure.
+package.json                 workspaces: api, web. Root scripts fan out to both.
+docker-compose.yml           api, web, db, kafka
+api/
+  src/modules/<area>/
+    domain/          pure TypeScript. No @nestjs/* imports, no decorators, no I/O.
+    application/     use cases. @Injectable services that orchestrate domain + ports.
+    infrastructure/  controllers, DTOs, repositories, Kafka consumers, mappers.
+    <area>.module.ts
+  src/common/        truly generic cross-cutting code only (filters, guards, logger).
+  src/config/        typed configuration.
+  test/              e2e tests (*.e2e-test.ts) and test infrastructure.
+web/
+  src/               React + Vite + TypeScript strict. A few tables and forms, plain CSS,
+                     no state library. Calls api over HTTP, contains no business rules.
 ```
 
 - **Domain is framework-free.** Entities, value objects, domain services and domain
@@ -63,6 +71,9 @@ test/              e2e tests (*.e2e-test.ts) and test infrastructure.
   code, inside a `Money` value object. Storage type and FX handling are ADRs.
 - **Kafka consumers are idempotent** and treat every message as untrusted input:
   validate, then hand a typed command to a use case. Details live in ADRs.
+- **`web` only shows.** It renders what `api` returns and sends what the user typed. No
+  computation of capacity, money or status on the client; a number shown in `web` was
+  computed by `api`.
 - **Names come from the glossary.** `wiki/spec/glossary.md` is the ubiquitous language.
   Classes, fields, API properties, message fields and test names use its words exactly
   (`held`, `reservedAmount`, `releaseId`, `adjustment`). A new domain word in code
@@ -120,6 +131,9 @@ One definition of green, used by the hook, `/verify` and CI:
 npm run gate:quick   lint + typecheck + prose check + unit + integration   (pre-commit hook)
 npm run gate         gate:quick + e2e + cold start smoke                   (/verify, CI)
 ```
+
+Root scripts run both workspaces: for `web`, `gate:quick` means lint, typecheck, build and
+render tests; `web` has no integration or e2e level, the cold start smoke opens its page.
 
 Prose check: fails if any Markdown file under the repo, or a commit message, contains an
 em dash or en dash (see §7).

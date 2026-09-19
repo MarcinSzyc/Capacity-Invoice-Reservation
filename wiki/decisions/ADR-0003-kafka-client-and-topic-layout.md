@@ -1,4 +1,4 @@
-# ADR-0002: Kafka client library and topic layout
+# ADR-0003: Kafka client library and topic layout
 
 - Status: proposed
 - Date: 2026-09-19

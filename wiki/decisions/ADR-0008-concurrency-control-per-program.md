@@ -1,4 +1,4 @@
-# ADR-0007: Concurrency control for reservations on one program
+# ADR-0008: Concurrency control for reservations on one program
 
 - Status: proposed
 - Date: 2026-09-19

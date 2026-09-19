@@ -29,4 +29,4 @@ Obsidian vault root is this folder. Working rules: `../CLAUDE.md`.
 | S-06 Reconciliation snapshots | planned |
 | S-07 Demo page and operations | planned |
 
-Next: decide ADR-0001, ADR-0002 and ADR-0003 (see [[decisions/README]]), confirm the wording of A-05, then `/implement S-01`.
+Next: decide ADR-0002, ADR-0003 and ADR-0004 (see [[decisions/README]]), confirm the wording of A-05, then `/implement S-01`.
