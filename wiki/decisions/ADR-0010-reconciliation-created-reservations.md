@@ -1,0 +1,47 @@
+# ADR-0010: Reservations created by reconciliation
+
+- Status: proposed
+- Date: 2026-09-19
+- Slice: S-06
+- Related: A-02, A-08, A-12, AC-19, AC-26, INV-08
+
+## Context
+
+A snapshot lists `{invoiceId, heldAmount}` in program currency, nothing else (A-11). When it
+names an invoice we do not know, AC-26 creates a reservation with `source: reconciliation`.
+That reservation must still carry `invoiceAmount`, `invoiceCurrency` and `rate` (AC-19), and a
+client may later release it in "invoice currency" (A-08), which we never learned.
+
+## Options
+
+### Option 1: Program currency, rate 1
+`invoiceAmount = heldAmount`, `invoiceCurrency = program.currency`, `reservedAmount = held =
+heldAmount`, `rate = 1`. A later client release is expressed in program currency and works
+with the normal rules. Honest about what we know: the treasury told us a held amount in
+program currency. Cons: `invoiceAmount` is not the real invoice amount if the invoice was
+partly repaid before we heard of it; the response says so through `source`.
+
+### Option 2: Nullable invoice fields
+`invoiceAmount`, `invoiceCurrency` and `rate` null for `reconciliation` reservations; releases
+against them must be in program currency (validation error otherwise). Cons: three nullable
+fields, a branch in every consumer of the reservation, a special release rule.
+
+### Option 3: Refuse to create, dead-letter the snapshot
+Cons: violates AC-26 and A-12; the treasury's knowledge would be lost.
+
+## Recommendation
+
+Option 1. `invoiceAmount` equals the `heldAmount` at creation, and the reservation read shows
+`source: reconciliation` so a reader knows the amount is the treasury's held, not the
+supplier's invoice. A later snapshot that reports a different `held` adjusts as for any other
+reservation.
+
+## Decision
+
+(empty until Marcin decides)
+
+## Consequences
+
+No nullable amount anywhere (INV-08 stays simple). The glossary entry `Adjustment` should say
+that a reconciliation-created reservation's `invoiceAmount` is the held amount reported by the
+treasury (glossary update through `/spec` on acceptance).
