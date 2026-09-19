@@ -1,7 +1,7 @@
 # S-01 Walking skeleton
 
 - Outcome: a clean checkout runs `docker compose up`, the service and its dependencies turn healthy, `GET /health` and both API documentation views answer, and `npm run gate` exists and is green.
-- Status: in progress
+- Status: done
 - AC: AC-00, AC-41
 - INV: none
 - Risk: low. Tooling and wiring only, no business rule. The cost of a mistake is friction in every later slice, so the gate and the layer lint must be exact from day one.
@@ -74,3 +74,4 @@ Beyond `CLAUDE.md §9`:
 | 2026-09-19 | verify | PASS, gate green after fourth fix round, 2/2 AC covered, boundary and image-drift guards re-proven live, no open findings |
 | 2026-09-19 | review (fifth round) | PASS, 10 findings (0 blockers, 0 majors, 10 minors), nothing returned to `/implement` |
 | 2026-09-19 | implement (review round 5) | review passed (0 blockers, 0 majors); 9 of 10 minors fixed, gate green |
+| 2026-09-19 | ship | AC-00 and AC-41 closed, changelog and checklist written, PR proposed |

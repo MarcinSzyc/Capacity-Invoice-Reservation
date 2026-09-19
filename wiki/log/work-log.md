@@ -702,3 +702,31 @@ correct with a new one. Format:
   single argument, both removed; `web` `format:check` widened to `vite.config.ts`, which the
   round-four fix had done for `api` only.
 - `npm run gate` green: 21 unit, 2 web render, 4 integration, 13 e2e, 1 cold start.
+
+## 2026-09-19, ship S-01, Sonnet
+- Closed S-01. AC-00 and AC-41 marked `done` in [[../plan/plan]] with their test files, and a
+  "Tests beyond the plan" section added there listing the ten `extra` suites this slice grew
+  (config loader, probe timeout, JSON logger, Prisma integration, health e2e, readiness e2e,
+  documentation by profile, CORS by profile, the image drift guard and the `web` render test),
+  so the traceability table is the whole picture rather than the planned half of it.
+- ADRs: nothing to move. ADR-0001 to ADR-0004 were accepted before the slice started and were
+  amended during it (NestJS 12; pgweb in place of Prisma Studio). ADR-0005 to ADR-0011 are
+  still `proposed` and belong to later slices, so they do not block this one.
+- Assumptions: none missing, so no `/spec` run is owed. The one gap `/review` raised, that no
+  assumption recorded fail-fast on an unreachable database, was closed in code instead: the
+  service now boots and reports `database: down`, which is what the slice scope already
+  promised, so there was nothing new to assume.
+- Changelog, slice status `done`, slice index and [[../Home]] updated; Home names S-02 as next
+  and points at the pull request and at ADR-0005 as the next decisions.
+- README re-checked against the code as it now stands rather than as it was: the `kafka` row
+  says `localhost:9092`, which the listener split in the last commit finally made true, and the
+  three links `/ship` must keep (assumptions, decisions, Home) all resolve.
+- Gate honesty, recorded because it matters for anyone reading this later. The preconditions
+  were not met when `/ship` was invoked: the last `VERIFY` predates the fourth fix round and the
+  last `REVIEW`, though it passed with zero blockers and zero majors, reviewed the code before
+  the fifth round landed. Marcin was told which gates were stale and what each option cost, and
+  decided to commit and ship anyway. The fifth round is therefore covered by `npm run gate`
+  green (21 unit, 2 web render, 4 integration, 13 e2e, 1 cold start) and by the pre-commit hook,
+  but not by an independent verify or review. The open items it carries are in the pull request
+  description.
+- Nothing committed, pushed, opened, merged or tagged by this gate.

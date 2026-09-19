@@ -12,7 +12,7 @@ Execution order with risk and dependencies, kept by `/plan`; status kept by `/sh
 
 | Slice | Title | Risk | Depends on | AC / INV | Status |
 |---|---|---|---|---|---|
-| [[S-01-walking-skeleton]] | Walking skeleton | low | none | AC-00, AC-41 | planned |
+| [[S-01-walking-skeleton]] | Walking skeleton | low | none | AC-00, AC-41 | done |
 | [[S-02-programs-from-the-treasury]] | Programs from the treasury | medium | S-01 | AC-20, AC-23, AC-24, AC-25, AC-32, AC-33, AC-35, AC-36, AC-37, AC-40, INV-10 | planned |
 | [[S-03-reservations-and-capacity-invariant]] | Reservations and the capacity invariant | high | S-02 | AC-01, AC-02, AC-03, AC-04, AC-05, AC-08, AC-09, AC-21, AC-22, INV-01, INV-03, INV-04, INV-09, INV-11 | planned |
 | [[S-04-cross-currency-reservations]] | Cross-currency reservations | high | S-03 | AC-06, AC-07, INV-08 | planned |
