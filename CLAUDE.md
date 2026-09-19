@@ -148,6 +148,11 @@ authenticated endpoint. "Runnable locally" is an acceptance criterion.
   AC/INV closed, ADRs accepted, how it was tested, known limitations) and tags the merge
   commit `S-03`.
 - Commit only when `gate:quick` is green. Never `--no-verify`.
+- **Nothing leaves the working tree without an explicit yes.** The agent never commits,
+  pushes, opens a PR, merges or tags on its own. Being asked to make a change is not
+  being asked to commit it. When the work is ready, the agent stops, names the files it
+  would commit and the branch, and asks. One yes covers one action: a yes to commit is
+  not a yes to push, a yes to push is not a yes to open the PR.
 - Review flow: the agent opens the PR and stops. Marcin reviews on GitHub and gives the
   go-ahead as a PR comment (GitHub disables Approve for the PR author, and PRs are opened
   under his account). Only then the agent merges (`--no-ff`, merge commit, tag). The
