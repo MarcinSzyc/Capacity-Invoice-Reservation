@@ -1,4 +1,4 @@
-# ADR-0005: Money and rate representation across API, domain and storage
+# ADR-0006: Money and rate representation across API, domain and storage
 
 - Status: proposed
 - Date: 2026-09-19

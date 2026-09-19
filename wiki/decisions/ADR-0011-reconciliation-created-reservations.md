@@ -1,4 +1,4 @@
-# ADR-0010: Reservations created by reconciliation
+# ADR-0011: Reservations created by reconciliation
 
 - Status: proposed
 - Date: 2026-09-19

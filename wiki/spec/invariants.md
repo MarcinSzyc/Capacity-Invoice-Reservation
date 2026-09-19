@@ -54,9 +54,9 @@ cross-currency operations), unit tests for rounding half up, API schema tests.
 against: unexplained changes to capacity. Test: storage constraint plus unit test of each
 use case.
 
-**INV-10 Business endpoints are unreachable without a valid token.** Every route except
-liveness, readiness, API docs (non-production) and the demo page (dev) answers `401`
-without a valid token. Guards against: a route added without the guard. Test: e2e sweep
+**INV-10 Business endpoints are unreachable without a valid token.** Every `api` route
+except liveness, readiness, API docs (non-production) and the dev-only endpoints the demo
+page uses (dev profile only) answers `401` without a valid token. Guards against: a route added without the guard. Test: e2e sweep
 over the route list of the running application, asserting `401` for each business route
 without a token. [A-14, A-16]
 
@@ -69,3 +69,4 @@ property over random event sequences including limit reductions.
 | Date | Id | Change | Where |
 |---|---|---|---|
 | 2026-09-19 | INV-01 to INV-11 | first version, output of the spec gate | PR #5 |
+| 2026-09-19 | INV-10 | wording: exceptions are the `api` dev-only endpoints, not a demo page on the api | docs/adr-renumber-and-deployment |

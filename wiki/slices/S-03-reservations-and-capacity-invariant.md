@@ -5,7 +5,7 @@
 - AC: AC-01, AC-02, AC-03, AC-04, AC-05, AC-08, AC-09, AC-21, AC-22
 - INV: INV-01, INV-03, INV-04, INV-09, INV-11
 - Risk: high. Concurrency: the core invariant of the brief (never overcommit) is decided here, under two service instances against one database. Implemented on Fable per `CLAUDE.md §8`.
-- Depends on: S-02. ADR that must be accepted first: [[../decisions/ADR-0007-concurrency-control-per-program]].
+- Depends on: S-02. ADR that must be accepted first: [[../decisions/ADR-0008-concurrency-control-per-program]].
 
 ## Scope
 
@@ -16,11 +16,11 @@ Domain:
 - Domain errors: `CapacityExceeded`, `ReservationAlreadyExists`, `ProgramNotFound`.
 
 Application:
-- `ReserveCapacity` use case: one transaction, lock the program row (ADR-0007), find an existing reservation for `(programId, invoiceId)` → `ReservationAlreadyExists(existing)`, `Program.reserve`, persist reservation, append movement with `clientId`, update `programs.reserved`. Returns the reservation.
+- `ReserveCapacity` use case: one transaction, lock the program row (ADR-0008), find an existing reservation for `(programId, invoiceId)` → `ReservationAlreadyExists(existing)`, `Program.reserve`, persist reservation, append movement with `clientId`, update `programs.reserved`. Returns the reservation.
 - Same-currency validation lives in the DTO: `invoiceCurrency` must equal the program currency until S-04 (a different currency is `400` here; S-04 changes that rule and its test).
 
 Infrastructure:
-- Migration: `reservations(id, program_id FK, invoice_id, invoice_amount BIGINT, invoice_currency, reserved_amount BIGINT, held BIGINT, rate NUMERIC per ADR-0005, source, client_id NULL, created_at, UNIQUE (program_id, invoice_id))`. `capacity_movements.reservation_id` references it.
+- Migration: `reservations(id, program_id FK, invoice_id, invoice_amount BIGINT, invoice_currency, reserved_amount BIGINT, held BIGINT, rate NUMERIC per ADR-0006, source, client_id NULL, created_at, UNIQUE (program_id, invoice_id))`. `capacity_movements.reservation_id` references it.
 - `POST /programs/:programId/reservations` body `{invoiceId, invoiceAmount, invoiceCurrency, rate?}` → `201` with the reservation `{programId, invoiceId, invoiceAmount, invoiceCurrency, reservedAmount, held, rate, status, source, createdAt}`. Errors: `400 VALIDATION_FAILED` (`details.fields[]` names each field), `404 PROGRAM_NOT_FOUND`, `409 RESERVATION_ALREADY_EXISTS` (`details.reservation`), `422 CAPACITY_EXCEEDED` (`details.available`, integer minor units, program currency).
 - The reservation id in every later route is the `invoiceId`, since `(programId, invoiceId)` is unique (A-07); no generated public id.
 - `GET /programs/:programId/availability` now returns real `reserved` and `overcommitted`.
@@ -47,7 +47,7 @@ Infrastructure:
 
 ## ADR candidates
 
-- [[../decisions/ADR-0007-concurrency-control-per-program]]: pessimistic row lock (`SELECT ... FOR UPDATE`, A-04's recommendation) vs optimistic version column vs conditional `UPDATE ... WHERE` vs serializable isolation with retry.
+- [[../decisions/ADR-0008-concurrency-control-per-program]]: pessimistic row lock (`SELECT ... FOR UPDATE`, A-04's recommendation) vs optimistic version column vs conditional `UPDATE ... WHERE` vs serializable isolation with retry.
 
 ## Definition of done
 

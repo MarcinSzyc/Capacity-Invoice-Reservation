@@ -1,4 +1,4 @@
-# ADR-0001: Storage engine and data access library
+# ADR-0002: Storage engine and data access library
 
 - Status: proposed
 - Date: 2026-09-19
