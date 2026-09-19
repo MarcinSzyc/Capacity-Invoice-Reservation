@@ -40,7 +40,13 @@ entries for this slice in `wiki/log/work-log.md`.
    ship changes, pushing the branch, opening the PR, merging, tagging. Do none of these
    without an explicit yes for that action; afterwards fill the commit column in
    `wiki/plan/plan.md` with the merge commit.
-8. Append a work-log entry.
+8. **Back to `main`, once the merge happened.** After the merge commit exists and the tag is
+   pushed, switch to `main` and fast forward it, so the next gate starts where it expects to
+   and nobody keeps working on a branch that is already merged. Switching branches lets
+   nothing out of the working tree, so it needs no yes; stop and ask if the tree is dirty.
+   If the user did not merge, stay on the slice branch: it is still the work in progress.
+   Leave the slice branch alone either way, deleting it is the user's call.
+9. Append a work-log entry.
 
 ## You must not
 

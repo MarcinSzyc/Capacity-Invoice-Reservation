@@ -10,6 +10,11 @@ the slice references. Then read the current code you will touch.
 
 ## Preconditions, check before writing anything
 
+- **Branch first.** Put yourself on `slice/$ARGUMENTS-<slug>` before writing anything, so no
+  code is ever written onto `main` (`CLAUDE.md §6`). Creating a branch lets nothing out of the
+  working tree, so it needs no permission; committing it still does. Check `git status` first
+  and stop if the tree is dirty, rather than carrying someone else's work onto a new branch.
+  Cut it from an up to date `main`; if it already exists, switch to it and continue there.
 - The slice file exists and every slice it depends on has status `done` in its own file.
   Set this slice's status to `in progress` and append a line to its `Log` section.
 - Every ADR the slice depends on has status `accepted`. If one is still `proposed`,
