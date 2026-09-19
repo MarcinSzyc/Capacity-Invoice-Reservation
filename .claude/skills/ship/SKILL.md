@@ -36,9 +36,10 @@ entries for this slice in `wiki/log/work-log.md`.
 7. **Pull request.** Propose, do not execute: the PR title `feat(S-xx): <outcome>` and
    a description with outcome, AC/INV closed, ADRs accepted, how it was tested, known
    limitations. The slice branch is `slice/S-xx-<slug>`, rebased on `main`, merged with
-   `--no-ff`, merge commit tagged `S-xx` (see `CLAUDE.md §6`). Open, merge and tag only if
-   the user says so; afterwards fill the commit column in `wiki/plan/plan.md` with the merge
-   commit.
+   `--no-ff`, merge commit tagged `S-xx` (see `CLAUDE.md §6`). Ask before each of: committing the
+   ship changes, pushing the branch, opening the PR, merging, tagging. Do none of these
+   without an explicit yes for that action; afterwards fill the commit column in
+   `wiki/plan/plan.md` with the merge commit.
 8. Append a work-log entry.
 
 ## You must not
@@ -46,3 +47,4 @@ entries for this slice in `wiki/log/work-log.md`.
 - Modify `src/` or `test/`.
 - Accept an ADR or add an assumption on the user's behalf.
 - Ship over a failed or stale verify/review.
+- Commit, push, open, merge or tag without an explicit yes for that action.

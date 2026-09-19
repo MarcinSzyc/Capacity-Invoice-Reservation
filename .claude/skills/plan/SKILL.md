@@ -76,8 +76,9 @@ waiting for it.
 
 ## Hand-off
 
-Do not commit. Report the branch name to use, `docs/plan-S-xx`, and remind the user that
-the ADR decisions are made in that PR's review before `/implement` may start.
+Do not commit, push or open a PR. Report the files written and the branch name to use,
+`docs/plan-S-xx`, ask whether to commit, and remind the user that the ADR decisions are
+made in that PR's review before `/implement` may start.
 
 ## Output
 
