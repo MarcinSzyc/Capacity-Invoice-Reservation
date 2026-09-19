@@ -32,6 +32,7 @@ Check the diff against `CLAUDE.md §2, §3, §4`. The things that actually go wr
   contradicts the glossary (e.g. `amount` where the glossary says `held`)
 - a business error without a stable code in the body
 - em or en dashes in any Markdown, comment or commit message
+- a spec file changed in the diff without a matching row in its `## Changes` table
 
 ## Axis 2: spec
 

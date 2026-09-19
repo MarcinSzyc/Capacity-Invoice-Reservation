@@ -170,6 +170,9 @@ wiki/testing/strategy.md        test pyramid and rules
   commit messages. Use a comma, a colon, a period or parentheses. Enforced by the prose
   check in the gate.
 - Work-log entries are never edited after the fact. Correct with a new entry.
+- Requirement changes are logged twice: a row in the `## Changes` table at the end of
+  the spec file (acceptance criteria, invariants, assumptions) and a line in the work-log
+  entry of the session. A new or amended AC without a Changes row is a review finding.
 - Assumptions are numbered `A-xx`, acceptance criteria `AC-xx`, invariants `INV-xx`,
   slices `S-xx`, decisions `ADR-xxxx`. Ids are stable once assigned.
 - `README.md` at repo root is the reviewer's entry point: how to run, where the
