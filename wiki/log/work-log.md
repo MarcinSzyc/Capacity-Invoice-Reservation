@@ -53,3 +53,5 @@ correct with a new one. Format:
 
 ## 2026-09-19, setup/ci-actions-node24
 - PR #9: GitHub actions bumped to v7 (Node 24 runtime), gate job on Node 24 LTS, new CI job failing a PR that does not touch the work-log.
+## 2026-09-19, setup/slice-files
+- PR #8: plan.md is the requirement checklist (traceability folded in), slices one file each under wiki/slices with README index, /plan accepts AC and INV ids, spec revisions add Changes rows, every PR appends to the work-log.
