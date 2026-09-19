@@ -411,3 +411,11 @@ built.
 currency, `asOf` of the last reconciliation, overcommitted flag) and a single
 reservation by id (all three amounts, rate, status, movements). Listing reservations of a
 program is not an acceptance criterion.
+
+## Changes
+
+| Date | Id | Change | Where |
+|---|---|---|---|
+| 2026-09-18 | A-01 to A-04 | written during the spec discussion | PR #5 |
+| 2026-09-19 | A-05 to A-19 | written from the answered questions; A-05 awaits wording confirmation | PR #5 |
+| 2026-09-19 | A-16 | amended: Swagger UI and Redoc, both views over one OpenAPI document | PR #10 |

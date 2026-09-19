@@ -200,3 +200,13 @@ line per step carries a correlation id shared across that request's or message's
 **AC-41 Assumptions documented.** The repository README links to the assumptions
 register, the decision records and the run instructions, and each is current at every
 shipped slice. [brief: "document them briefly"]
+
+## Changes
+
+Every addition, amendment or supersession of an AC, newest last. Ids never change.
+
+| Date | Id | Change | Where |
+|---|---|---|---|
+| 2026-09-19 | AC-01 to AC-41 | first version, output of the spec gate | PR #5 |
+| 2026-09-19 | AC-00 | added: project baseline (walking skeleton), Node 24, compose, gate scripts, README, API docs | PR #10 |
+| 2026-09-19 | AC-35 | amended: API documentation is Swagger UI and Redoc over one OpenAPI document | PR #10 |
