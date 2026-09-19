@@ -19,6 +19,9 @@ If any of `wiki/spec/{acceptance-criteria,invariants,assumptions,glossary,open-q
 already exist, read them and treat this run as a **revision**: every existing id stays
 stable, new items get the next free id, changed items are marked `superseded by <id>`
 rather than edited in place, and each new AC/INV/A records which source it came from.
+Every added, amended or superseded id gets a row in the `## Changes` table at the end of
+its file (date, id, one-line change, PR or branch), so the history of the requirements
+is readable in the file itself, not only in git.
 
 ## Goal
 
