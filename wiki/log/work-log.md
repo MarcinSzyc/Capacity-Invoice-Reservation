@@ -123,3 +123,7 @@ correct with a new one. Format:
 - Nothing committed. Proposed branch for this plan: `docs/plan` (one PR for the whole
   plan, since ADR-0001..0003 must be decided before S-01 and the per-slice `docs/plan-S-xx`
   rule in CLAUDE.md §6 was written for later revisions).
+- Added ADR-0011 technology baseline (accepted): Node 24 LTS, NestJS 11, TypeScript
+  strict, npm, with the alternatives not taken. Marcin asked why the baseline decisions in
+  AC-00 had no ADR; lint, format and the documentation views stay where they already are
+  (CLAUDE.md §3, A-16), the framework and runtime choice had no record until now.
