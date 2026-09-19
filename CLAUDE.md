@@ -40,9 +40,17 @@ Two isolated folders joined by npm workspaces at the root (ADR-0001): `api/` is 
 service, `web/` is a small React UI. Nothing is imported across them; their only contract is
 the OpenAPI document `api` publishes.
 
+**Technology baseline (ADR-0001).** Node 24 LTS, NestJS 12, TypeScript 6 `strict`, npm
+workspaces; Prisma 7 on PostgreSQL (ADR-0002), kafkajs (ADR-0003), Jest 30 with Testcontainers
+(ADR-0004), ESLint 10 with `typescript-eslint` 8, Prettier 3; `web` is React with Vite and
+Vitest. Versions are pinned in each workspace `package.json`. The framework major moved from
+11 to 12 during S-01: 11 is tagged `legacy` on npm and carries an open `multer` advisory. A
+major upgrade is a setup PR with a work-log line and an amendment to ADR-0001, never a silent
+bump inside a slice.
+
 ```
 package.json                 workspaces: api, web. Root scripts fan out to both.
-docker-compose.yml           api, web, db, kafka
+docker-compose.yml           api, web, db, kafka, studio
 api/
   src/modules/<area>/
     domain/          pure TypeScript. No @nestjs/* imports, no decorators, no I/O.
@@ -51,12 +59,33 @@ api/
     <area>.module.ts
   src/common/        truly generic cross-cutting code only (filters, guards, logger).
   src/config/        typed configuration.
+  src/persistence/   the database connection, one module, nothing business specific.
+  src/messaging/     the Kafka connection: client, admin, subscribe and commit plumbing.
+  src/health/        liveness and readiness. Owns no business data.
   test/              e2e tests (*.e2e-test.ts) and test infrastructure.
 web/
   src/               React + Vite + TypeScript strict. A few tables and forms, plain CSS,
                      no state library. Calls api over HTTP, contains no business rules.
 ```
 
+- **Two tiers, and only two.** `src/modules/<area>/` holds business areas and is where the
+  three layers apply. `src/persistence/`, `src/messaging/` and `src/health/` are the app-level
+  tier: one folder per module directly under `src/`, which is the NestJS convention (`nest g
+  module health` produces exactly `src/health/`). They carry connections and process-level
+  concerns, never a business rule. A new folder at this level needs a reason in review; a new
+  business area always goes under `src/modules/`.
+- **A message is split between the two tiers.** `src/messaging/` owns the connection and the
+  loop that pulls bytes off a topic and commits offsets; it knows nothing about programs,
+  reservations or the shape of a payload. Validating a message, mapping it to a typed command
+  and calling a use case is message handling, so it is a consumer under
+  `src/modules/<area>/infrastructure/` like any other adapter, behind the port the module
+  defines. If a file names a business word, it does not belong in `src/messaging/`.
+- **Connections are not global.** Only `config` and `common` are `@Global()`. A module that
+  needs the database or the broker imports `PersistenceModule` or `MessagingModule`, as the
+  NestJS documentation advises over global modules. The Prisma client is held rather than
+  extended, so the ORM is reached through one named door instead of the service being the ORM.
+  That is for readability; the rule that actually keeps persistence out of `domain/` and
+  `application/` is the import boundary lint, and it is the one to fix if it can be evaded.
 - **Domain is framework-free.** Entities, value objects, domain services and domain
   errors are plain classes. Dependencies enter through interfaces (ports) defined in
   `domain/` and implemented in `infrastructure/`. Lint enforces the import boundary.
@@ -118,7 +147,12 @@ Strategy in detail: `wiki/testing/strategy.md`. The rules that matter every day:
 - **Contract tests for Kafka**: message schema, idempotency, out-of-order and
   duplicate delivery.
 - Naming: `describe('<Class|UseCase>')`, `it('[AC-03] should reject a reservation that
-  exceeds available capacity')`. Every e2e/invariant test carries its AC or INV id.
+  exceeds available capacity')`. An e2e or invariant test that closes a requirement carries
+  its AC or INV id, and that tag is what `/verify` counts. A supporting test that proves only
+  the harness or a piece of infrastructure (a health probe answering, a correlation id being
+  echoed, the error envelope having its shape) carries no tag, because tagging it would close
+  a requirement that a later slice owns. If a supporting test is the only proof a requirement
+  has, it is not supporting: give it the tag.
 - Fixture values in UPPERCASE constants. Tests read top-down, no shared mutable state.
 - Coverage is not a metric. Traceability is: `wiki/plan/plan.md` maps each AC and INV to
   a test, a test file and a commit, with its status.

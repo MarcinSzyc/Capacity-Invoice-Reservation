@@ -1,0 +1,32 @@
+{
+  "name": "capacity-invoice-reservation",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Program Capacity & Invoice Reservation: a capacity ledger for invoice financing programs",
+  "license": "UNLICENSED",
+  "engines": {
+    "node": ">=24"
+  },
+  "workspaces": [
+    "api",
+    "web"
+  ],
+  "scripts": {
+    "lint": "npm run lint --workspaces",
+    "format:check": "npm run format:check --workspaces",
+    "format": "npm run format --workspaces",
+    "typecheck": "npm run typecheck --workspaces",
+    "build": "npm run build --workspaces",
+    "check:prose": "scripts/check-prose.sh",
+    "test": "npm run test --workspaces",
+    "test:integration": "npm run test:integration -w api",
+    "test:e2e": "npm run test:e2e -w api",
+    "smoke": "scripts/smoke.sh",
+    "gate:quick": "npm run lint && npm run format:check && npm run typecheck && npm run check:prose && npm run build && npm run test && npm run test:integration",
+    "gate": "npm run gate:quick && npm run test:e2e && npm run smoke",
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "husky": "^9.1.7"
+  }
+}
