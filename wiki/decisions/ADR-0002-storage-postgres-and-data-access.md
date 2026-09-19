@@ -1,7 +1,7 @@
 # ADR-0002: Storage engine and data access library
 
 - Status: accepted
-- Date: proposed 2026-09-19, accepted 2026-09-19
+- Date: proposed 2026-09-19, accepted 2026-09-19, amended 2026-09-19 (inspection tool: pgweb)
 - Slice: S-01 (decided before it starts; used from S-02 on)
 - Related: A-04, A-15, INV-01, INV-04, INV-08, INV-09
 
@@ -66,6 +66,14 @@ Prisma Studio is a fifth compose service, `studio`, built from the `api` image a
 `docker compose up` in the dev profile and absent from production. If it disappoints, a
 web tool such as pgweb replaces it in the same slot with no other change. Decided by Marcin
 on 2026-09-19.
+
+Amended on 2026-09-19 during S-01, taking exactly that fallback. Prisma Studio 7 binds
+`127.0.0.1` inside its container and offers no option to bind anything else (no `--hostname`
+flag, and `HOST` is ignored), so its port cannot be published and a browser on the host can
+never reach it. The `studio` service therefore runs `sosedoff/pgweb:0.17.0` instead, on the
+same port `5555`, pointed at the same database with `--url` so it is connected the moment the
+stack is up. Nothing else changed: the slot, the port and the purpose are the ones decided
+above. Should Prisma Studio gain a bind option, it can move back with no other change.
 
 ## Consequences
 

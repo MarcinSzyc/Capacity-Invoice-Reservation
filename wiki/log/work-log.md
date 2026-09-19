@@ -162,3 +162,571 @@ correct with a new one. Format:
 - ADR-0004 accepted by Marcin following the recommendation: Testcontainers for integration
   and e2e, compose stack only for the cold start smoke, Jest with three projects plus the
   cold start project. All three ADRs blocking S-01 are now accepted.
+
+## 2026-09-19, implement S-01, Opus
+- Started S-01 on branch `slice/S-01-walking-skeleton`. Slice status set to `in progress`.
+  All three blocking ADRs (ADR-0002, ADR-0003, ADR-0004) were already accepted.
+- Framework major moved from NestJS 11 to NestJS 12, decided by Marcin while the workspaces
+  were being installed. Two reasons: 12.0.3 carries the npm `latest` tag while the 11 line
+  ended at 11.2.5 and is now tagged `legacy`, so a service starting today would start one
+  major behind; and 11 has an open high severity advisory through `multer` in
+  `@nestjs/platform-express` (denial of service via crafted multipart field names) that is
+  fixed only in 12. The advisory is not reachable here, no route in the brief takes a file,
+  but a red `npm audit` on day one is noise every later slice inherits.
+- Recorded in four places at Marcin's request: [[../decisions/ADR-0001-technology-baseline]]
+  (amended status line, Framework section with the reasoning and the whole version matrix,
+  Decision paragraph), the ADR index row in `wiki/decisions/README.md`, the technology
+  baseline paragraph added to `CLAUDE.md §2`, and the scope line of
+  [[../slices/S-01-walking-skeleton]]. ADR-0001 already said a major upgrade is a setup
+  change with a work-log line rather than a new ADR, so no new ADR was drafted.
+- Version matrix pinned in `api/package.json`, each range written as the exact latest
+  resolved version: NestJS 12.0.3, TypeScript 6.0.3, ESLint 10.11.0 with `typescript-eslint`
+  8.70.0, Jest 30.5.2 with `ts-jest` 29.4.12, Testcontainers 12.1.0, Prisma 7.10.0 for client
+  and CLI. TypeScript 6 rather than the newer 7 because `@nestjs/schematics` 12 requires
+  `>=6` and `typescript-eslint` 8 supports `<6.1`, so 6 is the only version the whole
+  toolchain accepts. Prisma stays on 7: the `latest` tag of `prisma` is an 8.0.0 release
+  candidate and a baseline does not start on a prerelease.
+- Known audit noise, accepted and not fixed: the Prisma 7 CLI pulls a vulnerable `mysql2`
+  transitively (dev dependency, a driver we never load, Postgres is the only engine) and
+  `deepmerge-ts` through `@prisma/config`. Both clear when Prisma 8 ships stable, which is a
+  setup PR at that point.
+- Built the walking skeleton test first. Red then green, in this order: the config loader unit
+  test (missing variable names itself, boot fails fast), the AC-41 README test, the health e2e
+  test over supertest, the Prisma integration test against a Testcontainers Postgres, and last
+  the AC-00 cold start test against the compose stack. Both tagged tests from the plan exist
+  and pass with the names the plan gives them.
+- Shape of `api`: `src/config` (typed configuration, validated once at boot), `src/common`
+  (JSON logger with a correlation id in `AsyncLocalStorage`, one exception filter with the
+  `{statusCode, code, message, details?}` envelope where 5xx says only `INTERNAL_ERROR`, the
+  OpenAPI setup), `src/persistence` (Prisma), `src/messaging` (kafkajs, readiness only for
+  now), `src/health` (liveness, readiness over database and broker). No module under
+  `src/modules` yet, as the slice says. `src/app-setup.ts` holds the pipeline so `main.ts` and
+  the e2e tests configure the app the same way.
+- Consequence of NestJS 12 found while wiring the tests: the framework now ships as ES modules
+  only. Jest evaluates those only with Node's `--experimental-vm-modules`, which must be set
+  when the process starts, so `api/scripts/run-jest.mjs` re-executes Jest with the flag. That
+  keeps the four test scripts working on any operating system without an extra dependency.
+  The compiled service itself stays CommonJS and loads the ESM framework through Node 24's
+  `require(esm)`.
+- Prisma 7 no longer takes the connection URL from the schema: it lives in `api/prisma.config.ts`
+  with the `@prisma/adapter-pg` driver adapter. The URL is read leniently there so that
+  `prisma generate` runs during the image build, where no database exists.
+- `studio` is pgweb, not Prisma Studio. Prisma Studio 7 binds `127.0.0.1` inside its container
+  with no flag to change it, so its port cannot be published and a browser on the host never
+  reaches it. ADR-0002 had already named pgweb as the fallback "in the same slot with no other
+  change", so that is what happened: same service name, same port 5555, connected to the same
+  database on start. ADR-0002, ADR-0001, the S-01 scope line and the README now say pgweb.
+- Compose health checks address `127.0.0.1`, not `localhost`: in the nginx image `localhost`
+  resolves to `::1` first while the server listens on IPv4 only, which made `web` never turn
+  healthy. Every port is overridable (`API_PORT`, `WEB_PORT`, `DB_PORT`, `KAFKA_PORT`,
+  `STUDIO_PORT`) with the documented defaults, because a reviewer may already have something on
+  port 3000; plain `docker compose up` still needs no `.env`.
+- Testcontainers runs the same `apache/kafka:4.3.1` image as compose (ADR-0003, ADR-0004). The
+  `@testcontainers/kafka` module only drives Confluent images, so `test/support/kafka-container.ts`
+  performs the same starter script handshake by hand: the container idles until we write the
+  advertised listener with the mapped host port. Images are named once in `test/support/images.ts`
+  and mirrored in `docker-compose.yml`.
+- Definition of done checked by hand: a probe file under `src/modules/programs/domain/` importing
+  `@nestjs/common`, the generated Prisma client and a file from `infrastructure/` produced three
+  lint errors, one per rule, and was deleted afterwards. `docker compose down -v` followed by
+  `docker compose up --wait` turns the whole stack healthy in 22 to 37 seconds, well inside the
+  two minute budget.
+- Tests written beyond the two the plan names, for `/ship` to add to the checklist: the config
+  loader suite (7 cases), three Prisma integration cases, four health e2e cases, a second cold
+  start case (no documentation view answers 401), a second README case (health and both
+  documentation views are named in it) and two `web` render cases.
+- Local choices worth naming, none of them ADR material: Vitest for `web` (it is the Vite native
+  runner; ADR-0004 chose Jest for the NestJS side and its reasoning is about `@nestjs/testing`),
+  hand written health endpoints rather than `@nestjs/terminus` (the envelope stays ours, about
+  forty lines), Redoc loaded from its CDN bundle in the dev profile only, and the repository
+  README test living in `api/test/` because that is the only workspace with a test runner.
+- Known noise, not defects: kafkajs 2.2.4 prints a `TimeoutNegativeWarning` from its internal
+  request queue on Node 24, and npm 11 now withholds dependency install scripts behind
+  `npm approve-scripts`. Neither affects the gate, and both behave the same locally and in CI.
+
+## 2026-09-19, verify S-01, Sonnet
+- Full gate: `npm run gate` green (lint, format, typecheck, prose check, build, unit,
+  integration, e2e, cold start). No retries, nothing flaky.
+- Coverage: 2/2 AC covered (AC-00, AC-41), 0/0 INV (none claimed). Both tags found in
+  tests that ran and passed; no `.skip`, `.only`, `xit` anywhere. Test bodies assert real
+  response bodies and status codes, not trivially true.
+- Level matches the plan: AC-00 runs over real HTTP against the compose stack (cold
+  start level, not a use case call); AC-41 reads the actual `README.md` from disk.
+- Style: prose check clean; no nested ternaries or braced one-line `if` introduced since
+  ADR-0002/3/4 acceptance.
+- Layer boundaries: no `src/modules/*/domain` exists yet (none planned for S-01); the
+  only Prisma/kafkajs imports outside `infrastructure/`-equivalent folders are the
+  generated client itself. The `no-restricted-imports` boundary rule is wired and was
+  hand-verified with a probe file per the slice's definition of done.
+- Cold start: `docker compose down -v`, `docker compose up -d --build`, `docker compose
+  up --wait` turned healthy. `/health`, `/health/ready`, `/openapi.json`, `/docs`,
+  `/redoc` all answered 200 with no `Authorization` header, matching AC-00/AC-35; a
+  bogus bearer token did not break anything (no auth exists until S-02, as scoped).
+  `web` answered 200. Unknown route returned the `{statusCode, code, message}` envelope.
+  Torn down with `docker compose down -v` afterwards.
+- README: followed literally, every linked file exists, every documented URL answered
+  as described, `npm ci && npm run gate:quick` and `npm run gate` both green.
+- No blocker or major findings.
+
+## 2026-09-19, review S-01, Fable
+- REVIEW S-01: 11 findings (1/3/7). Returned to `/implement`; `/verify` and `/review` run again.
+- Blocker: `PrismaService extends PrismaClient` and is exported from a `@Global()` module, so
+  the ORM is visible outside `infrastructure/` (CLAUDE.md §2). Majors: the import boundary
+  lint covers `domain/` only while ADR-0002 says `domain/` and `application/`; `src/health`,
+  `src/messaging`, `src/persistence` are top level folders absent from the §2 layout; the
+  smoke tears down the developer's own compose project and volume. Minors: untagged e2e tests,
+  dead `SERVICE_UNAVAILABLE` mapping, separator-only `KAFKA_BROKERS` passes validation,
+  `CONSUMER_GROUP` used as `clientId`, Redoc bundle unpinned, A-17 and CLAUDE.md still say
+  four containers, ADR and slice amendments inside the implement commit.
+
+## 2026-09-19, implement S-01 (review fixes), Opus
+- Fix round for the eleven findings of `/review`. Nine fixed, one pushed back on with
+  reasoning, one handed to `/spec` because `/implement` may not edit the spec.
+- Blocker fixed: `PrismaService` no longer extends `PrismaClient`, it holds one privately and
+  exposes `isReachable()` plus `withClient()`, the single door for repositories under
+  `infrastructure/` in S-02. `PersistenceModule` and `MessagingModule` lost `@Global()`, so
+  `HealthModule` now imports what it uses. The NestJS Prisma recipe does extend the client, but
+  CLAUDE.md §2 is stricter on purpose and the NestJS module documentation itself advises the
+  `imports` array over global modules. The typecheck error this produced in the integration
+  test (`$queryRaw` no longer reachable from outside) is the proof the boundary now holds.
+- Major fixed: the ESLint boundary rule gained an `application/**` block, so the data access
+  library is refused there too, which is what accepted ADR-0002 promised.
+- Major fixed: `scripts/smoke.sh` runs under its own compose project name `capacity-smoke` and
+  its own ports (3100, 8180, 55432, 19092, 15555). `npm run gate` can no longer stop a
+  developer's stack or delete the `db-data` volume holding rows edited by hand in pgweb.
+- Major settled by amending `CLAUDE.md §2` rather than moving code, after checking what the
+  NestJS documentation actually prescribes: one directory per module directly under `src/`
+  (`nest g module health`, the command in the Terminus recipe, generates `src/health/`
+  verbatim; the Prisma recipe is flatter still at `src/prisma.service.ts`). NestJS has no
+  notion of `domain`/`application`/`infrastructure`; that layering is this repository's own
+  overlay. §2 now names the app-level tier (`src/persistence/`, `src/messaging/`, `src/health/`),
+  states that only `config` and `common` are global, and lists `studio` as the fifth compose
+  service.
+- Minor fixed: the unreachable `SERVICE_UNAVAILABLE` entry removed from `CODE_BY_STATUS`;
+  `KAFKA_BROKERS` holding only separators now fails boot instead of yielding an empty list;
+  `CLIENT_ID` split from `CONSUMER_GROUP` because a kafkajs client id and a consumer group are
+  different things (ADR-0003 names the group); the Redoc bundle pinned to `v2.5.3` instead of
+  tracking `latest`.
+- Pushed back, not fixed: the four untagged health e2e tests. The S-01 slice plans them
+  explicitly as "supporting tests without a tag, needed so every level of the harness runs at
+  least once", and tagging them `[AC-35]` or `[AC-40]` would claim acceptance criteria that the
+  plan assigns to S-02, where their real e2e tests belong. They stay untagged.
+- Handed to `/spec`, out of reach of this gate: A-17 still says `docker compose up` starts four
+  containers while compose, ADR-0001 and the README have five. That needs an amendment with a
+  Changes row in `wiki/spec/assumptions.md`, which `/implement` must not edit.
+- Not split, by Marcin's decision: the wiki amendments that rode inside commit d94bd05 stay
+  where they are. The branch is already pushed and rewriting it would mean a force-push, which
+  the rules forbid once history is shared. Fixed forward instead.
+- `npm run gate` green after the round, and the smoke left no containers behind.
+
+## 2026-09-19, verify S-01 (re-verify after fix round), Sonnet
+- Full gate: `npm run gate` green on commit 5959111 (lint, format, typecheck, prose,
+  build, unit, integration, e2e, cold start). `npm run smoke` confirmed running under
+  its own `capacity-smoke` compose project and ports, isolated from the developer's own
+  stack as the fix claims; no containers left behind afterwards.
+- Coverage: 2/2 AC covered (AC-00, AC-41), 0/0 INV (none claimed). Same tags, same
+  passing tests as the previous verify; no `.skip`/`.only`/`xit` introduced.
+- Level unchanged and still correct: AC-00 over real HTTP against the compose stack,
+  AC-41 against the real README on disk.
+- Style: prose check clean; diff since the last verify (d94bd05..HEAD) has no nested
+  ternary or braced one-line `if`.
+- Layer boundaries, re-checked against the review's blocker: `PrismaService` no longer
+  extends `PrismaClient` (holds it privately, exposes `isReachable()`/`withClient()`
+  only); grep for `.$queryRaw`/`.$connect`/`.$disconnect` outside
+  `prisma.service.ts` is empty. `PersistenceModule` and `MessagingModule` are no longer
+  `@Global`; `HealthModule` imports both explicitly. The ESLint boundary rule now covers
+  `application/**` as well as `domain/**`, matching ADR-0002. No `src/modules/*/domain`
+  exists yet, none planned for S-01.
+- Cold start: clean `down -v`, `up -d --build`, `up --wait` turned healthy. Every
+  documented endpoint answered 200 with no `Authorization` header; a bogus bearer token
+  did not break `/health` or `/health/ready` (no auth exists until S-02); the error
+  envelope on an unknown route is unchanged after the dead-code removal
+  (`{statusCode, code, message}`); Redoc served `v2.5.3`, matching the pin. Torn down
+  afterwards.
+- README: every linked file exists; every documented URL and command behaved as
+  written, including the new claim that `npm run smoke` cannot touch the developer's
+  own stack, confirmed live in the gate run above.
+- One minor finding remains open from the previous review, correctly outside
+  `/implement`'s reach: `wiki/spec/assumptions.md` A-17 still states `docker compose up`
+  starts four containers; compose, ADR-0001, CLAUDE.md and the README all agree on five
+  (`studio` included). Needs a `/spec` amendment with a Changes row before `/ship`.
+  Not a blocker or major, does not fail this gate.
+
+## 2026-09-19, review S-01 (second round), Fable
+- REVIEW S-01: 9 findings (0/0/9). Pass: zero blockers, zero majors. The blocker and the
+  three majors of the first round are closed in the code (`PrismaService` holds the client,
+  no `@Global()` on connections, boundary lint covers `application/**`, smoke isolated under
+  `capacity-smoke`). Minors, for Marcin's call in the PR rather than a fix round: the
+  CLAUDE.md §2 amendment landed through `/implement` and needs his explicit acceptance;
+  A-17 still says four containers (needs `/spec`); untagged health e2e tests conflict with
+  CLAUDE.md §4 while the approved plan exempts them; readiness probes have no timeout so a
+  hung dependency stalls `/health/ready` instead of a 503; the production guard on the
+  documentation views has no test; `CONSUMER_GROUP` is an unused export; `web` lint lacks
+  the explicit return type rule `api` has; a boot failure is a raw unhandled rejection, not
+  a JSON log line; kafkajs runs at `logLevel.NOTHING` so a `broker: down` has no cause in
+  the logs.
+
+## 2026-09-19, implement S-01 (second review round), Opus
+- Second `/review` returned nine findings, all minor, zero blockers and zero majors: the
+  first round's blocker and its three majors are closed in code. Six findings fixed here,
+  one taken in part, three are Marcin's to decide.
+- Readiness probes are now bounded by `probeWithin` (2 seconds), written test first with five
+  unit cases covering an answer in time, no answer, a late answer, a throwing probe and the
+  case where a fast probe must not wait out the timeout. This was a real defect: measured
+  against a dead broker, kafkajs retries for more than five seconds before it gives up, so
+  `GET /health/ready` would have hung instead of answering `503` as the slice scope promises.
+  The integration test could not catch it because `127.0.0.1:1` refuses instantly.
+- The production profile guard now has a test. `test/docs.e2e-test.ts` builds the app twice,
+  once outside production where `/openapi.json`, `/docs` and `/redoc` all answer `200`, and
+  once with the profile overridden to `production` where all three answer `404` while
+  liveness still answers `200`. A-16's "not served in production" was previously unproven at
+  any level.
+- kafkajs errors are no longer swallowed: `logLevel.NOTHING` became `logLevel.WARN` with a
+  `logCreator` routing through `JsonLogger`. Verified by hand against a dead broker, the cause
+  now appears as JSON lines carrying the client id as context, and `isReachable()` still
+  returns false (A-18).
+- A boot failure is logged as JSON and exits 1 instead of surfacing as an unhandled rejection
+  printing a raw stack, so the one line a misconfigured deployment produces matches every
+  other line (A-18).
+- `CONSUMER_GROUP` removed: it was exported and used nowhere, which is dead code under §3. It
+  belongs in S-02's commit, with the consumer that subscribes.
+- `web` lint gained `explicit-module-boundary-types`, which `api` already enforced and §3
+  requires of both workspaces.
+- Tag policy, taken in part: the liveness e2e test now carries `[AC-00]`, because it asserts
+  that criterion's own Then clause ("`GET /health` answers `200` without a token") and tagging
+  it claims nothing that belongs to S-02. The other three e2e tests stay untagged as the slice
+  plans them; whether §4 or the plan gives way is Marcin's call.
+- Still open, both needing Marcin rather than this gate: A-17 says four containers where
+  everything else says five, which needs `/spec`; and the `CLAUDE.md §2` amendment that
+  legitimised `src/health`, `src/messaging` and `src/persistence` was written by the same gate
+  whose code it judges, so it needs his explicit acceptance in the PR review.
+- `npm run gate` green after the round: 14 unit, 2 web render, 3 integration, 7 e2e, 2 cold start.
+
+## 2026-09-19, spec (A-17 correction), Fable
+- Amended A-17 only, closing the last open finding of the second `/review` of S-01. The
+  statement said `docker compose up` starts four containers while compose, ADR-0001,
+  ADR-0002, `CLAUDE.md` and the README all say five. It now says five and names `studio`
+  as a database browser on its own port, dev profile only, never deployed to production,
+  so a reviewer can read and correct rows by hand without installing a client. Which tool
+  fills that slot stays ADR-0002's decision rather than the spec's, so the assumption does
+  not pin pgweb.
+- Amended in place rather than superseded by a new id. The assumption itself did not
+  change: local still means one command plus a demo page. Only an enumeration had gone
+  stale against a decision Marcin had already accepted, and this is how the file already
+  records its two earlier corrections (A-16, and A-17's own first amendment). A new id
+  would imply the old statement had been a different decision, which it was not.
+- Logged twice as §7 requires: a row in the `## Changes` table of
+  [[../spec/assumptions]] pointing at branch `slice/S-01-walking-skeleton`, and this entry.
+  The Status line now carries both amendments, matching how A-16 records its own.
+- No feature brief was written under `wiki/spec/features/`. That folder takes new
+  requirements, and this was a correction whose source is already on record in ADR-0002
+  and in the `/review` finding.
+- Cross-checked the rest of the spec for the same staleness. No other assumption,
+  acceptance criterion or invariant was touched, and none needed it: the remaining
+  matches for "four" are the four kinds of capacity movement and the four options of an
+  answered question. One judgement is left for Marcin rather than taken here: AC-00 names
+  `api`, `web`, `db` and `kafka` without mentioning `studio`. It is not false, those four
+  do start and the criterion never claimed to be exhaustive, so it was left alone.
+
+## 2026-09-19, verify S-01 (re-verify after second review round), Sonnet
+- Full gate: `npm run gate` green on the working tree (5959111 plus the second fix round
+  and the A-17 spec amendment, all uncommitted). 14 unit, 2 web render, 3 integration,
+  7 e2e, 2 cold start. `npm run smoke` again confirmed isolated under `capacity-smoke`.
+- Coverage: 2/2 AC covered (AC-00, AC-41), 0/0 INV. `[AC-00]` now appears on three tests
+  (the two cold-start tests plus the newly tagged liveness e2e test), `[AC-41]` on one;
+  all four ran and passed. No `.skip`/`.only`/`xit` anywhere. The new liveness tag is not
+  trivially true: it asserts `GET /health` returns `200` with `{status: 'ok'}`, matching
+  AC-00's own Then clause, and does not claim any S-02 criterion.
+- Level unchanged and correct: AC-00 over real HTTP (cold start and e2e), AC-41 against
+  the real README.
+- Style: prose check clean; diff since the last verify (5959111..working tree) has no
+  nested ternary or braced one-line `if`.
+- Layer boundaries: re-checked that the first round's blocker fix survived the second
+  round untouched. `PrismaService` still does not extend `PrismaClient`; grep for
+  `.$queryRaw`/`.$connect`/`.$disconnect` outside `prisma.service.ts` (excluding the
+  integration test, which goes through `withClient`) is empty; `PersistenceModule` and
+  `MessagingModule` remain non-`@Global`. The new `probe-within.ts` is a pure function
+  with no framework or ORM import. No `src/modules/*/domain` exists yet.
+- Cold start: clean `down -v`, `up -d --build`, `up --wait` turned healthy. Every
+  documented endpoint answered 200 with no `Authorization` header; a bogus bearer token
+  did not break liveness or readiness; readiness answered in 12ms on the healthy path,
+  so the new timeout bound (`probeWithin`, 2s) adds no cost when nothing is wrong.
+  Additionally verified the production-profile fix live, not just at the e2e level:
+  `NODE_ENV=production docker compose up --wait` served `404` on `/openapi.json`,
+  `/docs` and `/redoc` while `/health` and `/health/ready` stayed `200`, matching the
+  new `docs.e2e-test.ts` exactly and giving A-16 real proof for the first time.
+- README: unchanged since the last verify, still true; every linked file exists.
+- Both CLAUDE.md amendments from this round are in place (`§2` "Two tiers, and only
+  two", `§4` the supporting-test carve-out) and A-17 no longer says "four containers"
+  anywhere in the spec. No open finding remains from either review round.
+- No blocker or major findings.
+
+## 2026-09-19, review S-01 (third round), Fable
+- REVIEW S-01: 10 findings (0/1/9). Returned to `/implement` for the one major: the second
+  cold start test tagged `[AC-00]` asserts only `status !== 401`, and with no authentication in
+  S-01 nothing can produce a 401, so it passes on a 404 or a 500 as well; a tagged test that
+  cannot fail is counted as coverage. Minors: the lint boundary blocks the Prisma package in
+  `application/` but not `PrismaService`, whose `withClient` hands the query API to any caller
+  that injects it; `writeBrokerLog` branches on `logLevel.NOTHING`, which kafkajs never emits;
+  the `degraded` to `503` path of `/health/ready` has no test at HTTP level; the two `CLAUDE.md`
+  amendments (§2 tiers, §4 supporting tests) were written by `/implement` and still need
+  Marcin's acceptance, and six e2e tests are untagged under the unamended §4; a readiness
+  probe that times out leaves the kafkajs connect retry loop running and `onModuleDestroy`
+  skips an admin whose connect is mid flight; `/redoc` renders only with network because the
+  bundle comes from a CDN; `studio` depends on `db` only, while ADR-0002 says it depends on the
+  migrations having run; a comment cites `A18` instead of `A-18`; `PROBE_TIMEOUT_MS` is exported
+  with no importer.
+
+## 2026-09-19, implement S-01 (third review round), Opus
+- Third `/review` returned ten findings, one major and nine minor. Eight fixed here, one is
+  Marcin's call in the PR, one was already his decision.
+- Major fixed, and it was a fair catch against this gate's own work: the second `[AC-00]`
+  cold start test asserted only `status !== 401` across five paths. S-01 has no
+  authentication, so nothing can produce a `401` and the test could not fail, yet it was
+  tagged and therefore counted by `/verify` as AC-00 coverage. A `404` or a `500` would have
+  passed it. Deleted rather than repaired: the first test already asserts `200` on the same
+  five paths with no `Authorization` header, which is what AC-00 and A-16 actually require.
+- The `degraded` to `503` mapping now has a test. `test/readiness.e2e-test.ts` builds the app
+  with the broker address pointing at `127.0.0.1:1` and drives `GET /health/ready` over HTTP,
+  expecting `503` with `{database: 'up', broker: 'down'}`, and liveness still `200`. The slice
+  scope promised "503 until both answer" and only the pieces were tested, never the status
+  code they add up to.
+- The import boundary named the Prisma package but not the service wrapping it, so an
+  application service could inject `PrismaService` and reach the whole query API through
+  `withClient` without a lint error. Both restricted groups now list `**/persistence/**`, and
+  the domain group also lists `**/messaging/**`.
+- Redoc is served from `node_modules` instead of a CDN. "Runnable locally" (A-17) has to hold
+  on a laptop with no network, and Swagger UI already ships its assets with the service, so
+  Redoc rendering a blank page offline was a real gap. The cold start test now fetches
+  `/redoc/redoc.standalone.js` and asserts it answers with JavaScript, so the claim is proven
+  against the real image rather than asserted. Cost: the `redoc` dependency and about a
+  megabyte in the image; the cold start took 92 seconds on the rebuild, inside the two minute
+  budget but no longer comfortably.
+- `onModuleDestroy` on the Kafka admin no longer returns early when `connected` is false. A
+  probe that timed out at two seconds leaves `connect()` still retrying, and that loop holds
+  the process open, so the disconnect is now unconditional and its failure ignored.
+- Smaller ones: the `logLevel.NOTHING` branch removed, since kafkajs emits only at ERROR,
+  WARN, INFO and DEBUG; `studio` waits for `api` to be healthy as well as `db`, because
+  ADR-0002 says it depends on the migrations having run and the `api` entrypoint runs them;
+  `A18` written as `A-18`; `PROBE_TIMEOUT_MS` no longer exported, as nothing imports it.
+- Not fixed, unchanged from the last round and already decided: the `CLAUDE.md §2` and `§4`
+  amendments are Marcin's to accept in the PR review, and the six untagged e2e tests are
+  supporting tests under the `§4` carve-out he chose.
+- `npm run gate` green after the round: 14 unit, 2 web render, 3 integration, 9 e2e, 1 cold
+  start.
+
+## 2026-09-19, verify S-01 (re-verify after third review round), Sonnet
+- Full gate: `npm run gate` green on the working tree (5959111 plus the third fix round,
+  uncommitted). 14 unit, 2 web render, 3 integration, 9 e2e, 1 cold start. Cold start
+  turned healthy in 22s this run (the redoc dependency's image layer was already built).
+- Coverage: 2/2 AC covered (AC-00, AC-41), 0/0 INV. Confirmed the tautological second
+  `[AC-00]` test (`status !== 401` with no auth in S-01) is gone; no test replaced it
+  with the same flaw. The two remaining `[AC-00]` tests and the one `[AC-41]` test all
+  assert real values, ran and passed. No `.skip`/`.only`/`xit` anywhere.
+- Level unchanged and correct. The new `readiness.e2e-test.ts` and `docs.e2e-test.ts`
+  are untagged, correctly, under the `§4` supporting-test carve-out; both assert real
+  behaviour (503 with a named-down check, 404 in production) rather than a shape that
+  cannot fail.
+- Style: prose check clean; diff since the last verify (5959111..working tree) has no
+  nested ternary or braced one-line `if`.
+- Layer boundaries: this time proven live rather than by inspection alone. A throwaway
+  probe under `src/modules/probe/{application,domain}` importing `PrismaService` and
+  `KafkaService` produced the expected two `no-restricted-imports` errors, confirming
+  the widened patterns (`**/persistence/**`, `**/messaging/**`) actually fire, not just
+  that the text is present in `eslint.config.mjs`. Probe deleted after. `PrismaService`
+  still does not extend `PrismaClient`; the dead `logLevel.NOTHING` branch is gone from
+  `kafka.service.ts`; `onModuleDestroy` disconnects unconditionally.
+- Cold start: clean `down -v`, `up -d --build`, `up --wait` turned healthy. Every
+  documented endpoint answered 200 with no `Authorization` header, including the new
+  `/redoc/redoc.standalone.js` route (1.1MB, served locally, `text/javascript`); a
+  bogus bearer token did not break liveness or readiness; `studio` came up healthy with
+  its new dependency on `api`. Re-ran the production-profile check from the last verify:
+  `NODE_ENV=production` still serves `404` on all three documentation paths and the new
+  bundle route, `200` on `/health`/`/health/ready`. Torn down afterwards.
+- README: unchanged since the last verify, still true; every linked file exists.
+- No blocker or major findings. The two items left from the third review are Marcin's
+  decisions, not gate failures: whether to accept the `CLAUDE.md §2`/`§4` amendments in
+  the PR review, and the tag policy they encode.
+
+## 2026-09-19, review S-01 (fourth round), Fable
+- REVIEW S-01: 13 findings (0/2/11). Returned to `/implement` for the two majors: boot calls
+  `$connect` in `PrismaService.onModuleInit`, so an unreachable database at start exits the
+  process instead of serving `503 {database: 'down'}` as the slice scope promises, no test
+  pins either behaviour and no assumption records the fail-fast choice; and the `CLAUDE.md §2`
+  amendment now gives two homes to the Kafka consumer (`src/messaging/` "the consumer loop"
+  next to `infrastructure/` "Kafka consumers"), which S-02 will build against. Minors: the
+  `connected` flag in `KafkaService` duplicates kafkajs state and diverges after a timed-out
+  probe while each poll starts another connect retry loop; `Array.isArray` on `unknown` leaks
+  `any` in `error-body.ts`; the echoed correlation id has no length bound; `PORT` accepts
+  values above 65535 and `WEB_ORIGIN` accepts an empty string; "same OpenAPI document" is
+  asserted for Redoc only; two near-identical app factories in `test-app.ts`; a fixture
+  constant inside a test body; the runtime image carries devDependencies, runs as root and
+  needs the `prisma` devDependency at start; `format:check` skips the config and script
+  files; image parity with compose is kept by hand; the `§4` tag carve-out is uncommitted
+  while HEAD still requires a tag on every e2e test.
+
+## 2026-09-19, implement S-01 (fourth review round), Opus
+- Fourth `/review`: thirteen findings, two major. Both majors fixed, eleven minors: ten fixed,
+  one standing for Marcin.
+- Major fixed, a real behaviour gap: `PrismaService.onModuleInit` called `$connect()` and let
+  it throw, so a database that was not up at boot killed the process. The slice promises
+  readiness answers `503` "until both answer", which until now held only for the broker. The
+  connect failure is now caught and logged as a warning, Prisma connects lazily on the first
+  query, and a database that arrives late needs no restart. Covered twice: an integration test
+  that `onModuleInit` resolves and `isReachable()` stays false against an unreachable database,
+  and an e2e test driving `GET /health/ready` to `503` with `{database: 'down', broker: 'up'}`
+  while liveness still answers `200`. The two dependencies now behave identically.
+- Major fixed, ambiguity this gate introduced last round: the `§2` amendment gave the Kafka
+  consumer two homes, `src/messaging/` ("the connection and the consumer loop") and
+  `infrastructure/` ("Kafka consumers"), so S-02 could put message handling outside the three
+  layers and still be defensible. `§2` now splits it: `src/messaging/` owns the connection and
+  the loop that moves bytes and commits offsets and knows no business word, while validating a
+  payload, mapping it to a command and calling a use case is a consumer under
+  `src/modules/<area>/infrastructure/`, behind the module's port.
+- The Kafka `connected` flag is gone. kafkajs `connect()` is idempotent and tracks its own
+  state; our copy diverged whenever a probe timed out, because the stale continuation could
+  flip it back to true after a later probe had set it false.
+- Config validation tightened test first: `PORT` above 65535 and a blank `WEB_ORIGIN` are now
+  `ConfigurationError`s at boot instead of a raw listen failure and `enableCors({origin: ''})`.
+- The production image no longer ships the toolchain or runs as root. A separate `prod-deps`
+  stage installs with `--omit=dev`, the runtime stage copies only that, and the container runs
+  as `node`. 1.18GB to 892MB. Two things this surfaced: the `prisma` CLI is a genuine runtime
+  dependency here, because ADR-0002 runs migrations from the entrypoint, so it moved out of
+  devDependencies; and `--ignore-scripts` left the Prisma engines to be fetched on first use,
+  which a non-root container cannot write and an offline one cannot reach, so the engines are
+  resolved at build. `typescript` remains in the image and belongs there: `@prisma/client` and
+  the CLI both require it to load `prisma.config.ts`.
+- ADR-0004's "compose and Testcontainers name the same images" is now enforced rather than
+  asked for: `test/support/images.test.ts` reads `docker-compose.yml` and fails if the tags
+  drift. Verified by pointing the constant at `postgres:16-alpine` and watching it fail.
+- Smaller ones: `Array.isArray` on `unknown` narrowed to `any[]`, replaced with a typed guard
+  (§3); the caller's `x-correlation-id` is truncated at 128 characters, since it is repeated on
+  every log line of that request; `createProductionApp` and `createAppWithBrokerDown` collapsed
+  into one `createAppWithConfig(overrides)`; the correlation id fixture moved to the top of its
+  file; Prettier's gate widened to the workspace config files it was skipping.
+- One assertion of mine was wrong and the gate caught it: asserting the Swagger UI page shell
+  contains `/openapi.json` fails, because the shell loads `swagger-ui-init.js` and that script
+  carries the document inline. The test now fetches the init script and checks it against the
+  title and a path taken from the document fetched moments earlier, which is what AC-00's "two
+  views over the same document" actually claims.
+- Standing item, unchanged and Marcin's: the `§2` and `§4` amendments are still uncommitted and
+  unaccepted, and the tag policy the untagged e2e tests rely on is the `§4` carve-out.
+- `npm run gate` green: 18 unit, 2 web render, 4 integration, 11 e2e, 1 cold start.
+
+## 2026-09-19, verify S-01 (re-verify after fourth review round), Sonnet
+- Full gate: `npm run gate` green on the working tree (5959111 plus the fourth fix round,
+  uncommitted). 18 unit, 2 web render, 4 integration, 11 e2e, 1 cold start. Cold start
+  turned healthy in 21s, confirming the hardened image (892MB, non-root) is still fast.
+- Coverage: 2/2 AC covered (AC-00, AC-41), 0/0 INV. Both tags on non-trivial tests that
+  ran and passed. The reworked AC-00 cold start test now ties Swagger UI to the same
+  OpenAPI document by checking its init script against the title and a known path taken
+  from the document fetched moments earlier, closing the gap the last review found. No
+  `.skip`/`.only`/`xit` anywhere.
+- Level unchanged and correct throughout, including the new database-down e2e case
+  (real HTTP, a specific 503 body naming which check failed, not a shape that always
+  passes).
+- Style: prose check clean; diff since the last verify (5959111..working tree) has no
+  nested ternary or braced one-line `if`.
+- Layer boundaries: re-proved live rather than trusted from the work-log, for the second
+  time running. A probe under `src/modules/probe/{application,domain}` importing
+  `PrismaService` and `KafkaService` produced the expected two errors, confirming the
+  messaging-boundary fix from this round actually fires. Also independently re-ran the
+  ADR-0004 image-drift guard by pointing it at `apache/kafka:4.2.1` and watching it fail,
+  then restored it. `PrismaService` still does not extend `PrismaClient`; the `connected`
+  flag is gone from `kafka.service.ts` as claimed.
+- Cold start: clean `down -v`, `up -d --build`, `up --wait` turned healthy. Every
+  documented endpoint answered 200 with no `Authorization` header; a bogus bearer token
+  did not break liveness or readiness. Verified the image hardening live: `whoami`
+  inside the `api` container returns `node`, zero dev-toolchain packages
+  (jest/eslint/testcontainers/etc) present, image size 892MB. Torn down afterwards.
+- README: unchanged since the last verify, still true; every linked file exists.
+- No blocker or major findings. The two standing items are unchanged and remain
+  Marcin's decisions, not gate failures: accepting the `CLAUDE.md §2`/`§4` amendments
+  (now including the messaging split) in the PR review, and the tag policy they encode.
+
+## 2026-09-19, review S-01 (fifth round), Fable
+- REVIEW S-01: 10 findings (0/0/10). Pass: zero blockers, zero majors; the fourth round's
+  two majors are closed in code (boot survives a down database at both levels, `§2` splits
+  the connection from message handling). Minors, for Marcin's call or a small fix round: the
+  `main.ts` claim that a boot failure is one JSON line does not hold for the case it names,
+  since a `ConfigurationError` thrown inside `NestFactory.create` is caught by Nest's
+  exceptions zone and printed as a coloured stack before `bootstrap().catch` runs (verified by
+  booting `dist/main.js` without `DATABASE_URL`); README lists `kafka` at `localhost:9092` but
+  the broker advertises `kafka:9092`, so a host client cannot use that port; `JsonLogger`
+  serialises non-string messages with `JSON.stringify`, which throws on the `bigint` the money
+  domain will carry; the `PrismaService` comment and the `§2` amendment say injecting it does
+  not hand out the query API while `withClient` does exactly that (the lint rule is the real
+  boundary); `$connect()` at boot has no bound although the probes do; the two Redoc routes
+  sit on the raw adapter outside the global filter; dev-profile CORS is untested; a redundant
+  image test with a no-op `join`; `web` `format:check` still skips its config files; and the
+  standing `§2`/`§4` amendments remain uncommitted while ten e2e tests are untagged under the
+  `§4` on `main`.
+
+## 2026-09-19, implement S-01 (fifth review round), Opus
+- Fifth `/review` passed: zero blockers, zero majors, ten minors. Nine fixed here, the tenth
+  is the standing `CLAUDE.md` amendment question for Marcin.
+- Three of them were worth the round on their own merits.
+  - `main.ts` carried a comment promising that a misconfigured deployment produces one JSON
+    log line. It did not: `loadConfig` throws inside `NestFactory.create`, Nest's own handler
+    printed a coloured multi-line stack and the process exited before our handler ran.
+    Reproduced by booting `dist/main.js` with no `DATABASE_URL`. `abortOnError: false` alone
+    was not enough, because Nest logs through its default logger first, so the logger is now
+    passed at creation. Every boot line, including the failure, is now JSON, and the exit code
+    is 1. The comment is true for the first time.
+  - `JsonLogger` called `JSON.stringify` on a non-string message, which throws on `bigint`.
+    ADR-0001 fixes `bigint` for money, so the first `logger.log(reservation)` in S-03 would
+    have crashed inside the logger. A replacer renders bigint as its digits, `Error` logs by
+    its message rather than its fields, and `undefined` is a word rather than nothing. Three
+    unit tests pin it.
+  - `README.md` listed `kafka` at `localhost:9092`, a port no host client could use: the
+    broker advertised `kafka:9092`, so a client reaching the published port got back an
+    address it cannot resolve. Compose now runs two listeners, INTERNAL for the containers
+    and HOST for the published port. Verified from the host with a kafkajs admin client,
+    which connects and lists topics.
+- Two standards claims were corrected rather than defended. `CLAUDE.md §2` and the comment on
+  `PrismaService` both said the held-not-extended client means injecting the service does not
+  hand over the query API. It does: `withClient` is public and passes the real client. Holding
+  rather than extending is a readability boundary; the guarantee lives in the import boundary
+  lint, and both places now say so. A standard that overstates what the code does is worse
+  than no standard, because review trusts it.
+- `$connect()` at boot is now bounded by the same `probeWithin` the readiness probes use. A
+  refused address fails at once, which is what the integration test covers, but a black holed
+  one never answers and would stall `app.init()` so that neither liveness nor readiness ever
+  replies, the exact failure `probe-within.ts` was written to prevent.
+- The two Redoc routes sit on the Express adapter, outside the global exception filter, so a
+  missing bundle would have answered HTML with a stack trace outside production. They now fail
+  with the same `{statusCode, code, message}` envelope as everything else.
+- The slice scope promises CORS for the `web` origin in the dev profile and nothing in
+  production. `test/cors.e2e-test.ts` now asserts both.
+- Smaller: the second test in `images.test.ts` was the first one again and its `join()` had a
+  single argument, both removed; `web` `format:check` widened to `vite.config.ts`, which the
+  round-four fix had done for `api` only.
+- `npm run gate` green: 21 unit, 2 web render, 4 integration, 13 e2e, 1 cold start.
+
+## 2026-09-19, ship S-01, Sonnet
+- Closed S-01. AC-00 and AC-41 marked `done` in [[../plan/plan]] with their test files, and a
+  "Tests beyond the plan" section added there listing the ten `extra` suites this slice grew
+  (config loader, probe timeout, JSON logger, Prisma integration, health e2e, readiness e2e,
+  documentation by profile, CORS by profile, the image drift guard and the `web` render test),
+  so the traceability table is the whole picture rather than the planned half of it.
+- ADRs: nothing to move. ADR-0001 to ADR-0004 were accepted before the slice started and were
+  amended during it (NestJS 12; pgweb in place of Prisma Studio). ADR-0005 to ADR-0011 are
+  still `proposed` and belong to later slices, so they do not block this one.
+- Assumptions: none missing, so no `/spec` run is owed. The one gap `/review` raised, that no
+  assumption recorded fail-fast on an unreachable database, was closed in code instead: the
+  service now boots and reports `database: down`, which is what the slice scope already
+  promised, so there was nothing new to assume.
+- Changelog, slice status `done`, slice index and [[../Home]] updated; Home names S-02 as next
+  and points at the pull request and at ADR-0005 as the next decisions.
+- README re-checked against the code as it now stands rather than as it was: the `kafka` row
+  says `localhost:9092`, which the listener split in the last commit finally made true, and the
+  three links `/ship` must keep (assumptions, decisions, Home) all resolve.
+- Gate honesty, recorded because it matters for anyone reading this later. The preconditions
+  were not met when `/ship` was invoked: the last `VERIFY` predates the fourth fix round and the
+  last `REVIEW`, though it passed with zero blockers and zero majors, reviewed the code before
+  the fifth round landed. Marcin was told which gates were stale and what each option cost, and
+  decided to commit and ship anyway. The fifth round is therefore covered by `npm run gate`
+  green (21 unit, 2 web render, 4 integration, 13 e2e, 1 cold start) and by the pre-commit hook,
+  but not by an independent verify or review. The open items it carries are in the pull request
+  description.
+- Nothing committed, pushed, opened, merged or tagged by this gate.

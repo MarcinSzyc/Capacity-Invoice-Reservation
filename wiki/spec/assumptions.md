@@ -379,11 +379,15 @@ says "all endpoints".
 
 ## A-17 Runnable locally means one command plus a demo page
 
-- Status: accepted 2026-09-19
+- Status: accepted 2026-09-19, amended 2026-09-19 (the demo is its own container; the local
+  stack is five containers, `studio` included)
 - Source: Q25
 
-**Statement.** `docker compose up` starts four containers from a clean checkout: `api`,
-`web`, `db` and `kafka` (ADR-0001). A second command mints a dev token. The demo is the
+**Statement.** `docker compose up` starts five containers from a clean checkout: `api`,
+`web`, `db`, `kafka` and `studio` (ADR-0001). `studio` is a database browser on its own port,
+started in the dev profile only and never deployed to production, so that a reviewer can read
+and correct rows by hand without installing a client; which tool fills that slot is ADR-0002's
+decision, not this assumption's. A second command mints a dev token. The demo is the
 `web` container: a small React UI (Vite, TypeScript) in its own `web/` folder, built to
 static files, a few tables and forms, showing a random reserve/release generator that calls the real `api` endpoints, the list of
 requests with their status codes, the ledger appended live, and a treasury panel that
@@ -391,7 +395,9 @@ publishes real messages to Kafka through dev-only `api` endpoints (limit change,
 duplicate, stale message). `web` contains no business logic, lives in `web/` isolated from `api/`, and is not deployed
 in production; the dev-only `api` endpoints exist only outside the production profile. Last
 slice; budget half a day. Amended 2026-09-19: the page moved from a module inside the
-service to its own container, so the API stays only an API.
+service to its own container, so the API stays only an API. Amended again 2026-09-19: the
+count is five, not four. `studio` joined the local stack when ADR-0002 was accepted and this
+statement had not caught up, which `/review` found while S-01 was being built.
 
 **Rationale.** A reviewer should see the system working within a minute, through the
 real code paths, without writing curl commands.
@@ -423,3 +429,4 @@ program is not an acceptance criterion.
 | 2026-09-19 | A-05 to A-19 | written from the answered questions; A-05 awaits wording confirmation | PR #5 |
 | 2026-09-19 | A-16 | amended: Swagger UI and Redoc, both views over one OpenAPI document | PR #10 |
 | 2026-09-19 | A-17 | amended: demo moves from a module in the service to the `web` container; four compose services (ADR-0001) | docs/adr-renumber-and-deployment |
+| 2026-09-19 | A-17 | amended: five compose services, `studio` is the fifth (ADR-0002); stale count found by `/review` in S-01 | slice/S-01-walking-skeleton |
