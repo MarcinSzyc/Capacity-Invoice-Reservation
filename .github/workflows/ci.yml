@@ -1,0 +1,51 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  prose:
+    name: Prose check
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: No em or en dashes in Markdown and commit messages
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            scripts/check-prose.sh "origin/${{ github.base_ref }}"
+          else
+            scripts/check-prose.sh
+          fi
+
+  gate:
+    name: Gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Detect project
+        id: detect
+        run: |
+          if [ -f package.json ]; then echo "present=true" >> "$GITHUB_OUTPUT"; else echo "present=false" >> "$GITHUB_OUTPUT"; echo "No package.json yet, gate skipped."; fi
+      - uses: actions/setup-node@v4
+        if: steps.detect.outputs.present == 'true'
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install
+        if: steps.detect.outputs.present == 'true'
+        run: npm ci
+      - name: Gate
+        if: steps.detect.outputs.present == 'true'
+        run: npm run gate
+        env:
+          CI: true
