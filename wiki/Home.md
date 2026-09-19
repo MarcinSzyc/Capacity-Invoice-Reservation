@@ -7,7 +7,7 @@ Obsidian vault root is this folder. Working rules: `../CLAUDE.md`.
 
 - [[spec/brief]]: the brief, transcribed
 - [[spec/acceptance-criteria]] · [[spec/invariants]] · [[spec/assumptions]] · [[spec/glossary]] · [[spec/open-questions]]
-- [[plan/plan]] · [[plan/traceability]]
+- [[plan/plan]]: every AC and INV with status · [[slices/README]]: slices, one file each
 - [[decisions/README]]: architecture decision records
 - [[log/work-log]] · [[log/changelog]]
 - [[testing/strategy]]

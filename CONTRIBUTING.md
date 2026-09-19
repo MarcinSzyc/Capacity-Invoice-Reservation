@@ -16,11 +16,11 @@ never approve their own work.
 | Step | Run it when | Files written |
 |---|---|---|
 | `/spec` | starting the project, or adding a requirement | `wiki/spec/acceptance-criteria.md`, `wiki/spec/invariants.md`, `wiki/spec/assumptions.md`, `wiki/spec/glossary.md`, `wiki/spec/open-questions.md`; a feature brief under `wiki/spec/features/` when given inline |
-| `/plan` | after every `/spec` | `wiki/plan/plan.md` (slice index), one `wiki/plan/slices/S-xx-<slug>.md` per slice with AC/INV, named tests and ADR candidates, `wiki/plan/traceability.md`, ADR drafts `wiki/decisions/ADR-xxxx-*.md` with status `proposed` |
+| `/plan` | after every `/spec` | `wiki/plan/plan.md` (every AC and INV with slice, status and test name), `wiki/slices/README.md` (slice order), one `wiki/slices/S-xx-<slug>.md` per slice with AC/INV, named tests and ADR candidates, ADR drafts `wiki/decisions/ADR-xxxx-*.md` with status `proposed` |
 | `/implement S-xx` | a slice is next and its ADRs are accepted | code under `src/`, tests next to it and under `test/`, an entry in `wiki/log/work-log.md`, status and log line in the slice file |
 | `/verify S-xx` | implement reports done, and after every fix | a `VERIFY S-xx: PASS or FAIL` entry in `wiki/log/work-log.md` and a log line in the slice file, nothing else |
 | `/review S-xx` | verify passed, and after every fix | a `REVIEW S-xx` entry in `wiki/log/work-log.md` with findings and a log line in the slice file, nothing else |
-| `/ship S-xx` | verify PASS and review clean | `wiki/log/changelog.md`, `wiki/plan/traceability.md` (test files and commits filled), ADR statuses, slice file status `done`, `wiki/plan/plan.md`, `wiki/Home.md`, `README.md`, and the pull request |
+| `/ship S-xx` | verify PASS and review clean | `wiki/log/changelog.md`, `wiki/plan/plan.md` (test files, commits and status filled), ADR statuses, slice file status `done`, `wiki/slices/README.md`, `wiki/Home.md`, `README.md`, and the pull request |
 
 ## First run
 
@@ -54,7 +54,8 @@ Existing ids never change; superseded items are marked, not rewritten.
 | What did we decide it means? | `wiki/spec/assumptions.md` |
 | What must the service do? | `wiki/spec/acceptance-criteria.md`, `wiki/spec/invariants.md` |
 | Why is it built this way? | `wiki/decisions/` |
-| Which test proves which requirement? | `wiki/plan/traceability.md` |
+| Which test proves which requirement, and is it done? | `wiki/plan/plan.md` |
+| What are we building next and in what order? | `wiki/slices/README.md` and one file per slice |
 | What happened, in order? | `wiki/log/work-log.md` |
 | What has shipped? | `wiki/log/changelog.md` |
 
