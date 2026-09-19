@@ -23,7 +23,7 @@ brief → /spec → /plan → [ /implement → /verify → /review → /ship ] p
 | `/implement` | code + tests for one slice, work-log entry | red → green → refactor done, `npm run gate:quick` green |
 | `/verify` | gate report, AC↔test coverage check, cold-start check | `npm run gate` green and every AC in the slice has a passing test |
 | `/review` | findings against standards and against spec | runs in a fresh context; reports, never fixes |
-| `/ship` | changelog, traceability, README, ADR finalisation, commit message | wiki reflects reality |
+| `/ship` | changelog, requirement checklist, slice status, README, ADR finalisation, PR | wiki reflects reality |
 
 Rules that hold across gates:
 
@@ -109,8 +109,8 @@ Strategy in detail: `wiki/testing/strategy.md`. The rules that matter every day:
 - Naming: `describe('<Class|UseCase>')`, `it('[AC-03] should reject a reservation that
   exceeds available capacity')`. Every e2e/invariant test carries its AC or INV id.
 - Fixture values in UPPERCASE constants. Tests read top-down, no shared mutable state.
-- Coverage is not a metric. Traceability is: `wiki/plan/traceability.md` maps each AC
-  and INV to a test file and a commit.
+- Coverage is not a metric. Traceability is: `wiki/plan/plan.md` maps each AC and INV to
+  a test, a test file and a commit, with its status.
 
 ## 5. The gate
 
@@ -155,7 +155,9 @@ authenticated endpoint. "Runnable locally" is an acceptance criterion.
 wiki/Home.md                    map + current status
 wiki/spec/                      brief, acceptance-criteria, invariants,
                                 assumptions, glossary, open-questions
-wiki/plan/                      plan (slices), traceability
+wiki/plan/plan.md               every AC and INV: slice, status, test, test file, commit
+wiki/slices/README.md           slice index: order, risk, dependencies, status
+wiki/slices/S-xx-*.md           one file per slice: AC/INV, tests by name, ADRs, log
 wiki/decisions/ADR-xxxx-*.md    one decision per file, template in decisions/
 wiki/log/work-log.md            append-only, one entry per working session
 wiki/log/changelog.md           what landed, per slice
@@ -168,6 +170,12 @@ wiki/testing/strategy.md        test pyramid and rules
   commit messages. Use a comma, a colon, a period or parentheses. Enforced by the prose
   check in the gate.
 - Work-log entries are never edited after the fact. Correct with a new entry.
+- Every PR, code or docs, appends at least one line to `wiki/log/work-log.md`: what
+  changed and why. Slice PRs get it from `/ship`; setup and docs PRs get it from whoever
+  opens them. CI fails a PR that does not touch the work-log.
+- Requirement changes are logged twice: a row in the `## Changes` table at the end of
+  the spec file (acceptance criteria, invariants, assumptions) and a line in the work-log
+  entry of the session. A new or amended AC without a Changes row is a review finding.
 - Assumptions are numbered `A-xx`, acceptance criteria `AC-xx`, invariants `INV-xx`,
   slices `S-xx`, decisions `ADR-xxxx`. Ids are stable once assigned.
 - `README.md` at repo root is the reviewer's entry point: how to run, where the
@@ -187,5 +195,5 @@ wiki/testing/strategy.md        test pyramid and rules
 - Every AC and INV assigned to the slice has a passing, tagged test.
 - `npm run gate` is green.
 - `/review` returned no open findings.
-- Work-log, changelog, traceability and any ADRs are updated.
+- Work-log, changelog, the requirement checklist, slice status and any ADRs are updated.
 - README still tells the truth about how to run the service.

@@ -9,7 +9,7 @@ allowed-tools: Read, Grep, Glob, Bash
 
 You are reviewing slice `$ARGUMENTS`. You start without the implementation conversation
 on purpose: judge the code, not the intent behind it. Read `CLAUDE.md` in full, then the
-slice in `wiki/plan/plan.md`, its AC/INV in `wiki/spec/`, its ADRs in `wiki/decisions/`,
+slice file `wiki/slices/$ARGUMENTS-*.md`, its AC/INV in `wiki/spec/`, its ADRs in `wiki/decisions/`,
 and `wiki/spec/assumptions.md`. Then read the diff: `git diff <base>..HEAD` where base is
 the commit before the slice started (find it in the work-log or ask), or the working tree
 if uncommitted.
@@ -32,6 +32,7 @@ Check the diff against `CLAUDE.md §2, §3, §4`. The things that actually go wr
   contradicts the glossary (e.g. `amount` where the glossary says `held`)
 - a business error without a stable code in the body
 - em or en dashes in any Markdown, comment or commit message
+- a spec file changed in the diff without a matching row in its `## Changes` table
 
 ## Axis 2: spec
 
@@ -59,7 +60,8 @@ REVIEW S-xx: <n> findings (<blockers>/<majors>/<minors>)
 bug class from the list above. `minor`: style. Zero blockers and zero majors is a pass.
 Findings return to `/implement`; then `/verify` and `/review` run again.
 
-Append the summary line to `wiki/log/work-log.md`.
+Append the summary line to `wiki/log/work-log.md` and to the `Log` section of the slice
+file.
 
 ## You must not
 

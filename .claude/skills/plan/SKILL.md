@@ -1,25 +1,38 @@
 ---
 name: plan
-description: Turn the acceptance criteria and invariants into a risk-ordered list of vertical slices, each with named tests and ADR candidates, and build the AC-to-test traceability table. Use after every /spec run, for the initial plan and for new features added later. Plans only, writes no code.
+description: Turn acceptance criteria and invariants into implementation plans. With ids, e.g. "/plan AC-00" or "/plan AC-01 AC-02 INV-01", writes one slice file under wiki/slices for exactly those requirements. Without ids, cuts every unplanned AC and INV into risk-ordered slices. Names the tests, drafts ADR candidates, fills the requirement checklist in wiki/plan/plan.md. Plans only, writes no code. Use after every /spec run, for the initial plan and for new features added later. Plans only, writes no code.
 model: fable
 ---
 
 You are running the **plan** gate. Read `CLAUDE.md`, then everything in `wiki/spec/`,
-then `wiki/plan/plan.md` and `wiki/plan/traceability.md` if they exist, then the current
-`src/` tree if any. Do not start before the spec gate is closed: if open-questions has
+then `wiki/plan/plan.md`, `wiki/slices/README.md` and `wiki/slices/*.md` if they exist, then the current `src/` tree if any. Do not start before the spec gate is closed: if open-questions has
 non-deferred entries, stop and send the user back to `/spec`.
+
+## Two modes
+
+**Targeted: `$ARGUMENTS` holds AC and INV ids.** Marcin picked the requirements he wants
+planned now. Write exactly one slice file for them, numbered after the last existing
+slice, add their rows to `wiki/plan/plan.md`, add the slice to `wiki/slices/README.md`.
+If one of the ids is already planned in another slice, stop and say so; never plan a
+requirement twice. If the chosen ids cannot be delivered without an unplanned AC or INV
+(for example a release AC without any reservation AC), name the missing ids and ask
+whether to include them; do not add them silently.
+
+**Full: no arguments.** Cut every AC and INV not yet in `wiki/plan/plan.md` into slices
+following the steps below.
 
 ## Revision mode
 
-When `wiki/plan/plan.md` exists, this is a revision. Slices marked done are never
-changed. Only AC/INV not yet in traceability get new slices, numbered after the last
+When `wiki/slices/README.md` exists, this is a revision. Slice files marked done are never
+changed. Only AC/INV not yet in `wiki/plan/plan.md` get new slices, numbered after the last
 existing one. A new requirement that invalidates a shipped slice gets a new slice that
-changes it, with the old AC marked `superseded` in traceability, never a rewrite of history.
+changes it, with the old AC marked `superseded` in `wiki/plan/plan.md`, never a rewrite of history.
 
 ## Goal
 
 A plan `/implement` can execute one slice at a time without further design conversations,
-and a traceability table that proves every requirement has a test waiting for it.
+and a requirement checklist in `wiki/plan/plan.md` that proves every AC and INV has a test
+waiting for it.
 
 ## Steps
 
@@ -34,8 +47,8 @@ and a traceability table that proves every requirement has a test waiting for it
    uncertainty they remove. Concurrency of reservations, bulk reconciliation semantics
    and multi-currency arithmetic are the usual candidates for early slices. Explain the
    ordering in one paragraph.
-4. **Per slice, write:**
-   - `S-xx` id, title, one-sentence outcome
+4. **One file per slice**, `wiki/slices/S-xx-<slug>.md`, containing:
+   - `S-xx` id, title, one-sentence outcome, status (`planned`, `in progress`, `done`)
    - AC and INV ids covered
    - `risk: low | medium | high` with one line of justification. High-risk slices are
      implemented on Fable per `CLAUDE.md §8`.
@@ -44,9 +57,15 @@ and a traceability table that proves every requirement has a test waiting for it
      with the test level (unit / integration / e2e / invariant / contract)
    - ADR candidates: decisions this slice forces, with the alternatives you already see
    - definition of done specific to the slice, if anything beyond `CLAUDE.md §9`
-5. **Traceability.** Write `wiki/plan/traceability.md` as one table:
-   `id | slice | test name | test file (planned) | commit`. Test file and commit stay
-   empty until `/ship` fills them. Every AC and INV appears exactly once. An AC without a
+   - a `Log` section at the end, appended to by implement, verify, review and ship with
+     one line each (date, gate, result)
+
+   Then fill the table in `wiki/slices/README.md`: slices in execution order with risk,
+   dependencies, AC/INV ids and status, plus the paragraph explaining the order. The index
+   never repeats slice detail; it links to the slice files.
+5. **Requirement checklist.** Fill `wiki/plan/plan.md`: one row per AC and INV with
+   slice, status `planned`, test name and level. Test file and commit stay empty until
+   `/ship` fills them. Every AC and INV appears exactly once. An AC without a
    test or a test without an AC is a planning error; fix it before finishing.
 6. **ADR drafts.** For every ADR candidate that must be decided before its slice starts,
    create `wiki/decisions/ADR-xxxx-<slug>.md` from the template with status `proposed`,
@@ -57,7 +76,8 @@ and a traceability table that proves every requirement has a test waiting for it
 
 ## Output
 
-- `wiki/plan/plan.md`, `wiki/plan/traceability.md`, proposed ADR files.
+- `wiki/plan/plan.md` (requirement checklist), `wiki/slices/README.md` (slice index), one
+  `wiki/slices/S-xx-<slug>.md` per slice, proposed ADR files.
 - Update `wiki/Home.md` status section.
 - Append an entry to `wiki/log/work-log.md`.
 
