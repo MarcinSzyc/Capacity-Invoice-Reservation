@@ -5,6 +5,7 @@
 - AC: AC-00, AC-41
 - INV: none
 - Risk: low. Tooling and wiring only, no business rule. The cost of a mistake is friction in every later slice, so the gate and the layer lint must be exact from day one.
+- Builds on: [[../decisions/ADR-0001-technology-baseline]] (accepted): Node 24, NestJS, TypeScript strict, npm; `api/` and `web/` workspaces; compose with `api`, `web`, `db`, `kafka`.
 - Depends on: nothing. ADRs that must be accepted first: [[../decisions/ADR-0002-storage-postgres-and-data-access]], [[../decisions/ADR-0003-kafka-client-and-topic-layout]], [[../decisions/ADR-0004-test-infrastructure-testcontainers]].
 
 ## Scope
@@ -37,6 +38,7 @@ Supporting tests without a tag, needed so every level of the harness runs at lea
 
 Decided before this slice starts, all three drafted:
 
+- [[../decisions/ADR-0001-technology-baseline]]: accepted; fixes the runtime, the two workspaces, the four compose services and the `web` stack this slice scaffolds. Nothing left to decide here.
 - [[../decisions/ADR-0002-storage-postgres-and-data-access]]: PostgreSQL is a given for row locks and BIGINT; the data access library is the choice.
 - [[../decisions/ADR-0003-kafka-client-and-topic-layout]]: client library (kafkajs, Confluent's client, Nest microservices transport) and one topic vs two.
 - [[../decisions/ADR-0004-test-infrastructure-testcontainers]]: Testcontainers vs the compose stack for integration and e2e; test runner.
