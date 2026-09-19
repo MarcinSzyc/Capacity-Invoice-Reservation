@@ -45,8 +45,8 @@ here).
 
 ### Deployment shape: everything in Docker, three services of ours plus the Kafka broker we consume from
 Chosen. Every process runs in a container, locally through one `docker compose up`. The
-compose file defines three services that are ours and one piece of infrastructure that is
-not ours but must exist for our consumer to have something to read:
+compose file defines three services that are ours, one piece of infrastructure that is not
+ours but must exist for our consumer to have something to read, and one dev tool:
 
 | Service | Container | Role |
 |---|---|---|
@@ -54,6 +54,7 @@ not ours but must exist for our consumer to have something to read:
 | `web` | React (Vite, TypeScript) built to static files, served by nginx | a simple UI, a few tables, that shows what the system does: the demo from A-17, calling `api` over HTTP with a dev token |
 | `db` | Postgres | the database, its own container, its own volume |
 | `kafka` | single broker, KRaft | not our service. Locally it stands in for the treasury's broker; in production we connect to theirs. We only consume from it (A-03, A-04) |
+| `studio` | Prisma Studio from the `api` image, port 5555 | dev profile only: browse and edit rows by hand (ADR-0002). Not deployed in production |
 
 `web` never contains business logic and never talks to `db` or `kafka` directly; everything
 it shows comes from `api`. `api` serves no HTML. In production the `web` container is simply
