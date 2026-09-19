@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - name: No em or en dashes in Markdown and commit messages
@@ -31,15 +31,15 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Detect project
         id: detect
         run: |
           if [ -f package.json ]; then echo "present=true" >> "$GITHUB_OUTPUT"; else echo "present=false" >> "$GITHUB_OUTPUT"; echo "No package.json yet, gate skipped."; fi
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         if: steps.detect.outputs.present == 'true'
         with:
-          node-version: 22
+          node-version: 24
           cache: npm
       - name: Install
         if: steps.detect.outputs.present == 'true'
@@ -49,3 +49,21 @@ jobs:
         run: npm run gate
         env:
           CI: true
+
+  worklog:
+    name: Work log updated
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Every PR appends to wiki/log/work-log.md
+        run: |
+          changed=$(git diff --name-only "origin/${{ github.base_ref }}...HEAD")
+          echo "$changed"
+          if ! echo "$changed" | grep -qx 'wiki/log/work-log.md'; then
+            echo "::error::This PR does not touch wiki/log/work-log.md. Every PR appends at least one line saying what changed and why (CLAUDE.md §7)."
+            exit 1
+          fi
