@@ -56,10 +56,11 @@ const asRecord = (payload: unknown): Record<string, unknown> | undefined => {
   return payload as Record<string, unknown>;
 };
 
+const isUnknownArray = (value: unknown): value is readonly unknown[] => Array.isArray(value);
+
 const validationDetails = (payload: unknown): readonly string[] | undefined => {
-  const record = asRecord(payload);
-  const message = record?.message;
-  if (!Array.isArray(message)) return undefined;
+  const message = asRecord(payload)?.message;
+  if (!isUnknownArray(message)) return undefined;
   return message.map((entry) => String(entry));
 };
 

@@ -45,7 +45,13 @@ export default tseslint.config(
         {
           patterns: [
             {
-              group: ['@prisma/*', 'prisma', '.prisma/*', '**/generated/**'],
+              group: [
+                '@prisma/*',
+                'prisma',
+                '.prisma/*',
+                '**/generated/**',
+                '**/persistence/**',
+              ],
               message: 'Persistence stays in infrastructure: no ORM in application (ADR-0002).',
             },
           ],
@@ -66,7 +72,14 @@ export default tseslint.config(
               message: 'Domain is framework free: no @nestjs imports (CLAUDE.md §2).',
             },
             {
-              group: ['@prisma/*', 'prisma', '.prisma/*', '**/generated/**'],
+              group: [
+                '@prisma/*',
+                'prisma',
+                '.prisma/*',
+                '**/generated/**',
+                '**/persistence/**',
+                '**/messaging/**',
+              ],
               message: 'Persistence stays in infrastructure: no Prisma in domain (ADR-0002).',
             },
             {

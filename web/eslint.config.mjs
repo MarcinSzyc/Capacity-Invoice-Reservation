@@ -17,6 +17,7 @@ export default tseslint.config(
     rules: {
       '@typescript-eslint/no-explicit-any': 'error',
       '@typescript-eslint/no-floating-promises': 'error',
+      '@typescript-eslint/explicit-module-boundary-types': 'error',
       'no-nested-ternary': 'error',
       'max-depth': ['error', 2],
       curly: ['error', 'multi-line'],

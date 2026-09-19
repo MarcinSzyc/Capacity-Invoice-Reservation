@@ -62,3 +62,15 @@ Beyond `CLAUDE.md §9`:
 | 2026-09-19 | verify | PASS, gate green, 2/2 AC covered, no findings |
 | 2026-09-19 | review | 11 findings (1 blocker, 3 majors, 7 minors), returned to `/implement` |
 | 2026-09-19 | implement (review fixes) | 9 findings fixed, 1 pushed back, 1 handed to `/spec`; gate green |
+| 2026-09-19 | verify | PASS, gate green on 5959111, 2/2 AC covered, 1 open minor (A-17 needs /spec) |
+| 2026-09-19 | review (second round) | PASS, 9 findings (0 blockers, 0 majors, 9 minors), nothing returned to `/implement` |
+| 2026-09-19 | implement (review round 2) | 6 of 9 minors fixed, 1 taken in part, 3 left for Marcin; gate green |
+| 2026-09-19 | verify | PASS, gate green after second fix round and A-17 amendment, 2/2 AC covered, no open findings |
+| 2026-09-19 | review (third round) | 10 findings (0 blockers, 1 major, 9 minors), returned to `/implement` |
+| 2026-09-19 | implement (review round 3) | major fixed (a tagged test that could not fail), 7 minors fixed; gate green |
+| 2026-09-19 | verify | PASS, gate green after third fix round, 2/2 AC covered, boundary rule proven live, no open findings |
+| 2026-09-19 | review (fourth round) | 13 findings (0 blockers, 2 majors, 11 minors), returned to `/implement` |
+| 2026-09-19 | implement (review round 4) | 2 majors fixed (boot survives a down database; consumer home disambiguated), 10 minors; gate green |
+| 2026-09-19 | verify | PASS, gate green after fourth fix round, 2/2 AC covered, boundary and image-drift guards re-proven live, no open findings |
+| 2026-09-19 | review (fifth round) | PASS, 10 findings (0 blockers, 0 majors, 10 minors), nothing returned to `/implement` |
+| 2026-09-19 | implement (review round 5) | review passed (0 blockers, 0 majors); 9 of 10 minors fixed, gate green |

@@ -22,6 +22,7 @@ const DEFAULT_PROFILE: Profile = 'development';
 const DEFAULT_PORT = 3000;
 const DEFAULT_WEB_ORIGIN = 'http://localhost:8080';
 const PORT_PATTERN = /^[1-9][0-9]*$/;
+const HIGHEST_PORT = 65_535;
 
 /**
  * Boot reads the environment once, here. Anything missing or malformed is collected and thrown
@@ -35,7 +36,7 @@ export const loadConfig = (env: Environment): AppConfig => {
     port: readPort(env.PORT, problems),
     databaseUrl: readRequired(env.DATABASE_URL, 'DATABASE_URL', problems),
     kafkaBrokers: readBrokers(env.KAFKA_BROKERS, problems),
-    webOrigin: env.WEB_ORIGIN ?? DEFAULT_WEB_ORIGIN,
+    webOrigin: readWebOrigin(env.WEB_ORIGIN, problems),
   };
 
   if (problems.length > 0) throw new ConfigurationError(problems);
@@ -59,7 +60,22 @@ const readPort = (value: string | undefined, problems: string[]): number => {
     problems.push(`PORT must be a positive integer, got "${value}"`);
     return DEFAULT_PORT;
   }
-  return Number.parseInt(value, 10);
+
+  const port = Number.parseInt(value, 10);
+  if (port > HIGHEST_PORT) {
+    problems.push(`PORT must be at most ${HIGHEST_PORT}, got "${value}"`);
+    return DEFAULT_PORT;
+  }
+  return port;
+};
+
+const readWebOrigin = (value: string | undefined, problems: string[]): string => {
+  if (value === undefined) return DEFAULT_WEB_ORIGIN;
+  if (value.trim() === '') {
+    problems.push('WEB_ORIGIN must not be blank');
+    return DEFAULT_WEB_ORIGIN;
+  }
+  return value;
 };
 
 const readRequired = (value: string | undefined, name: string, problems: string[]): string => {

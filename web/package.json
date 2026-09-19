@@ -10,8 +10,8 @@
     "build": "tsc --noEmit -p tsconfig.json && vite build",
     "preview": "vite preview",
     "lint": "eslint . --max-warnings 0",
-    "format": "prettier --write \"src/**/*.{ts,tsx,css}\"",
-    "format:check": "prettier --check \"src/**/*.{ts,tsx,css}\"",
+    "format": "prettier --write \"src/**/*.{ts,tsx,css}\" \"*.ts\"",
+    "format:check": "prettier --check \"src/**/*.{ts,tsx,css}\" \"*.ts\"",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run"
   },

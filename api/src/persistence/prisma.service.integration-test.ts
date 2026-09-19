@@ -1,3 +1,4 @@
+import {JsonLogger} from '../common/logging/json-logger';
 import {loadConfig} from '../config/configuration';
 import {PrismaService} from './prisma.service';
 
@@ -7,7 +8,7 @@ describe('PrismaService', () => {
   let prisma: PrismaService;
 
   beforeAll(async () => {
-    prisma = new PrismaService(loadConfig(process.env));
+    prisma = new PrismaService(loadConfig(process.env), new JsonLogger());
     await prisma.onModuleInit();
   });
 
@@ -28,8 +29,22 @@ describe('PrismaService', () => {
   it('should report itself unreachable when the database is not there', async () => {
     const detached = new PrismaService(
       loadConfig({...process.env, DATABASE_URL: UNREACHABLE_DATABASE}),
+      new JsonLogger(),
     );
 
+    await expect(detached.isReachable()).resolves.toBe(false);
+
+    await detached.onModuleDestroy();
+  });
+
+  it('should survive a database that is not there when the module starts', async () => {
+    const detached = new PrismaService(
+      loadConfig({...process.env, DATABASE_URL: UNREACHABLE_DATABASE}),
+      new JsonLogger(),
+    );
+
+    // Readiness reports it down, boot does not die (the slice promises 503 until both answer).
+    await expect(detached.onModuleInit()).resolves.toBeUndefined();
     await expect(detached.isReachable()).resolves.toBe(false);
 
     await detached.onModuleDestroy();

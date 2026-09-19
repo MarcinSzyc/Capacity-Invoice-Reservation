@@ -42,6 +42,14 @@ describe('loadConfig', () => {
     expect(() => loadConfig({...COMPLETE_ENV, PORT: 'http'})).toThrow(/PORT/);
   });
 
+  it('should reject a port above the highest one a machine has', () => {
+    expect(() => loadConfig({...COMPLETE_ENV, PORT: '99999'})).toThrow(/PORT/);
+  });
+
+  it('should reject an empty web origin rather than pass it to CORS', () => {
+    expect(() => loadConfig({...COMPLETE_ENV, WEB_ORIGIN: '   '})).toThrow(/WEB_ORIGIN/);
+  });
+
   it('should default the profile to development and the port to 3000', () => {
     const {NODE_ENV: _profile, PORT: _port, ...withoutOptionals} = COMPLETE_ENV;
 
