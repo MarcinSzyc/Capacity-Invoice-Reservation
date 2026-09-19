@@ -747,3 +747,18 @@ correct with a new one. Format:
   what anyone wants and least of all at the start of a plan.
 - Found while shipping S-01, where the `slice/S-01-walking-skeleton` branch was created by
   hand because neither skill said who creates it.
+
+## 2026-09-19, setup: ship returns to main after the merge, Opus
+- Added to the same pull request, at Marcin's suggestion, because it is the same question as
+  the branch change: which branch a gate leaves you on. `/ship` now switches to `main` and fast
+  forwards it once the merge commit exists and the tag is pushed, so the next `/plan` starts
+  where it expects to and nobody keeps committing to a branch that is already merged.
+- Conditional on the merge actually having happened. If the user reviewed and did not merge,
+  the slice branch is still the work in progress and `/ship` stays on it. Deleting the branch
+  stays the user's call either way; after S-01 Marcin chose to keep it.
+- Same permission rule as before, stated in the skill: switching branches lets nothing out of
+  the working tree, so it needs no yes, and a dirty tree stops the gate and asks.
+- Noticed while reading step 7 for this change: the S-01 ship did not fill the commit column in
+  [[../plan/plan]] with the merge commit `4215d1c`, which that step requires. Raised with
+  Marcin rather than folded into this pull request, which is about skills and not about S-01's
+  records.
