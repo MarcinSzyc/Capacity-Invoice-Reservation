@@ -9,7 +9,7 @@ allowed-tools: Read, Grep, Glob, Bash
 
 You are reviewing slice `$ARGUMENTS`. You start without the implementation conversation
 on purpose: judge the code, not the intent behind it. Read `CLAUDE.md` in full, then the
-slice file `wiki/plan/slices/$ARGUMENTS-*.md`, its AC/INV in `wiki/spec/`, its ADRs in `wiki/decisions/`,
+slice file `wiki/slices/$ARGUMENTS-*.md`, its AC/INV in `wiki/spec/`, its ADRs in `wiki/decisions/`,
 and `wiki/spec/assumptions.md`. Then read the diff: `git diff <base>..HEAD` where base is
 the commit before the slice started (find it in the work-log or ask), or the working tree
 if uncommitted.

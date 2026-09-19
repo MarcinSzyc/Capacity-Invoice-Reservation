@@ -7,8 +7,7 @@ allowed-tools: Read, Grep, Glob, Bash
 
 You are running the **verify** gate for slice `$ARGUMENTS`. You are the independent
 check; you did not write this code and you do not fix it. Read `CLAUDE.md §4 and §5`,
-the slice file `wiki/plan/slices/$ARGUMENTS-*.md`, and its rows in
-`wiki/plan/traceability.md`.
+the slice file `wiki/slices/$ARGUMENTS-*.md`, and its rows in `wiki/plan/plan.md`.
 
 ## Checks, in order, all mandatory
 

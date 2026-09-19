@@ -4,8 +4,8 @@ description: Implement one planned slice test-first (red, green, refactor) follo
 ---
 
 You are running the **implement** gate for slice `$ARGUMENTS`. Read `CLAUDE.md`, the
-slice file `wiki/plan/slices/$ARGUMENTS-*.md`, the AC/INV it covers in `wiki/spec/`, the
-relevant rows of `wiki/plan/traceability.md`, `wiki/testing/strategy.md`, and every ADR
+slice file `wiki/slices/$ARGUMENTS-*.md`, the AC/INV it covers in `wiki/spec/`, their
+rows in `wiki/plan/plan.md`, `wiki/testing/strategy.md`, and every ADR
 the slice references. Then read the current code you will touch.
 
 ## Preconditions, check before writing anything
@@ -49,7 +49,7 @@ Rules during the loop:
 
 - `npm run gate:quick` green.
 - Every test name from the plan exists and passes; if you added tests beyond the plan,
-  list them so `/ship` can add them to traceability.
+  list them so `/ship` can add them to `wiki/plan/plan.md`.
 - Append a work-log entry: what was built, decisions made and why, anything deferred,
   proposed ADRs awaiting decision.
 - Report to the user, then hand off to `/verify`.
@@ -58,4 +58,4 @@ Rules during the loop:
 
 - Skip red. Write code before its test.
 - Weaken or delete a failing test to get green.
-- Edit spec, plan, traceability or ADR decisions.
+- Edit spec, the requirement checklist, slice content or ADR decisions.
