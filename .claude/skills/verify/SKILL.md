@@ -7,7 +7,8 @@ allowed-tools: Read, Grep, Glob, Bash
 
 You are running the **verify** gate for slice `$ARGUMENTS`. You are the independent
 check; you did not write this code and you do not fix it. Read `CLAUDE.md §4 and §5`,
-the slice in `wiki/plan/plan.md`, and its rows in `wiki/plan/traceability.md`.
+the slice file `wiki/plan/slices/$ARGUMENTS-*.md`, and its rows in
+`wiki/plan/traceability.md`.
 
 ## Checks, in order, all mandatory
 
@@ -33,7 +34,8 @@ the slice in `wiki/plan/plan.md`, and its rows in `wiki/plan/traceability.md`.
 
 ## Report
 
-Write the result to the user and append a short entry to `wiki/log/work-log.md`:
+Write the result to the user, append a short entry to `wiki/log/work-log.md`, and one
+line to the `Log` section of the slice file:
 
 ```
 VERIFY S-xx: PASS | FAIL
@@ -48,6 +50,6 @@ findings. Anything else is `FAIL` and goes back to `/implement`.
 
 ## You must not
 
-- Edit any file except `wiki/log/work-log.md`.
+- Edit any file except `wiki/log/work-log.md` and the `Log` section of the slice file.
 - Mark PASS with a skipped check. If a check cannot run, the result is FAIL with the
   reason.

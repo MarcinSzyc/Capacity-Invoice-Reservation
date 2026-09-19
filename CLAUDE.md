@@ -155,7 +155,9 @@ authenticated endpoint. "Runnable locally" is an acceptance criterion.
 wiki/Home.md                    map + current status
 wiki/spec/                      brief, acceptance-criteria, invariants,
                                 assumptions, glossary, open-questions
-wiki/plan/                      plan (slices), traceability
+wiki/plan/plan.md               slice index: order, risk, dependencies, status
+wiki/plan/slices/S-xx-*.md      one file per slice: AC/INV, tests by name, ADRs, log
+wiki/plan/traceability.md       AC/INV to test to commit
 wiki/decisions/ADR-xxxx-*.md    one decision per file, template in decisions/
 wiki/log/work-log.md            append-only, one entry per working session
 wiki/log/changelog.md           what landed, per slice

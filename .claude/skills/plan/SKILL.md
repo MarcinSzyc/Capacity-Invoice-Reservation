@@ -5,13 +5,13 @@ model: fable
 ---
 
 You are running the **plan** gate. Read `CLAUDE.md`, then everything in `wiki/spec/`,
-then `wiki/plan/plan.md` and `wiki/plan/traceability.md` if they exist, then the current
-`src/` tree if any. Do not start before the spec gate is closed: if open-questions has
+then `wiki/plan/plan.md`, `wiki/plan/slices/*.md` and `wiki/plan/traceability.md` if they
+exist, then the current `src/` tree if any. Do not start before the spec gate is closed: if open-questions has
 non-deferred entries, stop and send the user back to `/spec`.
 
 ## Revision mode
 
-When `wiki/plan/plan.md` exists, this is a revision. Slices marked done are never
+When `wiki/plan/plan.md` exists, this is a revision. Slice files marked done are never
 changed. Only AC/INV not yet in traceability get new slices, numbered after the last
 existing one. A new requirement that invalidates a shipped slice gets a new slice that
 changes it, with the old AC marked `superseded` in traceability, never a rewrite of history.
@@ -34,8 +34,8 @@ and a traceability table that proves every requirement has a test waiting for it
    uncertainty they remove. Concurrency of reservations, bulk reconciliation semantics
    and multi-currency arithmetic are the usual candidates for early slices. Explain the
    ordering in one paragraph.
-4. **Per slice, write:**
-   - `S-xx` id, title, one-sentence outcome
+4. **One file per slice**, `wiki/plan/slices/S-xx-<slug>.md`, containing:
+   - `S-xx` id, title, one-sentence outcome, status (`planned`, `in progress`, `done`)
    - AC and INV ids covered
    - `risk: low | medium | high` with one line of justification. High-risk slices are
      implemented on Fable per `CLAUDE.md §8`.
@@ -44,6 +44,12 @@ and a traceability table that proves every requirement has a test waiting for it
      with the test level (unit / integration / e2e / invariant / contract)
    - ADR candidates: decisions this slice forces, with the alternatives you already see
    - definition of done specific to the slice, if anything beyond `CLAUDE.md §9`
+   - a `Log` section at the end, appended to by implement, verify, review and ship with
+     one line each (date, gate, result)
+
+   Then write `wiki/plan/plan.md` as the index: a table of slices in execution order with
+   risk, dependencies, AC/INV count and status, plus the paragraph explaining the order.
+   The index never repeats slice detail; it links to the slice files.
 5. **Traceability.** Write `wiki/plan/traceability.md` as one table:
    `id | slice | test name | test file (planned) | commit`. Test file and commit stay
    empty until `/ship` fills them. Every AC and INV appears exactly once. An AC without a
@@ -57,7 +63,8 @@ and a traceability table that proves every requirement has a test waiting for it
 
 ## Output
 
-- `wiki/plan/plan.md`, `wiki/plan/traceability.md`, proposed ADR files.
+- `wiki/plan/plan.md` (index), one `wiki/plan/slices/S-xx-<slug>.md` per slice,
+  `wiki/plan/traceability.md`, proposed ADR files.
 - Update `wiki/Home.md` status section.
 - Append an entry to `wiki/log/work-log.md`.
 

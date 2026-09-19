@@ -16,11 +16,11 @@ never approve their own work.
 | Step | Run it when | Files written |
 |---|---|---|
 | `/spec` | starting the project, or adding a requirement | `wiki/spec/acceptance-criteria.md`, `wiki/spec/invariants.md`, `wiki/spec/assumptions.md`, `wiki/spec/glossary.md`, `wiki/spec/open-questions.md`; a feature brief under `wiki/spec/features/` when given inline |
-| `/plan` | after every `/spec` | `wiki/plan/plan.md` (risk-ordered slices with named tests), `wiki/plan/traceability.md`, ADR drafts `wiki/decisions/ADR-xxxx-*.md` with status `proposed` |
-| `/implement S-xx` | a slice is next and its ADRs are accepted | code under `src/`, tests next to it and under `test/`, an entry in `wiki/log/work-log.md` |
-| `/verify S-xx` | implement reports done, and after every fix | a `VERIFY S-xx: PASS or FAIL` entry in `wiki/log/work-log.md`, nothing else |
-| `/review S-xx` | verify passed, and after every fix | a `REVIEW S-xx` entry in `wiki/log/work-log.md` with findings, nothing else |
-| `/ship S-xx` | verify PASS and review clean | `wiki/log/changelog.md`, `wiki/plan/traceability.md` (test files and commits filled), ADR statuses, `wiki/Home.md`, `README.md`, and the pull request |
+| `/plan` | after every `/spec` | `wiki/plan/plan.md` (slice index), one `wiki/plan/slices/S-xx-<slug>.md` per slice with AC/INV, named tests and ADR candidates, `wiki/plan/traceability.md`, ADR drafts `wiki/decisions/ADR-xxxx-*.md` with status `proposed` |
+| `/implement S-xx` | a slice is next and its ADRs are accepted | code under `src/`, tests next to it and under `test/`, an entry in `wiki/log/work-log.md`, status and log line in the slice file |
+| `/verify S-xx` | implement reports done, and after every fix | a `VERIFY S-xx: PASS or FAIL` entry in `wiki/log/work-log.md` and a log line in the slice file, nothing else |
+| `/review S-xx` | verify passed, and after every fix | a `REVIEW S-xx` entry in `wiki/log/work-log.md` with findings and a log line in the slice file, nothing else |
+| `/ship S-xx` | verify PASS and review clean | `wiki/log/changelog.md`, `wiki/plan/traceability.md` (test files and commits filled), ADR statuses, slice file status `done`, `wiki/plan/plan.md`, `wiki/Home.md`, `README.md`, and the pull request |
 
 ## First run
 
