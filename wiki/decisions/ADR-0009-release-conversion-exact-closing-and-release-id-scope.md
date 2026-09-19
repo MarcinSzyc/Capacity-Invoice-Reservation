@@ -1,4 +1,4 @@
-# ADR-0008: Release conversion, exact closing and the scope of releaseId
+# ADR-0009: Release conversion, exact closing and the scope of releaseId
 
 - Status: proposed
 - Date: 2026-09-19

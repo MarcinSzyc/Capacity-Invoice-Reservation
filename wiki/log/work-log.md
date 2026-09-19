@@ -129,3 +129,23 @@ correct with a new one. Format:
   (CLAUDE.md §3, A-16), the framework and runtime choice had no record until now.
 - PR for the rule above opened from `setup/ask-before-git`; its work-log section landed
   earlier inside the plan PR (#12) because both sessions wrote the same file.
+
+## 2026-09-19, docs/adr-renumber-and-deployment
+- ADRs renumbered once, before any code: technology baseline is ADR-0001, the ten proposed
+  ADRs moved up by one (old 0001 to 0010 are now 0002 to 0011). Every reference in the
+  wiki, slices and skills rewritten; earlier work-log entries keep the old numbers and this
+  line is the mapping.
+- ADR-0001 gains the deployment shape from Marcin: everything in Docker, local run through
+  `docker compose up`, three services of ours (`api`, `web`, `db`) plus the Kafka broker.
+  `api` is only an API, `web` only shows what the system does, `db` is its own container.
+- Consequences applied: A-17 and AC-38 (demo is the `web` container, `api` keeps dev-only
+  endpoints), INV-10 wording, S-01 (compose with four services, `web` placeholder, CORS),
+  S-07 (page in `web/`, `src/modules/dev/` on the api side). Changes rows added.
+- `web` is a small React UI (Vite, TypeScript, a few tables), not a vanilla page. Repo
+  layout: isolated `api/` and `web/` folders joined by npm workspaces at the root, root
+  `npm run gate` covers both. CLAUDE.md §2 and §5, ADR-0001, A-17, AC-00, S-01, S-07
+  updated accordingly.
+- ADR-0001 explains why a Kafka container exists although we only consume (a consumer
+  needs a broker; locally it stands in for the treasury's), and who publishes on it (the
+  dev-only producer behind an `api` endpoint, called by `web`; the real consumer reads it).
+  Glossary gains "Dev producer".

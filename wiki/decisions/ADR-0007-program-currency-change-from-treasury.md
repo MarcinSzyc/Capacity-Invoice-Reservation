@@ -1,4 +1,4 @@
-# ADR-0006: A treasury message with a different currency than the program
+# ADR-0007: A treasury message with a different currency than the program
 
 - Status: proposed
 - Date: 2026-09-19

@@ -1,4 +1,4 @@
-# ADR-0004: Authentication with bearer JWT
+# ADR-0005: Authentication with bearer JWT
 
 - Status: proposed
 - Date: 2026-09-19

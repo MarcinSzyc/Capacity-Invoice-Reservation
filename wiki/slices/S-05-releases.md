@@ -5,12 +5,12 @@
 - AC: AC-10, AC-11, AC-12, AC-13, AC-14, AC-15, AC-16, AC-17, AC-18, AC-19, AC-34
 - INV: INV-02
 - Risk: high. Money: proportional conversion of instalments with the stored rate and exact closing of the last one; idempotency with the original outcome in the body. Implemented on Fable per `CLAUDE.md §8`.
-- Depends on: S-04. ADR that must be accepted first: [[../decisions/ADR-0008-release-conversion-exact-closing-and-release-id-scope]].
+- Depends on: S-04. ADR that must be accepted first: [[../decisions/ADR-0009-release-conversion-exact-closing-and-release-id-scope]].
 
 ## Scope
 
 Domain:
-- `Reservation.release(amount?: Money in invoice currency, releaseId, reason, clientId)` per ADR-0008: absent amount means "everything left"; `amount > remaining invoice amount` is `ReleaseExceedsHeld`; `held = 0` before the call is `ReservationAlreadyReleased`; a known `releaseId` is `ReleaseAlreadyProcessed(original outcome)`. Returns the new `held` and a `release` movement (`deltaHeld` negative, `releaseId`, `reason`, `clientId`).
+- `Reservation.release(amount?: Money in invoice currency, releaseId, reason, clientId)` per ADR-0009: absent amount means "everything left"; `amount > remaining invoice amount` is `ReleaseExceedsHeld`; `held = 0` before the call is `ReservationAlreadyReleased`; a known `releaseId` is `ReleaseAlreadyProcessed(original outcome)`. Returns the new `held` and a `release` movement (`deltaHeld` negative, `releaseId`, `reason`, `clientId`).
 - `ReleaseReason` enum: `repaid` (default), `cancelled`.
 - `Program.release(deltaHeld)` lowers `reserved`; `available` follows the formula; an overcommitted program may become committed again.
 - Domain errors: `ReservationNotFound`, `ReservationAlreadyReleased`, `ReleaseExceedsHeld`, `ReleaseAlreadyProcessed`.
@@ -22,7 +22,7 @@ Application:
 Infrastructure:
 - `POST /programs/:programId/reservations/:invoiceId/releases` body `{releaseId, amount?, reason?}` → `200` with the reservation as in S-03 plus `releasedInvoiceAmount`. Errors: `400 VALIDATION_FAILED`, `404 RESERVATION_NOT_FOUND` (unknown program or unknown invoice on that program), `409 RESERVATION_ALREADY_RELEASED`, `409 RELEASE_ALREADY_PROCESSED` (`details.appliedAt`, `details.heldAfter`), `422 RELEASE_EXCEEDS_HELD` (`details.held`, `details.remainingInvoiceAmount`).
 - `GET /programs/:programId/reservations/:invoiceId` → `200 {programId, invoiceId, invoiceAmount, invoiceCurrency, reservedAmount, held, rate, status, source, createdAt, movements: [{kind, amount, reason, releaseId, messageId, clientId, occurredAt}]}`; `404 RESERVATION_NOT_FOUND`.
-- Migration: `capacity_movements.release_id` and `reason` exist since S-02; add `UNIQUE (reservation_id, release_id)` (scope per ADR-0008) and `reservations.released_invoice_amount BIGINT`.
+- Migration: `capacity_movements.release_id` and `reason` exist since S-02; add `UNIQUE (reservation_id, release_id)` (scope per ADR-0009) and `reservations.released_invoice_amount BIGINT`.
 
 ## Tests by name
 
@@ -43,7 +43,7 @@ Infrastructure:
 
 ## ADR candidates
 
-- [[../decisions/ADR-0008-release-conversion-exact-closing-and-release-id-scope]]: how `held` follows the remaining invoice amount so the last instalment closes exactly; whether `releaseId` is unique per reservation or per program.
+- [[../decisions/ADR-0009-release-conversion-exact-closing-and-release-id-scope]]: how `held` follows the remaining invoice amount so the last instalment closes exactly; whether `releaseId` is unique per reservation or per program.
 
 ## Definition of done
 

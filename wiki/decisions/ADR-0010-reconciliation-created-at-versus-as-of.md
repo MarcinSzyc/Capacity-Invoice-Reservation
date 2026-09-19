@@ -1,4 +1,4 @@
-# ADR-0009: Deciding whether a local reservation is older than a snapshot
+# ADR-0010: Deciding whether a local reservation is older than a snapshot
 
 - Status: proposed
 - Date: 2026-09-19

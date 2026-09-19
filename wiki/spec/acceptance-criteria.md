@@ -14,8 +14,9 @@ readability; the API uses integer minor units.
 ## Baseline
 
 **AC-00 Project baseline (walking skeleton).** Given a clean checkout with Docker. When
-`docker compose up` is run. Then a NestJS service on Node 24 LTS starts together with its
-dependencies, readiness turns healthy, and `GET /health` answers `200` without a token.
+`docker compose up` is run. Then the `api` (NestJS on Node 24 LTS), the `web` UI (React, static build), `db` and
+`kafka` containers start, readiness turns healthy, `GET /health` answers `200` without a
+token, and the `web` page answers `200`.
 And `npm run lint`, `npm run format:check`, `npm run typecheck`, `npm run test`,
 `npm run gate:quick` and `npm run gate` exist and pass on the fresh project, with ESLint
 and Prettier configured as `CLAUDE.md §3` requires. And API documentation is served in
@@ -185,10 +186,11 @@ healthy, and an authenticated availability request for the sample program succee
 **AC-37 Dev token.** When the documented token command is run. Then it prints a token
 that AC-36's request accepts. [A-14, A-17]
 
-**AC-38 Demo page.** Given the dev profile. When `/demo` is opened. Then it shows the
-request generator, the request log, the live ledger and the treasury panel, and every
-action it performs goes through the real endpoints and the real Kafka topic. Given the
-production profile, `/demo` is not served. [A-17]
+**AC-38 Demo page.** Given the compose stack in the dev profile. When the `web` container's
+page is opened. Then it shows the request generator, the request log, the live ledger and
+the treasury panel, and every action it performs goes through the real `api` endpoints and
+the real Kafka topic. Given the production profile, the `api` serves no page and none of the
+dev-only endpoints the page relies on. [A-17, ADR-0001]
 
 **AC-39 Restart keeps state.** Given reservations exist. When the service restarts. Then
 availability and reservations read the same as before. [A-15]
@@ -210,3 +212,5 @@ Every addition, amendment or supersession of an AC, newest last. Ids never chang
 | 2026-09-19 | AC-01 to AC-41 | first version, output of the spec gate | PR #5 |
 | 2026-09-19 | AC-00 | added: project baseline (walking skeleton), Node 24, compose, gate scripts, README, API docs | PR #10 |
 | 2026-09-19 | AC-35 | amended: API documentation is Swagger UI and Redoc over one OpenAPI document | PR #10 |
+| 2026-09-19 | AC-38 | amended: the demo page is the `web` container, `api` keeps only dev-only endpoints (ADR-0001) | docs/adr-renumber-and-deployment |
+| 2026-09-19 | AC-00 | amended: four containers, `web` is a React UI in its own folder (ADR-0001) | docs/adr-renumber-and-deployment |
