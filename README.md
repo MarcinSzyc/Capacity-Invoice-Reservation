@@ -25,9 +25,12 @@ That builds and starts five containers defined in [docker-compose.yml](docker-co
 To start again from nothing: `docker compose down -v && docker compose up --wait`.
 
 If one of those ports is already taken on your machine, move it without editing any file:
-`API_PORT=3010 WEB_PORT=8081 docker compose up --wait`, and the same variables work for
-`npm run smoke`. The names are `API_PORT`, `WEB_PORT`, `DB_PORT`, `KAFKA_PORT` and
-`STUDIO_PORT`.
+`API_PORT=3010 WEB_PORT=8081 docker compose up --wait`. The names are `API_PORT`, `WEB_PORT`,
+`DB_PORT`, `KAFKA_PORT` and `STUDIO_PORT`.
+
+`npm run smoke` never touches this stack: it runs its own throwaway one under the compose
+project name `capacity-smoke` on its own ports, so running the gate cannot stop your
+containers or delete rows you edited in pgweb.
 
 ### Where to look first
 

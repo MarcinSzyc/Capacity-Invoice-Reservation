@@ -16,7 +16,7 @@ describe('PrismaService', () => {
   });
 
   it('should open a connection to the database and answer a query', async () => {
-    const rows = await prisma.$queryRaw`SELECT 1 AS one`;
+    const rows = await prisma.withClient((client) => client.$queryRaw`SELECT 1 AS one`);
 
     expect(rows).toEqual([{one: 1}]);
   });

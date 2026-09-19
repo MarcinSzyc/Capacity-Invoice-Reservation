@@ -6,7 +6,8 @@ export const OPENAPI_JSON_PATH = 'openapi.json';
 export const SWAGGER_UI_PATH = 'docs';
 export const REDOC_PATH = 'redoc';
 
-const REDOC_BUNDLE = 'https://cdn.redocly.com/redoc/latest/bundles/redoc.standalone.js';
+// Pinned: `latest` would let a Redoc major break /redoc with no change in this repository.
+const REDOC_BUNDLE = 'https://cdn.redocly.com/redoc/v2.5.3/bundles/redoc.standalone.js';
 
 /**
  * A-16: one OpenAPI document, two renderers. Swagger UI is for trying requests, Redoc for

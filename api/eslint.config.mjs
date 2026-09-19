@@ -37,6 +37,23 @@ export default tseslint.config(
     },
   },
   {
+    // ADR-0002: the data access library is forbidden in application/ as well as domain/.
+    files: ['src/modules/**/application/**/*.ts'],
+    rules: {
+      '@typescript-eslint/no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['@prisma/*', 'prisma', '.prisma/*', '**/generated/**'],
+              message: 'Persistence stays in infrastructure: no ORM in application (ADR-0002).',
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
     // CLAUDE.md §2: the domain layer is framework free and never sees persistence.
     files: ['src/modules/**/domain/**/*.ts'],
     rules: {

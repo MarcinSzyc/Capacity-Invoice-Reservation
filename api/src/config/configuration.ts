@@ -72,8 +72,11 @@ const readRequired = (value: string | undefined, name: string, problems: string[
 
 const readBrokers = (value: string | undefined, problems: string[]): readonly string[] => {
   const raw = readRequired(value, 'KAFKA_BROKERS', problems);
-  return raw
+  const brokers = raw
     .split(',')
     .map((broker) => broker.trim())
     .filter((broker) => broker !== '');
+
+  if (raw !== '' && brokers.length === 0) problems.push('KAFKA_BROKERS lists no broker');
+  return brokers;
 };

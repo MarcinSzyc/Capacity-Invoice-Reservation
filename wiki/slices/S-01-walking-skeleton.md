@@ -59,3 +59,6 @@ Beyond `CLAUDE.md §9`:
 | 2026-09-19 | plan (revision) | compose shape per ADR-0001: api, web, db, kafka; demo in the web container |
 | 2026-09-19 | implement | slice started, branch `slice/S-01-walking-skeleton` |
 | 2026-09-19 | implement | walking skeleton built test first, `npm run gate` green from a clean install |
+| 2026-09-19 | verify | PASS, gate green, 2/2 AC covered, no findings |
+| 2026-09-19 | review | 11 findings (1 blocker, 3 majors, 7 minors), returned to `/implement` |
+| 2026-09-19 | implement (review fixes) | 9 findings fixed, 1 pushed back, 1 handed to `/spec`; gate green |

@@ -1,20 +1,25 @@
 #!/usr/bin/env bash
 # Cold start smoke (AC-00, AC-36): bring the stack up from nothing, run the cold start tests
-# against it, then take it down again. Ports follow the same defaults as docker-compose.yml and
-# can be moved, for example API_PORT=3010 npm run smoke.
+# against it, then take it down again.
+#
+# It runs under its own compose project name and its own ports, so that `npm run gate` never
+# stops the stack a developer is using or deletes rows they edited by hand in pgweb.
 set -euo pipefail
 
-API_PORT="${API_PORT:-3000}"
-WEB_PORT="${WEB_PORT:-8080}"
-export API_PORT WEB_PORT
+export COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-capacity-smoke}"
+export API_PORT="${API_PORT:-3100}"
+export WEB_PORT="${WEB_PORT:-8180}"
+export DB_PORT="${DB_PORT:-55432}"
+export KAFKA_PORT="${KAFKA_PORT:-19092}"
+export STUDIO_PORT="${STUDIO_PORT:-15555}"
 
 cleanup() {
-  echo "smoke: stopping the stack"
+  echo "smoke: stopping the ${COMPOSE_PROJECT_NAME} stack"
   docker compose down -v --remove-orphans >/dev/null 2>&1 || true
 }
 trap cleanup EXIT
 
-echo "smoke: starting from a clean stack"
+echo "smoke: starting from a clean ${COMPOSE_PROJECT_NAME} stack"
 docker compose down -v --remove-orphans >/dev/null 2>&1 || true
 
 echo "smoke: docker compose up --wait"

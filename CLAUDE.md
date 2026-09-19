@@ -50,7 +50,7 @@ bump inside a slice.
 
 ```
 package.json                 workspaces: api, web. Root scripts fan out to both.
-docker-compose.yml           api, web, db, kafka
+docker-compose.yml           api, web, db, kafka, studio
 api/
   src/modules/<area>/
     domain/          pure TypeScript. No @nestjs/* imports, no decorators, no I/O.
@@ -59,12 +59,25 @@ api/
     <area>.module.ts
   src/common/        truly generic cross-cutting code only (filters, guards, logger).
   src/config/        typed configuration.
+  src/persistence/   the database connection, one module, nothing business specific.
+  src/messaging/     the Kafka connection and the consumer loop.
+  src/health/        liveness and readiness. Owns no business data.
   test/              e2e tests (*.e2e-test.ts) and test infrastructure.
 web/
   src/               React + Vite + TypeScript strict. A few tables and forms, plain CSS,
                      no state library. Calls api over HTTP, contains no business rules.
 ```
 
+- **Two tiers, and only two.** `src/modules/<area>/` holds business areas and is where the
+  three layers apply. `src/persistence/`, `src/messaging/` and `src/health/` are the app-level
+  tier: one folder per module directly under `src/`, which is the NestJS convention (`nest g
+  module health` produces exactly `src/health/`). They carry connections and process-level
+  concerns, never a business rule. A new folder at this level needs a reason in review; a new
+  business area always goes under `src/modules/`.
+- **Connections are not global.** Only `config` and `common` are `@Global()`. A module that
+  needs the database or the broker imports `PersistenceModule` or `MessagingModule`, as the
+  NestJS documentation advises over global modules. The Prisma client is held, never extended
+  or exported, so injecting the persistence service does not hand the query API to a caller.
 - **Domain is framework-free.** Entities, value objects, domain services and domain
   errors are plain classes. Dependencies enter through interfaces (ports) defined in
   `domain/` and implemented in `infrastructure/`. Lint enforces the import boundary.

@@ -243,3 +243,78 @@ correct with a new one. Format:
 - Known noise, not defects: kafkajs 2.2.4 prints a `TimeoutNegativeWarning` from its internal
   request queue on Node 24, and npm 11 now withholds dependency install scripts behind
   `npm approve-scripts`. Neither affects the gate, and both behave the same locally and in CI.
+
+## 2026-09-19, verify S-01, Sonnet
+- Full gate: `npm run gate` green (lint, format, typecheck, prose check, build, unit,
+  integration, e2e, cold start). No retries, nothing flaky.
+- Coverage: 2/2 AC covered (AC-00, AC-41), 0/0 INV (none claimed). Both tags found in
+  tests that ran and passed; no `.skip`, `.only`, `xit` anywhere. Test bodies assert real
+  response bodies and status codes, not trivially true.
+- Level matches the plan: AC-00 runs over real HTTP against the compose stack (cold
+  start level, not a use case call); AC-41 reads the actual `README.md` from disk.
+- Style: prose check clean; no nested ternaries or braced one-line `if` introduced since
+  ADR-0002/3/4 acceptance.
+- Layer boundaries: no `src/modules/*/domain` exists yet (none planned for S-01); the
+  only Prisma/kafkajs imports outside `infrastructure/`-equivalent folders are the
+  generated client itself. The `no-restricted-imports` boundary rule is wired and was
+  hand-verified with a probe file per the slice's definition of done.
+- Cold start: `docker compose down -v`, `docker compose up -d --build`, `docker compose
+  up --wait` turned healthy. `/health`, `/health/ready`, `/openapi.json`, `/docs`,
+  `/redoc` all answered 200 with no `Authorization` header, matching AC-00/AC-35; a
+  bogus bearer token did not break anything (no auth exists until S-02, as scoped).
+  `web` answered 200. Unknown route returned the `{statusCode, code, message}` envelope.
+  Torn down with `docker compose down -v` afterwards.
+- README: followed literally, every linked file exists, every documented URL answered
+  as described, `npm ci && npm run gate:quick` and `npm run gate` both green.
+- No blocker or major findings.
+
+## 2026-09-19, review S-01, Fable
+- REVIEW S-01: 11 findings (1/3/7). Returned to `/implement`; `/verify` and `/review` run again.
+- Blocker: `PrismaService extends PrismaClient` and is exported from a `@Global()` module, so
+  the ORM is visible outside `infrastructure/` (CLAUDE.md §2). Majors: the import boundary
+  lint covers `domain/` only while ADR-0002 says `domain/` and `application/`; `src/health`,
+  `src/messaging`, `src/persistence` are top level folders absent from the §2 layout; the
+  smoke tears down the developer's own compose project and volume. Minors: untagged e2e tests,
+  dead `SERVICE_UNAVAILABLE` mapping, separator-only `KAFKA_BROKERS` passes validation,
+  `CONSUMER_GROUP` used as `clientId`, Redoc bundle unpinned, A-17 and CLAUDE.md still say
+  four containers, ADR and slice amendments inside the implement commit.
+
+## 2026-09-19, implement S-01 (review fixes), Opus
+- Fix round for the eleven findings of `/review`. Nine fixed, one pushed back on with
+  reasoning, one handed to `/spec` because `/implement` may not edit the spec.
+- Blocker fixed: `PrismaService` no longer extends `PrismaClient`, it holds one privately and
+  exposes `isReachable()` plus `withClient()`, the single door for repositories under
+  `infrastructure/` in S-02. `PersistenceModule` and `MessagingModule` lost `@Global()`, so
+  `HealthModule` now imports what it uses. The NestJS Prisma recipe does extend the client, but
+  CLAUDE.md §2 is stricter on purpose and the NestJS module documentation itself advises the
+  `imports` array over global modules. The typecheck error this produced in the integration
+  test (`$queryRaw` no longer reachable from outside) is the proof the boundary now holds.
+- Major fixed: the ESLint boundary rule gained an `application/**` block, so the data access
+  library is refused there too, which is what accepted ADR-0002 promised.
+- Major fixed: `scripts/smoke.sh` runs under its own compose project name `capacity-smoke` and
+  its own ports (3100, 8180, 55432, 19092, 15555). `npm run gate` can no longer stop a
+  developer's stack or delete the `db-data` volume holding rows edited by hand in pgweb.
+- Major settled by amending `CLAUDE.md §2` rather than moving code, after checking what the
+  NestJS documentation actually prescribes: one directory per module directly under `src/`
+  (`nest g module health`, the command in the Terminus recipe, generates `src/health/`
+  verbatim; the Prisma recipe is flatter still at `src/prisma.service.ts`). NestJS has no
+  notion of `domain`/`application`/`infrastructure`; that layering is this repository's own
+  overlay. §2 now names the app-level tier (`src/persistence/`, `src/messaging/`, `src/health/`),
+  states that only `config` and `common` are global, and lists `studio` as the fifth compose
+  service.
+- Minor fixed: the unreachable `SERVICE_UNAVAILABLE` entry removed from `CODE_BY_STATUS`;
+  `KAFKA_BROKERS` holding only separators now fails boot instead of yielding an empty list;
+  `CLIENT_ID` split from `CONSUMER_GROUP` because a kafkajs client id and a consumer group are
+  different things (ADR-0003 names the group); the Redoc bundle pinned to `v2.5.3` instead of
+  tracking `latest`.
+- Pushed back, not fixed: the four untagged health e2e tests. The S-01 slice plans them
+  explicitly as "supporting tests without a tag, needed so every level of the harness runs at
+  least once", and tagging them `[AC-35]` or `[AC-40]` would claim acceptance criteria that the
+  plan assigns to S-02, where their real e2e tests belong. They stay untagged.
+- Handed to `/spec`, out of reach of this gate: A-17 still says `docker compose up` starts four
+  containers while compose, ADR-0001 and the README have five. That needs an amendment with a
+  Changes row in `wiki/spec/assumptions.md`, which `/implement` must not edit.
+- Not split, by Marcin's decision: the wiki amendments that rode inside commit d94bd05 stay
+  where they are. The branch is already pushed and rewriting it would mean a force-push, which
+  the rules forbid once history is shared. Fixed forward instead.
+- `npm run gate` green after the round, and the smoke left no containers behind.
