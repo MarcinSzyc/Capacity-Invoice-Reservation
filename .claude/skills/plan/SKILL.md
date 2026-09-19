@@ -74,6 +74,11 @@ waiting for it.
 7. **Present to the user.** Slice list with risk and order, the ADRs that need a decision
    before `S-01`, and any AC you found untestable as written (send those back to `/spec`).
 
+## Hand-off
+
+Do not commit. Report the branch name to use, `docs/plan-S-xx`, and remind the user that
+the ADR decisions are made in that PR's review before `/implement` may start.
+
 ## Output
 
 - `wiki/plan/plan.md` (requirement checklist), `wiki/slices/README.md` (slice index), one

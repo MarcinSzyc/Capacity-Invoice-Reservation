@@ -30,6 +30,17 @@ read by implement, verify, review and ship. Pick the requirements, run
 `/plan AC-01 AC-02 INV-01`, get the plan file, run `/implement S-xx` on it. The slice id
 is just the name of that plan.
 
+## Two PRs per slice
+
+1. `/plan AC-xx ...` writes the slice file and the ADR drafts. Open a PR from
+   `docs/plan-S-xx`. Marcin reviews the plan, decides the ADRs (status `accepted`), and
+   comments "Approved". Merge.
+2. `/implement`, `/verify`, `/review`, `/ship` work on `slice/S-xx-<slug>`. `/ship` opens
+   the PR. Marcin reviews the code and comments "Approved". Merge, tag `S-xx`.
+
+A plan correction found while implementing (an extra test, a renamed step) is a new
+commit in the slice PR, not a new plan PR.
+
 ## First run
 
 1. `/spec` with no arguments. It reads `wiki/spec/brief.md`, writes the glossary and

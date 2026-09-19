@@ -131,8 +131,12 @@ authenticated endpoint. "Runnable locally" is an acceptance criterion.
 
 - `main` is always green and is never pushed to directly. Exception: wiki and document
   changes before slice S-01 exists.
-- One branch per slice: `slice/S-03-release-capacity`. Non-slice work uses `setup/<slug>`
-  or `docs/<slug>` and the same PR flow. Inside a branch, small commits from the TDD loop. Conventional Commits with the slice id as scope:
+- Two PRs per slice. First the plan: branch `docs/plan-S-03`, containing the slice file,
+  its rows in `wiki/plan/plan.md`, the slice index and the proposed ADRs; Marcin decides
+  the ADRs in that review. Then the code: branch `slice/S-03-release-capacity`, opened by
+  `/ship`. Small plan corrections discovered while implementing go into the slice PR as
+  new commits, not into a new plan PR. Non-slice work uses `setup/<slug>` or
+  `docs/<slug>` and the same PR flow. Inside a branch, small commits from the TDD loop. Conventional Commits with the slice id as scope:
   `feat(S-03): release capacity on repayment`. Body lists AC, INV and ADR ids touched.
 - Rebase the slice branch on `main` before merging. Merge with `--no-ff` so the merge
   commit marks the slice boundary and the inner commits keep the red-green-refactor
