@@ -149,3 +149,16 @@ correct with a new one. Format:
   needs a broker; locally it stands in for the treasury's), and who publishes on it (the
   dev-only producer behind an `api` endpoint, called by `web`; the real consumer reads it).
   Glossary gains "Dev producer".
+
+## 2026-09-19, docs/adr-decisions-s-01
+- ADR-0002 accepted by Marcin: PostgreSQL with Prisma; Prisma Studio as a fifth compose
+  service on port 5555, started by default in the dev profile, for browsing and editing rows
+  by hand. Alternatives for inspection tooling (desktop clients, pgweb, Adminer, pgAdmin)
+  recorded. ADR-0001 compose table and S-01 compose line gain `studio`.
+- ADR-0003 accepted by Marcin following the recommendation: kafkajs directly behind the
+  `TreasuryMessageSource` port, one topic `treasury.capacity` keyed by `programId`, offset
+  committed after the database transaction, DLQ topic. The NestJS microservices transport
+  was weighed as the easiest to configure and declined because it hides the consumer.
+- ADR-0004 accepted by Marcin following the recommendation: Testcontainers for integration
+  and e2e, compose stack only for the cold start smoke, Jest with three projects plus the
+  cold start project. All three ADRs blocking S-01 are now accepted.

@@ -1,7 +1,7 @@
 # ADR-0004: Test infrastructure for integration and e2e tests
 
-- Status: proposed
-- Date: 2026-09-19
+- Status: accepted
+- Date: proposed 2026-09-19, accepted 2026-09-19
 - Slice: S-01
 - Related: AC-00, AC-36, `wiki/testing/strategy.md`
 
@@ -44,7 +44,11 @@ under `test/cold-start/` that targets `BASE_URL` and is run by `npm run smoke` a
 
 ## Decision
 
-(empty until Marcin decides)
+Option 1 with Jest, as recommended. Testcontainers starts one Postgres and one Kafka per
+Jest run for the integration and e2e projects; the compose stack is used only by the cold
+start smoke. Three Jest projects by file pattern (unit, integration, e2e) plus the small
+cold start project under `test/cold-start/` run by `npm run smoke` after
+`docker compose up --wait`. Decided by Marcin on 2026-09-19 following the recommendation.
 
 ## Consequences
 
