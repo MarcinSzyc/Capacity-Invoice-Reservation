@@ -17,3 +17,4 @@ Template: [[ADR-0000-template]].
 | [[ADR-0008-release-conversion-exact-closing-and-release-id-scope]] | Release conversion, exact closing and the scope of releaseId | proposed | S-05 |
 | [[ADR-0009-reconciliation-created-at-versus-as-of]] | Deciding whether a local reservation is older than a snapshot | proposed | S-06 |
 | [[ADR-0010-reconciliation-created-reservations]] | Reservations created by reconciliation | proposed | S-06 |
+| [[ADR-0011-technology-baseline]] | Technology baseline: Node 24 LTS, NestJS 11, TypeScript strict, npm | accepted | S-01 |
