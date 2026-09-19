@@ -49,3 +49,21 @@ jobs:
         run: npm run gate
         env:
           CI: true
+
+  worklog:
+    name: Work log updated
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Every PR appends to wiki/log/work-log.md
+        run: |
+          changed=$(git diff --name-only "origin/${{ github.base_ref }}...HEAD")
+          echo "$changed"
+          if ! echo "$changed" | grep -qx 'wiki/log/work-log.md'; then
+            echo "::error::This PR does not touch wiki/log/work-log.md. Every PR appends at least one line saying what changed and why (CLAUDE.md §7)."
+            exit 1
+          fi
