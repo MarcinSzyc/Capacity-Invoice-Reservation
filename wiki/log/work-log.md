@@ -83,3 +83,43 @@ correct with a new one. Format:
   goes in `docs/plan-S-xx` and Marcin decides the ADRs in that review; the code goes in
   `slice/S-xx-<slug>` via `/ship`. Small plan corrections found while implementing are
   commits on the slice PR. CLAUDE.md §6, CONTRIBUTING and the plan skill hand-off updated.
+
+## 2026-09-19, setup/ask-before-git
+- Rule from Marcin: the agent never commits, pushes, opens a PR, merges or tags without
+  an explicit yes for that action; a request to change something is not a request to
+  commit it. Written into CLAUDE.md §6, CONTRIBUTING hand rules and the must-not list
+  of all six skills.
+
+## 2026-09-19 14:35, plan, Fable
+- Full `/plan` run (no ids given): every AC-00..AC-41 and INV-01..INV-11 cut into seven
+  slices under `wiki/slices/`, 53 rows in `wiki/plan/plan.md`, each with a named test and
+  level. Order: S-01 walking skeleton, S-02 programs from the treasury (Kafka consumer,
+  persistence, auth, availability read, cold start), S-03 reservations and INV-01 under two
+  instances, S-04 cross-currency, S-05 releases, S-06 reconciliation snapshots, S-07 demo
+  and restart durability. Four slices `high` (S-03, S-04, S-05, S-06) per CLAUDE.md §8.
+- Placement choices worth knowing: AC-21, AC-22 and AC-09 sit in S-03 because their Given
+  needs reservations; AC-18, AC-19 and AC-34 sit in S-05 because their Then needs releases
+  and the reservation read endpoint; AC-35 sits in S-02 where the auth exemption becomes
+  real; AC-40 sits in S-02, the first slice with both a request and a message; AC-41 sits
+  in S-01 as a README link test that `/ship` keeps true; AC-36 and AC-37 sit in S-02 so
+  the gate's cold start smoke hits an authenticated endpoint from the second slice on.
+- Ten ADRs drafted as `proposed` with options and a recommendation each, decision empty:
+  ADR-0001 storage and data access (Prisma recommended, Drizzle as the alternative),
+  ADR-0002 Kafka client and topics (kafkajs, one topic with `type`), ADR-0003 test infra
+  (Testcontainers, Jest), ADR-0004 auth (HS256, global guard, `@Public()`), ADR-0005 money
+  and rate (`bigint`, integer JSON, rate as decimal string), ADR-0006 currency change from
+  the treasury (accept only with no active reservations), ADR-0007 concurrency (row lock
+  per A-04), ADR-0008 release conversion and `releaseId` scope (held derived from remaining
+  invoice amount; id unique per reservation), ADR-0009 `createdAt` vs `asOf` (30 s keep
+  window, database clock), ADR-0010 reconciliation-created reservations (program currency,
+  rate 1). ADR-0001 to ADR-0003 block S-01.
+- Interface decisions written into the slice files so `/implement` needs no design talk:
+  error envelope `{statusCode, code, message, details?}`, routes under `/programs/:programId`
+  with the invoice id as the reservation id, `NODE_ENV` as the profile, message envelope
+  with a `type` field.
+- Open: A-05 wording confirmation (unchanged since spec). Three ADR consequences ask for
+  small spec follow-ups on acceptance (A-12 currency sentence and keep window, glossary note
+  on reconciliation-created reservations); they go through `/spec`, not here.
+- Nothing committed. Proposed branch for this plan: `docs/plan` (one PR for the whole
+  plan, since ADR-0001..0003 must be decided before S-01 and the per-slice `docs/plan-S-xx`
+  rule in CLAUDE.md §6 was written for later revisions).
