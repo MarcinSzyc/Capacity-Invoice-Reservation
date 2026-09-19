@@ -5,12 +5,12 @@
 - AC: AC-06, AC-07
 - INV: INV-08
 - Risk: high. Money arithmetic: multiplication by a decimal rate with half-up rounding in integer arithmetic, no float anywhere. Small slice, but per `CLAUDE.md §8` money is Fable work.
-- Depends on: S-03. ADR: [[../decisions/ADR-0005-money-and-rate-representation]] (accepted in S-02, the rate part applies here).
+- Depends on: S-03. ADR: [[../decisions/ADR-0006-money-and-rate-representation]] (accepted in S-02, the rate part applies here).
 
 ## Scope
 
 Domain:
-- `Rate` value object per ADR-0005: exact decimal from a string (`"1.10"`), positive, bounded scale. `Money.convert(rate, targetCurrency)` returns Money in the target currency rounded half up to the minor unit; it is the only cross-currency operation in the domain.
+- `Rate` value object per ADR-0006: exact decimal from a string (`"1.10"`), positive, bounded scale. `Money.convert(rate, targetCurrency)` returns Money in the target currency rounded half up to the minor unit; it is the only cross-currency operation in the domain.
 - `Reservation` creation: `reservedAmount = invoiceAmount.convert(rate, program.currency)`; `held` starts equal to it; the rate is stored and immutable.
 - Validation rule (A-02, A-10): different currencies require `rate`; same currency requires `rate` absent or exactly `1`.
 
@@ -28,7 +28,7 @@ Infrastructure:
 
 ## ADR candidates
 
-None new. ADR-0005 must state the rate scale and the rounding rule before this slice starts.
+None new. ADR-0006 must state the rate scale and the rounding rule before this slice starts.
 
 ## Definition of done
 

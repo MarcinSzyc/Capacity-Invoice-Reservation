@@ -382,13 +382,16 @@ says "all endpoints".
 - Status: accepted 2026-09-19
 - Source: Q25
 
-**Statement.** `docker compose up` starts the service, its database and Kafka from a
-clean checkout. A second command mints a dev token. The service serves a simple `/demo`
-page in the dev profile only: one HTML file, vanilla JavaScript, no build step, showing a
-random reserve/release generator that calls the real endpoints, the list of requests with
-their status codes, the ledger appended live, and a treasury panel that publishes real
-messages to Kafka (limit change, snapshot, duplicate, stale message). The demo module
-contains no business logic and is the last slice; budget half a day.
+**Statement.** `docker compose up` starts four containers from a clean checkout: `api`,
+`web`, `db` and `kafka` (ADR-0001). A second command mints a dev token. The demo is the
+`web` container: a small React UI (Vite, TypeScript) in its own `web/` folder, built to
+static files, a few tables and forms, showing a random reserve/release generator that calls the real `api` endpoints, the list of
+requests with their status codes, the ledger appended live, and a treasury panel that
+publishes real messages to Kafka through dev-only `api` endpoints (limit change, snapshot,
+duplicate, stale message). `web` contains no business logic, lives in `web/` isolated from `api/`, and is not deployed
+in production; the dev-only `api` endpoints exist only outside the production profile. Last
+slice; budget half a day. Amended 2026-09-19: the page moved from a module inside the
+service to its own container, so the API stays only an API.
 
 **Rationale.** A reviewer should see the system working within a minute, through the
 real code paths, without writing curl commands.
@@ -419,3 +422,4 @@ program is not an acceptance criterion.
 | 2026-09-18 | A-01 to A-04 | written during the spec discussion | PR #5 |
 | 2026-09-19 | A-05 to A-19 | written from the answered questions; A-05 awaits wording confirmation | PR #5 |
 | 2026-09-19 | A-16 | amended: Swagger UI and Redoc, both views over one OpenAPI document | PR #10 |
+| 2026-09-19 | A-17 | amended: demo moves from a module in the service to the `web` container; four compose services (ADR-0001) | docs/adr-renumber-and-deployment |

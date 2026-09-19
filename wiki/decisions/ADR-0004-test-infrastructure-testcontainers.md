@@ -1,4 +1,4 @@
-# ADR-0003: Test infrastructure for integration and e2e tests
+# ADR-0004: Test infrastructure for integration and e2e tests
 
 - Status: proposed
 - Date: 2026-09-19
