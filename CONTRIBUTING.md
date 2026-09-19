@@ -95,6 +95,9 @@ force-push, so the reviewer can see what changed since the last look.
 
 ## Hand rules
 
+- The agent asks before every commit, push, PR, merge and tag. Always. A request to
+  change something is not a request to commit it, and one yes covers one action.
+
 - Green means `npm run gate`. Nothing else counts.
 - Branch per slice (`slice/S-xx-<slug>`), PR to `main`, merge `--no-ff`, tag `S-xx`. Commit, push or merge only when asked. Conventional Commits, scope is the slice id.
 - Ambiguity goes to Marcin, or into `wiki/spec/assumptions.md`. Never into the code silently.

@@ -52,3 +52,4 @@ findings. Anything else is `FAIL` and goes back to `/implement`.
 - Edit any file except `wiki/log/work-log.md` and the `Log` section of the slice file.
 - Mark PASS with a skipped check. If a check cannot run, the result is FAIL with the
   reason.
+- Commit or push anything.

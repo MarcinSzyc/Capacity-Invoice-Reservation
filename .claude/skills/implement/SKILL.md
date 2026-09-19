@@ -42,8 +42,10 @@ Rules during the loop:
   Do not edit `wiki/spec/` here.
 - Do not touch the wiki except `wiki/log/work-log.md` and the `Log` section and status of
   this slice's file.
-- Commit only when the user asks. If asked: Conventional Commits, scope is the slice id,
-  body lists AC/INV/ADR ids.
+- Never commit or push on your own. When a step is green and worth a commit, stop, name
+  the files and the message you would use, and ask. If the user says yes: Conventional
+  Commits, scope is the slice id, body lists AC/INV/ADR ids. A yes to commit is not a
+  yes to push.
 
 ## Finish
 
@@ -57,5 +59,6 @@ Rules during the loop:
 ## You must not
 
 - Skip red. Write code before its test.
+- Commit, push or open a PR without an explicit yes for that action.
 - Weaken or delete a failing test to get green.
 - Edit spec, the requirement checklist, slice content or ADR decisions.
