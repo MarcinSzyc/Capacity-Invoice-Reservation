@@ -69,6 +69,8 @@ Open `wiki/` as an Obsidian vault for the linked view; the files are plain Markd
    `main` and continues with the next step.
 
 The agent never merges without that go-ahead and never pushes to `main` directly.
+Fixes requested in review land as new commits on the branch, never as an amend or a
+force-push, so the reviewer can see what changed since the last look.
 
 ## Hand rules
 
