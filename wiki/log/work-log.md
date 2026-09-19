@@ -145,3 +145,7 @@ correct with a new one. Format:
   layout: isolated `api/` and `web/` folders joined by npm workspaces at the root, root
   `npm run gate` covers both. CLAUDE.md §2 and §5, ADR-0001, A-17, AC-00, S-01, S-07
   updated accordingly.
+- ADR-0001 explains why a Kafka container exists although we only consume (a consumer
+  needs a broker; locally it stands in for the treasury's), and who publishes on it (the
+  dev-only producer behind an `api` endpoint, called by `web`; the real consumer reads it).
+  Glossary gains "Dev producer".

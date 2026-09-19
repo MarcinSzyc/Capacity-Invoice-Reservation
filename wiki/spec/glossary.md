@@ -126,6 +126,11 @@ Authoritative for that moment, silent about anything after it.
 created after it are kept even if the snapshot does not list them; local reservations
 created before it and missing from the snapshot are released by adjustment.
 
+**Dev producer.** Code that exists only in the dev profile and publishes treasury-shaped
+messages on the local Kafka broker, so the real consumer has something to read when no
+treasury is present. Used by the `web` treasury panel through a dev-only `api` endpoint and
+by the integration and e2e tests. Not registered in production.
+
 **Message id.** The treasury's identifier of one message. Processing the same id twice
 changes nothing.
 
