@@ -137,6 +137,9 @@ authenticated endpoint. "Runnable locally" is an acceptance criterion.
 - Rebase the slice branch on `main` before merging. Merge with `--no-ff` so the merge
   commit marks the slice boundary and the inner commits keep the red-green-refactor
   history. No squash. Never force-push `main`.
+- Once a branch has a PR, its history is frozen: review fixes are new commits, never
+  `--amend` or `--force-push`, so the reviewer sees exactly what changed since the last
+  look. Rebasing on `main` is the only allowed rewrite, and only right before merging.
 - `/ship` opens the pull request using `.github/PULL_REQUEST_TEMPLATE.md` (outcome,
   AC/INV closed, ADRs accepted, how it was tested, known limitations) and tags the merge
   commit `S-03`.
