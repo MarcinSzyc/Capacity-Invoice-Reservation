@@ -92,6 +92,32 @@ describe('TreasuryCapacityConsumer', () => {
     });
   });
 
+  it('should count a malformed repeat of a known messageId as a duplicate and publish nothing (glossary: Duplicate)', async () => {
+    const capacity = inMemoryCapacity();
+    const source = new FakeMessageSource();
+    const consumer = new TreasuryCapacityConsumer(
+      source,
+      new ApplyCapacityUpdate(capacity),
+      new RejectTreasuryMessage(capacity),
+      new JsonLogger(new MemoryStream()),
+    );
+    const malformed = {
+      ...CURRENCY_CHANGE_ON_BUSY_PROGRAM,
+      messageId: 'm-bad',
+      creditLimit: 'a lot',
+    };
+    await consumer.handle(inbound(malformed));
+    expect(source.published).toHaveLength(1);
+
+    await consumer.handle(inbound(malformed));
+
+    expect(source.published).toHaveLength(1);
+    expect(capacity.repositories.treasuryMessages.byId.get('m-bad')).toMatchObject({
+      outcome: 'rejected',
+      duplicateCount: 1,
+    });
+  });
+
   it('should dead-letter a malformed message before recording it, for the same reason', async () => {
     const capacity = inMemoryCapacity();
     const source = new FakeMessageSource();

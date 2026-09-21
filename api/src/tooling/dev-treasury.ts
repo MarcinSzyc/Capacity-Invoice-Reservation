@@ -7,6 +7,8 @@ import {DevTreasuryProducer} from '../modules/capacity/infrastructure/messaging/
 const DEFAULT_BROKERS = 'localhost:9092';
 const CAPACITY_UPDATE = 'capacity-update';
 const INTEGER = /^[0-9]+$/;
+// The consumer refuses a zone-less time (A-11), so the producer must not manufacture one.
+const WITH_ZONE = /(Z|[+-]\d{2}:\d{2})$/;
 
 const USAGE = `Usage: npm run dev:treasury -- ${CAPACITY_UPDATE} --program <id> --currency <ISO 4217> --limit <minor units>
                                        [--message-id <id>] [--event-time <ISO 8601>]
@@ -20,6 +22,17 @@ Example: npm run dev:treasury -- ${CAPACITY_UPDATE} --program PRG-1 --currency U
 const required = (value: string | undefined, name: string): string => {
   if (value === undefined || value === '') throw new Error(`--${name} is required`);
   return value;
+};
+
+const parseEventTime = (value: string | undefined): Date => {
+  if (value === undefined) return new Date();
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime()) || !WITH_ZONE.test(value)) {
+    throw new Error(
+      `--event-time must be ISO 8601 with a zone, such as 2026-09-21T10:00:00Z, got "${value}"`,
+    );
+  }
+  return parsed;
 };
 
 const main = async (): Promise<void> => {
@@ -43,9 +56,7 @@ const main = async (): Promise<void> => {
   }
   const limit = required(values.limit, 'limit');
   if (!INTEGER.test(limit)) throw new Error(`--limit must be integer minor units, got "${limit}"`);
-  const eventTime =
-    values['event-time'] === undefined ? new Date() : new Date(values['event-time']);
-  if (Number.isNaN(eventTime.getTime())) throw new Error('--event-time must be ISO 8601');
+  const eventTime = parseEventTime(values['event-time']);
 
   const brokers = (process.env.KAFKA_BROKERS ?? DEFAULT_BROKERS).split(',');
   const kafka = new KafkaService({kafkaBrokers: brokers}, new JsonLogger());

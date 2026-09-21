@@ -1128,3 +1128,81 @@ correct with a new one. Format:
 - Considered and not taken: running the seed from the api entrypoint (no exiting container,
   but it puts a publisher next to the app, which the plan deliberately avoided) and a compose
   profile for the seed (one command would become two, against AC-36).
+
+## 2026-09-21, verify S-02 (fourth pass, after review fixes round 3), Fable
+- VERIFY S-02: PASS on 747c517. `npm run gate` green: unit 67, integration 19, e2e 24, cold
+  start 3, smoke stack healthy in 24 s on a warm image, and the smoke stage no longer trips on
+  the seed. Coverage 10/10 AC and 1/1 INV at the planned levels, no skipped test, layer
+  boundaries clean including the `common/` rule, no style drift in the new commit, prose clean.
+- Cold start by hand from a clean state with the README's own command: `docker compose up
+  --wait` exited 0 in 20 s (it exited 1 in the third pass), every URL the README lists answered
+  200, the availability endpoint answered 401 without a token, 200 with a dev token one second
+  after boot and 401 with an expired token. Teardown clean.
+- Findings, none blocking, unchanged and all for `/ship`: the README says nothing yet about
+  authentication, the dev token command or the availability endpoint; plan rows and slice
+  status still read `planned` and `in progress`; `api/src/tooling/` is not in the
+  `CLAUDE.md §2` tree.
+
+## 2026-09-21, review S-02 (third pass, after review fixes rounds 2 and 3), Fable (fresh context)
+- REVIEW S-02: 6 findings (0/0/6). Pass: no blocker, no major. Diff reviewed: `6053ba4..HEAD`
+  (747c517, working tree carries only the fourth verify's wiki lines), against `CLAUDE.md §2 to §4`,
+  the slice file, AC-20/23/24/25/32/33/35/36/37/40, INV-10, A-05/A-11/A-13/A-14/A-16/A-17/A-18 and
+  ADR-0002/0003/0005/0006/0007.
+- Round 2 and 3 fixes hold: the three amounts are `integer` in the OpenAPI document, the domain
+  lint boundary covers `common/` except `common/errors/`, `duplicate` is a count and not a stored
+  outcome, id widths come from `domain/identifier-limits.ts`, `Announce` is in the glossary, and
+  `web` depending on `seed` completing is what lets `docker compose up --wait` exit 0.
+- Every AC test asserts its Then clause (AC-20 the full body, AC-23 one applied row with count 1
+  and one ledger row, AC-24 limit and outcome, AC-25 dead letter payload and headers plus the
+  applied successor plus a warn line, AC-32/33/35 status and envelope, AC-36/37 through the
+  documented commands, AC-40 both id sets). INV-10 sweeps Express's router and subtracts only
+  `@Public()` controller routes and the documentation prefixes.
+- Minors: (spec) a malformed message that reuses an already processed id is dead-lettered before
+  `RejectTreasuryMessage` sees it is a duplicate, while the `CURRENCY_MISMATCH` path dedupes
+  first; the glossary says a duplicate is not dead-lettered and does not say which wins, so the
+  code decides silently (route to `/spec`). (spec) `creditLimit` accepts `0` with `@Min(0)` and
+  no assumption records that a zero limit is legal, where ADR-0006 states `@Min(1)` for amounts
+  (route to `/spec`). (standards) `jsonInteger` exists twice, in the availability mapper and the
+  dev producer. (spec) the slice file's schema line still lists `duplicate` as a stored outcome,
+  a plan correction for the slice PR. (standards) `dev:treasury --event-time` accepts a zoneless
+  timestamp and converts it with the host zone, the exact thing the consumer DTO refuses.
+  (standards) `api/src/tooling/` is still not in the `CLAUDE.md §2` tree, for `/ship`.
+- Concurrency for the record: INV-10 has no critical section. Consumer idempotency rests on one
+  partition per `programId`, the `treasury_messages` primary key and the `FOR UPDATE` row lock
+  inside one transaction; a reused id on two programs at once fails the second insert, rolls
+  back and is redelivered as a duplicate. Nothing in rounds 2 and 3 touched that.
+
+## 2026-09-21, spec (two sentences after review round 3 of S-02), Fable
+- Marcin asked for both decisions to be made for him; recorded here as his, with the reasoning.
+- A-06 amended: the treasury may lower the limit all the way to zero. A zero-limit program is
+  frozen: nothing new can be reserved, every existing reservation keeps its `held`. Reason:
+  A-06 already lets the treasury set a limit below usage, zero is the end of that range, and
+  refusing a treasury fact would make our state diverge from the source of truth. ADR-0006's
+  `@Min(1)` is about amounts a client sends, not about a limit the treasury states. Changes
+  row added. No AC or INV changed: AC-22 and INV-11 already cover a limit below usage.
+- Glossary, Duplicate: a known message id is a duplicate first, whatever the body says. A
+  repeat that is malformed or would be refused is counted, not dead-lettered, because it is
+  the same message heard again and nothing new about it needs a human. Reason: the entry
+  already said a duplicate is not dead-lettered; the code had picked "both" on one path and
+  "count" on the other, and one reading had to win.
+
+## 2026-09-21, implement S-02 (review fixes, round 4), Fable
+- Review round 3 passed (0 blockers, 0 majors, 6 minors). As in S-01, the minors got one fix
+  round before `/ship`: four here, one folded into the spec entry above, one left for `/ship`
+  (the `CLAUDE.md §2` tree entry for `api/src/tooling/`).
+- Duplicate wins on both rejection paths. `RejectTreasuryMessage.execute` now takes the
+  dead-letter publish as a callback and decides inside its transaction: a known id is counted
+  and nothing is published; otherwise it publishes, then records. The consumer's `reject()`
+  passes the publish and logs `counted as duplicate` or `rejected`. Test first: the consumer
+  unit test for a malformed repeat of a known id failed with two dead letters, then one. The
+  use case tests pin the order (publish before record) and that a failed publish leaves no
+  record, so the message is seen again.
+- `jsonInteger` lives once, in `infrastructure/json-integer.ts`; the availability mapper and
+  the dev producer use it.
+- `npm run dev:treasury -- --event-time` refuses a zone-less time with the same rule the
+  consumer applies, so the dev tooling cannot smuggle the host zone into staleness. Checked by
+  running the command; no unit test, it is three lines of argument validation.
+- Slice file corrected in place, as `CLAUDE.md §6` allows for small plan corrections inside
+  the slice PR: the schema sketch names three stored outcomes and the count.
+- Zero limit needs no code change: the message DTO already had `@Min(0)`, which is what the
+  review noticed was undocumented rather than wrong.

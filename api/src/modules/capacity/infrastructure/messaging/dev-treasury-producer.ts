@@ -1,6 +1,7 @@
 import {Inject, Injectable} from '@nestjs/common';
 import {MESSAGE_SOURCE, MessageSource} from '../../../../messaging/message-source';
 import {CAPACITY_UPDATE_TYPE} from '../../application/apply-capacity-update.use-case';
+import {jsonInteger} from '../json-integer';
 import {TREASURY_TOPIC} from './treasury-topics';
 
 export interface CapacityUpdateToPublish {
@@ -26,7 +27,7 @@ export class DevTreasuryProducer {
       type: CAPACITY_UPDATE_TYPE,
       programId: update.programId,
       currency: update.currency,
-      creditLimit: jsonInteger(update.creditLimit),
+      creditLimit: jsonInteger(update.creditLimit, 'creditLimit'),
       eventTime: update.eventTime.toISOString(),
     };
     return this.source.publish(TREASURY_TOPIC, [
@@ -34,11 +35,3 @@ export class DevTreasuryProducer {
     ]);
   }
 }
-
-// ADR-0006: integer JSON on the wire, exact only while it fits a double.
-const jsonInteger = (amount: bigint): number => {
-  if (amount > BigInt(Number.MAX_SAFE_INTEGER)) {
-    throw new RangeError(`${amount} does not fit a JSON integer exactly`);
-  }
-  return Number(amount);
-};
