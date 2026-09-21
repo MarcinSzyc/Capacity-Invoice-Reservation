@@ -134,6 +134,16 @@ by the integration and e2e tests. Not registered in production.
 **Message id.** The treasury's identifier of one message. Processing the same id twice
 changes nothing.
 
+**`CURRENCY_MISMATCH`.** The reason recorded against a treasury message that carries a
+different currency than the program already has, at a moment when the program still has an
+active reservation. The message is not applied and the program is left exactly as it was;
+the message is set aside on a separate topic for a human to look at, and the consumer moves
+on to the next one rather than stopping. The reason this is refused rather than converted:
+`held` of every active reservation is an amount in the old currency, and this service never
+invents a rate of its own, so there is no honest way to re-express it. On a program with no
+active reservation there is nothing to re-express, so the same message is applied as a
+re-denomination: limit and currency change together (A-12, ADR-0007).
+
 ## Behaviour words
 
 **Real time.** After we acknowledge an operation, every later read shows its effect.
