@@ -4,6 +4,7 @@ import type {Request, Response} from 'express';
 import {INTERNAL_ERROR_CODE} from '../filters/error-body';
 
 export const OPENAPI_JSON_PATH = 'openapi.json';
+export const OPENAPI_YAML_PATH = 'openapi.yaml';
 export const SWAGGER_UI_PATH = 'docs';
 export const REDOC_PATH = 'redoc';
 const REDOC_BUNDLE_PATH = `/${REDOC_PATH}/redoc.standalone.js`;
@@ -30,7 +31,10 @@ export const setupDocs = (app: INestApplication): void => {
       .build(),
   );
 
-  SwaggerModule.setup(SWAGGER_UI_PATH, app, document, {jsonDocumentUrl: OPENAPI_JSON_PATH});
+  SwaggerModule.setup(SWAGGER_UI_PATH, app, document, {
+    jsonDocumentUrl: OPENAPI_JSON_PATH,
+    yamlDocumentUrl: OPENAPI_YAML_PATH,
+  });
 
   const http = app.getHttpAdapter();
 

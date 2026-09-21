@@ -1,10 +1,13 @@
 import {HttpException, HttpStatus} from '@nestjs/common';
+import {DomainError, DomainErrorKind} from '../errors/domain-error';
 
 export interface ErrorBody {
   readonly statusCode: number;
   readonly code: string;
   readonly message: string;
   readonly details?: readonly string[];
+  /** Business fields next to the code, such as `available` on CAPACITY_EXCEEDED (AC-03). */
+  readonly [field: string]: unknown;
 }
 
 export const SERVER_ERROR_FROM = 500;
@@ -22,11 +25,26 @@ const CODE_BY_STATUS: Readonly<Record<number, string>> = {
   [HttpStatus.UNPROCESSABLE_ENTITY]: 'UNPROCESSABLE_ENTITY',
 };
 
+// The one place a domain error kind becomes an HTTP status (CLAUDE.md §2).
+const STATUS_BY_KIND: Readonly<Record<DomainErrorKind, number>> = {
+  not_found: HttpStatus.NOT_FOUND,
+  conflict: HttpStatus.CONFLICT,
+  unprocessable: HttpStatus.UNPROCESSABLE_ENTITY,
+};
+
 /**
  * One shape for every error the service returns (CLAUDE.md §2). A 5xx says nothing beyond its
  * code: what went wrong internally is for the logs, not for the caller.
  */
 export const toErrorBody = (exception: unknown): ErrorBody => {
+  if (exception instanceof DomainError) {
+    return {
+      statusCode: STATUS_BY_KIND[exception.kind],
+      code: exception.code,
+      message: exception.message,
+      ...exception.details,
+    };
+  }
   if (!(exception instanceof HttpException)) return internalError();
 
   const statusCode = exception.getStatus();

@@ -1,7 +1,7 @@
 # S-02 Programs from the treasury
 
 - Outcome: the treasury creates and updates a program over Kafka, an authenticated client reads its availability over HTTP, and a clean checkout reaches that state with the documented commands.
-- Status: planned
+- Status: done
 - AC: AC-20, AC-23, AC-24, AC-25, AC-32, AC-33, AC-35, AC-36, AC-37, AC-40
 - INV: INV-10
 - Risk: medium. It fixes the persistence model (programs, ledger with running balances, treasury message store) and the consumer's idempotency and staleness rules that every later slice relies on. No concurrency between clients yet and no money arithmetic beyond storing a limit. Foundations are set by the ADRs, so implementation risk is contained.
@@ -23,7 +23,7 @@ Application (`application/`):
 - `GetAvailability` query: program by id or `ProgramNotFound`.
 
 Infrastructure (`infrastructure/`):
-- Postgres schema (migration): `programs(program_id PK, currency, credit_limit BIGINT, reserved BIGINT, limit_event_time, as_of NULL, updated_at)`, `capacity_movements(id, program_id FK, reservation_id NULL, kind, delta_held BIGINT, limit_after, reserved_after, available_after, client_id NULL, message_id NULL, release_id NULL, reason NULL, occurred_at, CHECK (client_id IS NOT NULL OR message_id IS NOT NULL))`, `treasury_messages(message_id PK, program_id, type, payload JSONB, outcome ('applied' | 'duplicate' | 'stale' | 'rejected'), duplicate_count INT DEFAULT 0, error TEXT NULL, received_at, processed_at)`. The `reservations` table arrives in S-03.
+- Postgres schema (migration): `programs(program_id PK, currency, credit_limit BIGINT, reserved BIGINT, limit_event_time, as_of NULL, updated_at)`, `capacity_movements(id, program_id FK, reservation_id NULL, kind, delta_held BIGINT, limit_after, reserved_after, available_after, client_id NULL, message_id NULL, release_id NULL, reason NULL, occurred_at, CHECK (client_id IS NOT NULL OR message_id IS NOT NULL))`, `treasury_messages(message_id PK, program_id, type, payload JSONB, outcome ('applied' | 'stale' | 'rejected'), duplicate_count INT DEFAULT 0 (the fourth outcome of the glossary, duplicate, is this count on the first record; corrected after review round 2), error TEXT NULL, received_at, processed_at)`. The `reservations` table arrives in S-03.
 - Kafka consumer for the treasury topic (per ADR-0003): validates the raw message against the capacity update DTO (class-validator), builds a typed command, calls the use case, commits the offset after the transaction. Malformed or unprocessable: log with full context, publish to the dead-letter topic with the original payload and the error in headers, record `rejected` when a `messageId` is readable, continue.
 - Message contract (A-11), JSON, key = `programId`: `{messageId, type: 'capacity_update', programId, currency, creditLimit, eventTime}`; amounts are integer minor units, times ISO 8601 UTC. The snapshot type is defined in S-06 and rejected as unknown until then.
 - Controller `GET /programs/:programId/availability` → `200 {programId, currency, limit, reserved, available, overcommitted, asOf}`; `404 PROGRAM_NOT_FOUND` for an unknown program (not an AC of its own; AC-04 covers the reserve path in S-03, add an untagged e2e test here).
@@ -67,3 +67,19 @@ Beyond `CLAUDE.md §9`:
 | Date | Gate | Result |
 |---|---|---|
 | 2026-09-19 | plan | slice written |
+| 2026-09-21 | implement | slice started, branch `slice/S-02-programs-from-the-treasury` |
+| 2026-09-21 | implement | built test first, 11/11 planned tests present, `npm run gate:quick` green, e2e and smoke green, broker restart checked by hand |
+| 2026-09-21 | verify | PASS, gate green on 95ed588, 10/10 AC and 1/1 INV covered at the planned level, 2 minor findings for `/ship` |
+| 2026-09-21 | review | 6 findings (0/2/4): consumer rejection path writes unbounded ids into bounded columns and stalls the partition (major), glossary lacks outcome vocabulary (major, `/spec`), four minors; back to `/implement` |
+| 2026-09-21 | implement (review fixes) | 4 of 6 findings fixed test first (1 major, 3 minors), glossary to `/spec`, tooling tree entry to `/ship`; `npm run gate:quick` green |
+| 2026-09-21 | verify (second pass) | PASS, gate green on d9b15e7, 10/10 AC and 1/1 INV, review round 1 fixes confirmed, 2 minor findings for `/ship` |
+| 2026-09-21 | review (second pass) | 6 findings (1/0/5): OpenAPI publishes the three amounts as `number` against ADR-0006 `integer` (blocker), five minors (lint gap for `common` in domain, unused `duplicate` enum value, `announce` not in glossary, repeated column widths, tooling tree entry); back to `/implement` |
+| 2026-09-21 | implement (review fixes, round 2) | blocker and 3 minors fixed test first, "Announce" added to the glossary via `/spec`, tooling tree entry stays with `/ship`; `npm run gate:quick` green |
+| 2026-09-21 | verify (third pass) | FAIL on 08274fb: `docker compose up --wait` exits 1 once the seed one-shot has exited (0) on a warm image, smoke red; everything else green, 10/10 AC and 1/1 INV |
+| 2026-09-21 | implement (review fixes, round 3) | `web` depends on `seed` completing, so `docker compose up --wait` exits 0 on a warm image (was 1 three times); `npm run smoke` green 3 of 3, `npm run gate:quick` green |
+| 2026-09-21 | verify (fourth pass) | PASS, gate green on 747c517, README start command exits 0 from clean, 10/10 AC and 1/1 INV, 3 minor findings for `/ship` |
+| 2026-09-21 | review (third pass) | PASS, 6 findings (0/0/6), all minor: two glossary ambiguities for `/spec` (dead letter of a reused id, zero limit), duplicated `jsonInteger`, slice schema line still lists `duplicate`, zoneless `--event-time` in the dev producer, tooling tree entry for `/ship` |
+| 2026-09-21 | implement (review fixes, round 4) | 4 minors fixed test first, 2 spec sentences decided (A-06 zero limit, duplicate wins), 1 left for `/ship`; `npm run gate:quick` green |
+| 2026-09-21 | verify (fifth pass) | PASS, gate green on 4e169b9 after review fixes round 4, 10/10 AC and 1/1 INV, 3 minor findings for `/ship` |
+| 2026-09-21 | review (fourth pass) | PASS, 6 findings (0/0/6), all minor: dead-letter publish inside the database transaction, stale versus rejected on a currency change for `/spec`, glossary Duplicate rule without a Changes row for `/spec`, one tautological assertion in the AC-40 test, `jsonInteger` label in the availability mapper, tooling tree entry for `/ship` |
+| 2026-09-21 | ship | AC-20, AC-23, AC-24, AC-25, AC-32, AC-33, AC-35, AC-36, AC-37, AC-40 and INV-10 closed, changelog and checklist written, README updated, PR proposed |

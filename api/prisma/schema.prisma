@@ -1,6 +1,6 @@
-// S-01 has no tables yet: the schema exists so the client can connect and so that the
-// migration pipeline is wired. S-02 adds programs, reservations, the ledger and the message
-// store (A-15, ADR-0002).
+// ADR-0002: PostgreSQL through Prisma. Money columns are BIGINT minor units (ADR-0006), times are
+// timestamptz. The `reservations` table arrives with S-03; `reservation_id` on the ledger is a
+// plain column until then so that S-03 adds the foreign key rather than the column.
 
 generator client {
   provider = "prisma-client"
@@ -9,4 +9,77 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+}
+
+model Program {
+  programId      String    @id @map("program_id") @db.VarChar(64)
+  currency       String    @db.Char(3)
+  creditLimit    BigInt    @map("credit_limit")
+  reserved       BigInt
+  limitEventTime DateTime? @map("limit_event_time") @db.Timestamptz(6)
+  asOf           DateTime? @map("as_of") @db.Timestamptz(6)
+  updatedAt      DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  movements CapacityMovement[]
+
+  @@map("programs")
+}
+
+/// Exactly four kinds (glossary): the ledger has no fifth.
+enum CapacityMovementKind {
+  limit_set
+  reserve
+  release
+  adjustment
+
+  @@map("capacity_movement_kind")
+}
+
+/// The ledger (A-15): append-only, each row carries the balances it left behind.
+model CapacityMovement {
+  id             BigInt               @id @default(autoincrement())
+  programId      String               @map("program_id") @db.VarChar(64)
+  reservationId  String?              @map("reservation_id") @db.VarChar(128)
+  kind           CapacityMovementKind
+  /// The currency of the four amounts on this row: the program's at the time (ADR-0007).
+  currency       String               @db.Char(3)
+  deltaHeld      BigInt               @map("delta_held")
+  limitAfter     BigInt               @map("limit_after")
+  reservedAfter  BigInt               @map("reserved_after")
+  availableAfter BigInt               @map("available_after")
+  clientId       String?              @map("client_id") @db.VarChar(128)
+  messageId      String?              @map("message_id") @db.VarChar(128)
+  releaseId      String?              @map("release_id") @db.VarChar(128)
+  reason         String?              @db.VarChar(16)
+  occurredAt     DateTime             @map("occurred_at") @db.Timestamptz(6)
+
+  program Program @relation(fields: [programId], references: [programId])
+
+  @@index([programId, id])
+  @@map("capacity_movements")
+}
+
+/// The fourth outcome of the glossary, duplicate, is `duplicate_count` on the first record.
+enum TreasuryMessageOutcome {
+  applied
+  stale
+  rejected
+
+  @@map("treasury_message_outcome")
+}
+
+/// Every consumed treasury message and what became of it (A-13). A redelivery bumps
+/// `duplicate_count` on the first record instead of adding a row.
+model TreasuryMessage {
+  messageId      String                 @id @map("message_id") @db.VarChar(128)
+  programId      String?                @map("program_id") @db.VarChar(64)
+  type           String?                @db.VarChar(32)
+  payload        Json                   @db.JsonB
+  outcome        TreasuryMessageOutcome
+  duplicateCount Int                    @default(0) @map("duplicate_count")
+  error          String?
+  receivedAt     DateTime               @map("received_at") @db.Timestamptz(6)
+  processedAt    DateTime               @default(now()) @map("processed_at") @db.Timestamptz(6)
+
+  @@map("treasury_messages")
 }
