@@ -998,3 +998,40 @@ correct with a new one. Format:
   hand written table.
 - Not changed, on purpose: the message store keeps `program_id` and `type` nullable, which is
   what makes recording a malformed message possible at all.
+
+## 2026-09-21, verify S-02 (second pass, after review round 1), Fable
+- VERIFY S-02: PASS on d9b15e7. `npm run gate` green: unit 67, integration 19, e2e 23, cold
+  start 3, smoke stack healthy in 42 s with a rebuilt image. Coverage 10/10 AC and 1/1 INV, same
+  files and levels as the first pass, no skipped or trivially true test.
+- The four review findings routed to `/implement` are fixed at the source and each has a test
+  that ran in this gate: ids are read only when they fit the store column (`readable-payload.ts`,
+  applied to the correlation id as well), both rejection paths dead-letter before they record,
+  `eventTime` must carry `Z` or an offset, and the INV-10 sweep names methods with Nest's
+  `RequestMethod`. Layer boundaries clean; no nested ternary or braced one-line `if` in the
+  fix commit; prose check clean.
+- Cold start by hand from a clean state with the README's own command: five containers healthy
+  in 20 s, every URL the README lists answered 200, the availability endpoint answered 401
+  without a token and 200 with a dev token one second after boot, `docker compose down -v`
+  left nothing behind. The expired-token probe by hand failed again on my side (the token
+  script produced nothing, so the 401 was for an empty bearer); the AC-33 e2e test covers it.
+- Findings, unchanged from the first pass and none blocking: (minor) the README does not yet
+  mention authentication, the dev token command or the availability endpoint, `/ship`'s to
+  update; (minor) plan rows and slice status still read `planned` and `in progress`, `/ship`'s.
+  The glossary words from the review still await `/spec`.
+
+## 2026-09-21, spec (glossary words after review round 1 of S-02), Fable
+- Revision run, glossary only. Six words that code, storage and the message store already use
+  had no entry, which the S-02 review found as a major: event time (`eventTime`,
+  `limitEventTime`), message outcome (the set `applied`, `duplicate`, `stale`, `rejected`),
+  stale, rejected, dead letter, duplicate count. Each now has an entry under Treasury messages
+  written for a newcomer, with a number example where one helps.
+- Marcin approved the wording as proposed and chose to fold the `duplicate` outcome into the
+  existing Duplicate entry under Behaviour words rather than give it a second definition. That
+  entry gained one sentence: the silence is recorded as the `duplicate` outcome and the first
+  record's count goes up. The Message outcome entry points there.
+- No acceptance criterion, invariant or assumption changed, so no Changes row: `CLAUDE.md §7`
+  asks for one in those three files only, and the glossary has no Changes table, as the
+  previous spec entry already noted. Entries define behaviour that ADR-0003, ADR-0007 and A-13
+  had already decided; nothing new was decided here.
+- Source of the requirement: the review entry of 2026-09-21 in this log, not a feature brief,
+  so no file under `wiki/spec/features/` was created.
