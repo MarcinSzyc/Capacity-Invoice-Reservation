@@ -187,7 +187,7 @@ endpoint that emits the same internal command a capacity update does.
 
 ## A-06 Available capacity is derived from three kinds of events; overcommit is possible
 
-- Status: accepted 2026-09-19
+- Status: accepted 2026-09-19, amended 2026-09-21 (the limit may be zero)
 - Source: Q02, Q03, Q04
 
 **Statement.** `available = limit − reserved`, floored at zero, where `reserved` is the
@@ -197,7 +197,9 @@ adjustments; there is no separate "external usage" figure. A reservation equal t
 remaining capacity is allowed (`held ≤ available`). The treasury may lower the limit
 below current usage; the program becomes overcommitted, `available` reads zero, new
 reservations are rejected, existing ones stay valid. Limit, reserved and available are
-all exposed so a client can see overcommitment.
+all exposed so a client can see overcommitment. The limit may be lowered all the way to
+zero: a program with a zero limit is frozen, nothing new can be reserved on it, and every
+existing reservation keeps its `held` (amended 2026-09-21).
 
 **Rationale.** Every unit of money outstanding has an invoice behind it, so anything the
 treasury knows can be expressed as reservations. Refusing a treasury limit would make our
@@ -442,3 +444,4 @@ program is not an acceptance criterion.
 | 2026-09-19 | A-17 | amended: demo moves from a module in the service to the `web` container; four compose services (ADR-0001) | docs/adr-renumber-and-deployment |
 | 2026-09-19 | A-17 | amended: five compose services, `studio` is the fifth (ADR-0002); stale count found by `/review` in S-01 | slice/S-01-walking-skeleton |
 | 2026-09-21 | A-12 | amended: a currency change applies only to a program with no active reservation, otherwise `CURRENCY_MISMATCH` (ADR-0007) | docs/a-12-currency-change |
+| 2026-09-21 | A-06 | amended: the treasury may set the limit to zero, a frozen program; found by review round 3 of S-02 | slice/S-02-programs-from-the-treasury |
