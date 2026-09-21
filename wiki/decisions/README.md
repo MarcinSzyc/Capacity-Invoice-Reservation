@@ -13,9 +13,9 @@ Template: [[ADR-0000-template]].
 | [[ADR-0002-storage-postgres-and-data-access]] | Storage engine and data access library: PostgreSQL, Prisma, Prisma Studio in compose | accepted | S-01 |
 | [[ADR-0003-kafka-client-and-topic-layout]] | Kafka client library and topic layout: kafkajs behind a port, one topic keyed by programId | accepted | S-01, S-02 |
 | [[ADR-0004-test-infrastructure-testcontainers]] | Test infrastructure: Testcontainers for integration and e2e, compose for cold start, Jest | accepted | S-01 |
-| [[ADR-0005-authentication-bearer-jwt]] | Authentication with bearer JWT | proposed | S-02 |
-| [[ADR-0006-money-and-rate-representation]] | Money and rate representation across API, domain and storage | proposed | S-02, S-04 |
-| [[ADR-0007-program-currency-change-from-treasury]] | A treasury message with a different currency than the program | proposed | S-02, S-06 |
+| [[ADR-0005-authentication-bearer-jwt]] | Authentication with bearer JWT | accepted | S-02 |
+| [[ADR-0006-money-and-rate-representation]] | Money and rate representation across API, domain and storage | accepted | S-02, S-04 |
+| [[ADR-0007-program-currency-change-from-treasury]] | A treasury message with a different currency than the program | accepted | S-02, S-06 |
 | [[ADR-0008-concurrency-control-per-program]] | Concurrency control for reservations on one program | proposed | S-03 |
 | [[ADR-0009-release-conversion-exact-closing-and-release-id-scope]] | Release conversion, exact closing and the scope of releaseId | proposed | S-05 |
 | [[ADR-0010-reconciliation-created-at-versus-as-of]] | Deciding whether a local reservation is older than a snapshot | proposed | S-06 |
