@@ -828,3 +828,454 @@ correct with a new one. Format:
   defines neither "dead letter" nor "rejected" as a message outcome, though A-13 and now this
   entry both lean on the idea. Worth an entry of its own when S-02 builds the consumer and the
   words acquire real behaviour behind them.
+
+## 2026-09-21, implement S-02 (programs from the treasury), Fable
+- Branch `slice/S-02-programs-from-the-treasury`, cut from `main` at 6053ba4. Built test first,
+  one layer at a time, each layer driven by its own red test: `Money` and `Program` (unit),
+  `ApplyCapacityUpdate`, `RejectTreasuryMessage` and `GetAvailability` (unit, in-memory fakes),
+  the Prisma adapters and `KafkaService` (integration), the treasury consumer (contract tests
+  AC-23, AC-24, AC-25 over the real broker), the JWT verifier (unit), then the controller, the
+  guard and the e2e tests (AC-20, AC-32, AC-33, AC-35, AC-40, INV-10) and the cold start tests
+  (AC-36, AC-37). Because of that order the e2e tests for AC-20 and AC-40 passed on their first
+  run; they were still written before the controller and the request log line existed.
+- New module `src/modules/capacity/` in the three layers `CLAUDE.md §2` asks for. Domain:
+  `Money` (`bigint` minor units plus ISO 4217, same currency arithmetic only, ADR-0006),
+  `Program` (`announce`, `setLimit` returning `applied` or `stale`, `available`,
+  `overcommitted`, re-denomination per ADR-0007), `CapacityMovement`, four ports
+  (`ProgramRepository`, `LedgerRepository`, `TreasuryMessageStore`, `UnitOfWork`) and two errors
+  (`ProgramNotFoundError`, `CurrencyMismatchError`). Application: the three use cases above.
+  Infrastructure: Prisma repositories behind one `PrismaUnitOfWork` (one `$transaction`, a
+  `SELECT ... FOR UPDATE` row lock in `lockById`, ADR-0002), the Kafka consumer, the message
+  DTO, the dev producer and the availability controller.
+- `src/messaging/` now owns the loop: `KafkaService` implements a generic `MessageSource`
+  (`subscribe` with manual commit after the handler returns, `publish`). ADR-0003 calls the port
+  `TreasuryMessageSource`; it is named `MessageSource` here because `CLAUDE.md §2` says a file
+  under `src/messaging/` may not name a business word. The treasury-specific part (topics,
+  group, validation, dispatch) lives in `src/modules/capacity/infrastructure/messaging/`.
+- Idempotency, staleness and rejection are one transaction: lock or announce the program, check
+  `messageId`, apply `setLimit`, append the movement, record the outcome. A `messageId` seen
+  before increments `duplicate_count` on its first record instead of adding a row. A message
+  that is not JSON, fails the DTO, has an unknown `type` (the snapshot, until S-06) or carries
+  another currency on a program with something held is recorded `rejected` when its
+  `messageId` is readable, published to `treasury.capacity.dlq` with `error`, `sourceTopic`,
+  `sourcePartition`, `sourceOffset` and `correlationId` headers, logged at `warn`, and the
+  offset is committed. Anything else (a database that is away) propagates, the offset stays
+  uncommitted and the broker delivers the message again; `KafkaService` has a test for exactly
+  that.
+- Authentication per ADR-0005: `JoseTokenVerifier` behind the `TokenVerifier` port, HS256
+  pinned, `exp` and `sub` required, issuer and audience checked; `JwtAuthGuard` as the global
+  `APP_GUARD`; `@Public()` on the health controller. `jose` 6 was chosen over `@nestjs/jwt`: it
+  is ESM-only, which the Jest setup already handles for NestJS 12, and the dev token command can
+  use it without a Nest context. `JWT_SECRET` is required; `JWT_ISSUER` and `JWT_AUDIENCE`
+  default to `capacity-dev` and `capacity-api`. The development secret compose and
+  `npm run dev:token` agree on is refused in the production profile.
+- The INV-10 sweep reads every route off the Express router, subtracts the controller routes
+  that carry `@Public()` (found through `ModulesContainer` and the route metadata) and the
+  documentation paths, and calls each remaining route without a token. Swagger also registers a
+  YAML document; it now lives at `/openapi.yaml` next to `/openapi.json` so the documentation
+  allowlist is four known paths rather than a pattern.
+- Logging (AC-40): `JsonLogger` takes an optional output stream (`LOG_OUTPUT`), so e2e tests
+  read the lines back; a request log middleware writes one line per answered request under the
+  request's correlation id; the consumer runs every message under `messageId` as correlation
+  id, or a fresh UUID when the message has none.
+- Dev tooling in `src/tooling/`, a new folder at the app level and therefore something for
+  review to weigh: `dev-token.ts` (AC-37) and `dev-treasury.ts` (the seed). They compile into
+  `dist/` with the service so the compose `seed` one-shot can run from the same image, and run
+  on the host through `ts-node` (`npm run dev:token`, `npm run dev:treasury`). The seed sends a
+  fixed `messageId` (`seed-PRG-1`) and a fixed `eventTime`, so a second `docker compose up` is
+  a duplicate the consumer ignores rather than a second `limit_set` row.
+- Schema deviations from the slice sketch, both small: `capacity_movements.currency` was added
+  because a ledger row must rebuild `Money` and stay readable after a re-denomination
+  (ADR-0007); `treasury_messages.program_id` and `type` are nullable because a malformed message
+  may carry neither. Kinds and outcomes are Postgres enums. INV-09 is a CHECK constraint added
+  by hand to the generated migration. The test global setup runs `prisma migrate deploy`
+  against the container before any test.
+- Borderline local choices, not ADRs: the message DTO refuses unknown fields (we own the
+  contract, A-11); `Money.subtract` refuses to go negative and only `Program.available` floors
+  at zero, so an over-release can never be hidden by arithmetic; an update with the same
+  `eventTime` as the last applied one is applied, since "older" (A-13) does not include equal.
+- Tooling findings: TypeScript 6 needs an explicit `rootDir` for `ts-node`, set in
+  `api/tsconfig.json`; Jest reads hook timeouts from the root configuration, not from a
+  project's, so `testTimeout` moved to the root; the consumer's `maxWaitTimeInMs` is one second
+  so a shutdown never waits five seconds for an idle fetch.
+- Tests beyond the plan, for `/ship` to add to the checklist: `Money` (6 unit), `Program` (7
+  unit), `ApplyCapacityUpdate` (5 unit), `RejectTreasuryMessage` (2 unit), `GetAvailability`
+  (2 unit), `JoseTokenVerifier` (8 unit), `loadConfig` (3 new unit), `JsonLogger` (1 new unit),
+  Prisma adapters (6 integration), `KafkaService` (2 integration), consumer contract (3
+  untagged: re-denomination per ADR-0007, unknown type, non-JSON), authentication (2 untagged:
+  non-bearer scheme, valid token reaches the route), programs (2 untagged: 404
+  `PROGRAM_NOT_FOUND`, 400 on an overlong id).
+- Checked by hand, as the slice's definition of done asks: with the dev stack up,
+  `docker compose restart kafka`, then `npm run dev:treasury -- capacity-update --program PRG-1
+  --currency USD --limit 1200000000`. The api logged kafkajs's reconnection attempts, applied
+  the update within a second of publication, and the ledger held exactly two `limit_set` rows
+  for `PRG-1` (seed and this one) with `duplicate_count` 0 on both messages. While doing that,
+  noticed that kafkajs's own log lines inherited the correlation id of the last message handled,
+  through the async context the consumer loop runs in; broker log lines now run outside any
+  correlation context (`withoutCorrelationId`), so they carry none rather than a wrong one.
+- The pre-commit hook of the second commit failed on both Kafka integration suites with "This
+  server does not host this topic-partition", after three green full runs. kafkajs's
+  `createTopics` with `waitForLeaders` asks for metadata before a fresh single node broker lists
+  the topic and gives up. Fixed at the cause rather than retried (testing strategy: a flaky test
+  is a defect): `KafkaService.ensureTopic` creates the topic without kafkajs's wait and polls the
+  topic metadata until every partition has a leader.
+- Left for `/ship`: README (start, mint a token, curl `PRG-1`), changelog, checklist, slice
+  status. Left for `/spec` (noticed, not done here): the glossary has no entry for "dead
+  letter" or for `rejected` as a message outcome, as the previous entry already observed.
+
+## 2026-09-21, verify S-02, Fable
+- VERIFY S-02: PASS on 95ed588. `npm run gate` green: unit 57, integration 18, e2e 23, cold
+  start 3, smoke stack healthy in 37 s from a cached image. Coverage 10/10 AC and 1/1 INV, every
+  tag on a test that ran and passed, no `.only`, `.skip` or `xit`, no trivially true body.
+- Test levels match the plan: AC-20, AC-32, AC-33, AC-35 and AC-40 go through HTTP with
+  supertest; AC-23, AC-24 and AC-25 publish over the real broker and read the store, the ledger
+  and the dead-letter topic; AC-36 and AC-37 run the documented token command against the
+  compose stack; INV-10 sweeps the Express router of the running application.
+- Layer boundaries clean: no `@nestjs` import under `domain/`, no Prisma or kafkajs import
+  under `domain/` or `application/`, no business word in `src/messaging/`. Diff scan for nested
+  ternaries and braced one-line `if`s found nothing (one false positive on a `??` default with
+  a URL). Prose check clean.
+- Cold start by hand from a clean state with the README's own command: five containers healthy
+  in 21 s (image cached), every URL the README lists answered 200, the availability endpoint
+  answered 401 without a token and 200 with a dev token one second after boot, `docker compose
+  down -v` left nothing behind. The expired-token case was not probed by hand (a shell quoting
+  slip in the one-liner); the AC-33 e2e test covers it and passed in this run.
+- Findings, none blocking: (minor) the README does not yet mention authentication, the dev token
+  command or the availability endpoint; what it says still works as written, and README is
+  `/ship`'s to update. (minor) `wiki/plan/plan.md` rows for S-02 still read `planned` with
+  empty test file and commit columns, and the slice status is `in progress`; both are `/ship`'s.
+  (note for `/review`) `api/src/tooling/` is a new app-level folder, as the implement entry
+  already flags.
+
+## 2026-09-21, review S-02, Fable (fresh context)
+- REVIEW S-02: 6 findings (0/2/4). Not a pass: two majors. Diff reviewed: `6053ba4..HEAD` plus
+  the working tree, against `CLAUDE.md §2 to §4`, the slice file, AC-20/23/24/25/32/33/35/36/37/40,
+  INV-10, A-05/A-11/A-13/A-14/A-16/A-17/A-18 and ADR-0002/0003/0005/0006/0007.
+- (major, spec) The consumer's rejection path trusts the shape it just refused: `messageId`,
+  `programId` and `type` are read raw from a malformed payload with no length bound and written
+  into `VARCHAR(128)`, `VARCHAR(64)` and `VARCHAR(32)` columns. A malformed message with an
+  overlong id fails the insert, the transaction throws, the offset is never committed and the
+  broker redelivers it forever: one bad message stalls the partition, which A-13 (4) and AC-25
+  forbid. The same unbounded id becomes the correlation id of every log line and DLQ header.
+- (major, spec) Words in code, API and storage with no glossary entry: `stale`, `rejected` and
+  the message outcome set (`applied`, `duplicate`, `stale`, `rejected`), `dead letter`,
+  `eventTime` / `limitEventTime`, `duplicateCount`. Route: `/spec`, since only Marcin adds
+  glossary entries; the implement entry already flagged two of them.
+- (minor) A message the use case recorded `rejected` is dead-lettered after the transaction
+  committed; if that publish fails, the redelivery is answered `duplicate` and never
+  dead-lettered, unlike the validation-failure path. (minor) The message DTO accepts a
+  zone-less ISO 8601 time and reads it in the process's local zone while A-11 says UTC.
+  (minor) The INV-10 sweep's method name table does not match Nest's `RequestMethod` enum at
+  `ALL`, `OPTIONS`, `HEAD`; fails safe (spurious failure), never silently passes. (minor)
+  `api/src/tooling/` is a new app-level folder: reason accepted (entry points, no business
+  rule), the `CLAUDE.md §2` tree should list it.
+- Concurrency note for the record: INV-10 has no critical section. For the consumer
+  transaction, one program's messages share a partition and the handler is sequential; across
+  a rebalance the same message could run twice, and then the `FOR UPDATE` row lock plus the
+  primary key on `treasury_messages.message_id` make the second run a rollback and a redelivery
+  that reads `duplicate`. Idempotency is guaranteed by the schema, not by luck.
+
+## 2026-09-21, implement S-02 (review fixes, round 1), Fable
+- Four of the six review findings fixed, each test first; the glossary finding is `/spec`'s and
+  the `CLAUDE.md §2` tree entry for `api/src/tooling/` is `/ship`'s.
+- (major) The rejection path no longer trusts the payload it refused. `readableString` in
+  `readable-payload.ts` takes a bound equal to the column width (`message_id` 128,
+  `program_id` 64, `type` 32) and answers null for anything longer, so an over-long id is
+  "unreadable": the message is dead-lettered under a fresh correlation id, no row is written,
+  and the offset commits. Contract test: an over-long `messageId` followed by a valid update;
+  the valid one applies, the dead letter names `messageId`, the store has no row for it.
+  Unit tests for the helper's bound and shapes.
+- (minor) Both rejection paths now dead-letter first and record second, in one `reject()`.
+  `ApplyCapacityUpdate` returns `rejected` on a currency mismatch without recording; the
+  consumer records after the dead letter is out. If the publish fails, the redelivery repeats
+  both steps; if the record fails, the dead letter goes out twice. At least once on the DLQ,
+  which the previous order could not promise. Unit tests with a fake message source whose
+  publish fails once, for both the use case path and the validation path.
+- (minor) `eventTime` must carry `Z` or an offset (`@Matches` after `IsISO8601`), so the host
+  zone never decides staleness (A-11, AC-24). DTO unit tests: offset read as the same instant,
+  zone-less time and bare date refused, unknown field refused.
+- (minor) The INV-10 sweep names methods with Nest's own `RequestMethod[method]` instead of a
+  hand written table.
+- Not changed, on purpose: the message store keeps `program_id` and `type` nullable, which is
+  what makes recording a malformed message possible at all.
+
+## 2026-09-21, verify S-02 (second pass, after review round 1), Fable
+- VERIFY S-02: PASS on d9b15e7. `npm run gate` green: unit 67, integration 19, e2e 23, cold
+  start 3, smoke stack healthy in 42 s with a rebuilt image. Coverage 10/10 AC and 1/1 INV, same
+  files and levels as the first pass, no skipped or trivially true test.
+- The four review findings routed to `/implement` are fixed at the source and each has a test
+  that ran in this gate: ids are read only when they fit the store column (`readable-payload.ts`,
+  applied to the correlation id as well), both rejection paths dead-letter before they record,
+  `eventTime` must carry `Z` or an offset, and the INV-10 sweep names methods with Nest's
+  `RequestMethod`. Layer boundaries clean; no nested ternary or braced one-line `if` in the
+  fix commit; prose check clean.
+- Cold start by hand from a clean state with the README's own command: five containers healthy
+  in 20 s, every URL the README lists answered 200, the availability endpoint answered 401
+  without a token and 200 with a dev token one second after boot, `docker compose down -v`
+  left nothing behind. The expired-token probe by hand failed again on my side (the token
+  script produced nothing, so the 401 was for an empty bearer); the AC-33 e2e test covers it.
+- Findings, unchanged from the first pass and none blocking: (minor) the README does not yet
+  mention authentication, the dev token command or the availability endpoint, `/ship`'s to
+  update; (minor) plan rows and slice status still read `planned` and `in progress`, `/ship`'s.
+  The glossary words from the review still await `/spec`.
+
+## 2026-09-21, spec (glossary words after review round 1 of S-02), Fable
+- Revision run, glossary only. Six words that code, storage and the message store already use
+  had no entry, which the S-02 review found as a major: event time (`eventTime`,
+  `limitEventTime`), message outcome (the set `applied`, `duplicate`, `stale`, `rejected`),
+  stale, rejected, dead letter, duplicate count. Each now has an entry under Treasury messages
+  written for a newcomer, with a number example where one helps.
+- Marcin approved the wording as proposed and chose to fold the `duplicate` outcome into the
+  existing Duplicate entry under Behaviour words rather than give it a second definition. That
+  entry gained one sentence: the silence is recorded as the `duplicate` outcome and the first
+  record's count goes up. The Message outcome entry points there.
+- No acceptance criterion, invariant or assumption changed, so no Changes row: `CLAUDE.md §7`
+  asks for one in those three files only, and the glossary has no Changes table, as the
+  previous spec entry already noted. Entries define behaviour that ADR-0003, ADR-0007 and A-13
+  had already decided; nothing new was decided here.
+- Source of the requirement: the review entry of 2026-09-21 in this log, not a feature brief,
+  so no file under `wiki/spec/features/` was created.
+
+## 2026-09-21, review S-02 (second pass, after review fixes round 1), Fable (fresh context)
+- REVIEW S-02: 6 findings (1/0/5). Not a pass: one blocker. Diff reviewed: `6053ba4..HEAD`
+  (working tree clean), against `CLAUDE.md §2 to §4`, the slice file, AC-20/23/24/25/32/33/35/36/37/40,
+  INV-10, A-05/A-11/A-13/A-14/A-16/A-17/A-18 and ADR-0002/0003/0005/0006/0007.
+- Round 1 fixes hold: ids are read only when they fit the store column, both rejection paths
+  dead-letter before they record, `eventTime` needs a zone, the INV-10 sweep uses Nest's
+  `RequestMethod`, and the glossary now defines the outcome vocabulary.
+- (blocker, spec) `availability.dto.ts`: `limit`, `reserved` and `available` are published as
+  `type: number` in the OpenAPI document (checked by generating the schema from the DTO), while
+  ADR-0006 fixes every DTO amount as `integer` in that document and `CLAUDE.md §2` makes the
+  document the only contract with `web`. A client generated from the contract accepts fractional
+  money. The wire values are integers; the contract does not say so.
+- (minor) `domain/errors.ts` imports `src/common/errors/domain-error`, and the domain lint
+  boundary does not restrict `**/common/**`, so the logger, guards and filters are importable from
+  `domain/` today without a lint failure. (minor) `duplicate` is a storage enum value nothing
+  writes and `findById` throws for that impossible row. (minor) `announce`/`announced` is a
+  domain verb in code, an error message, the API description and test names with no glossary
+  entry; route `/spec`. (minor) the message DTO repeats the column widths 128 and 64 as literals
+  next to the named constants in `readable-payload.ts`. (minor) `CLAUDE.md §2` still does not
+  list `api/src/tooling/` (round 1, routed to `/ship`, still open).
+- Concurrency for the record: INV-10 has no critical section. The consumer's idempotency rests on
+  the `treasury_messages` primary key and the `FOR UPDATE` row lock inside one transaction, as
+  round 1 stated; nothing in this diff changes that.
+
+## 2026-09-21, implement S-02 (review fixes, round 2), Fable
+- Five of the six round 2 findings closed: the blocker and three minors here, the glossary
+  minor through a one-entry `/spec` change in the same session (Marcin chose to add
+  "Announce" rather than rename the code). The `CLAUDE.md §2` tree entry for
+  `api/src/tooling/` stays with `/ship`.
+- (blocker) The availability DTO now tells the OpenAPI document `type: 'integer'` for `limit`,
+  `reserved` and `available` (ADR-0006). TypeScript has no integer type, so `@ApiProperty` on a
+  `number` field said `number` and a client generated from the contract would have accepted
+  fractional money. Test first: the docs e2e test reads `/openapi.json` and asserts the three
+  properties are `integer`; it failed with `number` before the change.
+- (minor) The domain lint boundary now covers `common/`: everything under it is restricted
+  except `common/errors/`, the framework free error base the domain errors extend. Written as
+  a regex (`(^|/)common/(?!errors/)`) because a negated glob in the same group was not honoured
+  by the rule. Checked both ways with a throwaway file under `domain/` importing `JsonLogger`:
+  one restricted-import error; then removed. `npm run lint` passes with the legitimate import.
+- (minor) `duplicate` is no longer a storage enum value: it was never written, the glossary
+  makes it a count on the first record, and the store's `findById` threw for a row that could
+  not exist, which `§3` forbids. The Prisma enum, the port type and the migration lost the
+  value, the throw is gone. The migration was edited in place rather than followed by a second
+  one: S-02 has not merged, so no database outside a throwaway stack has applied it, and a
+  slice branch is exactly where a migration may still change.
+- (minor) Identifier widths live in one place, `domain/identifier-limits.ts`: the message DTO,
+  the HTTP params DTO and the payload reader import them. The Prisma schema still carries the
+  same numbers as literals because it cannot import; two places instead of four.
+- Round 1 fixes untouched. `npm run gate:quick` result in the slice log row.
+
+## 2026-09-21, verify S-02 (third pass, after review round 2), Fable
+- VERIFY S-02: FAIL on 08274fb. Unit 67, integration 19 and e2e 24 green; the smoke stage failed
+  at `docker compose up --wait`, which exited 1 with "container capacity-smoke-seed-1 exited
+  (0)" while all five services were healthy. Reproduced three times from a clean state on the
+  default project with a warm image: exit 1 every time. Docker Compose v2.39.1 counts a
+  container that has already exited, even with code 0, as a failed wait. The earlier passes
+  were timing: with a cold image the seed was still running when compose checked and showed as
+  Healthy. A flaky cold start is a defect (testing strategy), and the README's one command
+  returning non-zero is a finding against AC-36.
+- Everything else holds: coverage 10/10 AC and 1/1 INV at the planned levels, no skipped test,
+  layer boundaries clean including the new `common/` rule, no style drift in the two new
+  commits, prose clean. Round 2 fixes confirmed: three `integer` money fields in the OpenAPI
+  document (read back from the running stack), no stored `duplicate` outcome, widths from
+  `domain/identifier-limits.ts`, `Announce` in the glossary. Cold start by hand: every README
+  URL 200, availability 401 without a token, 200 with a dev token after one second, and 401
+  with a genuinely expired token this time. Teardown clean.
+- Finding, major, to `/implement`: the compose `seed` one-shot makes the documented start
+  command exit non-zero once its image is warm. Fix candidates for that round: make another
+  service depend on `seed` with `condition: service_completed_successfully` so compose knows
+  the exit is the plan; or run the seed from the api entrypoint after the app is healthy so no
+  container exits; or find the compose flag that accepts a clean exit. Whichever, `npm run
+  smoke` must pass three times in a row on a warm image before the next verify.
+- Findings unchanged and minor, for `/ship`: README says nothing about authentication or the
+  dev token; plan rows and slice status still read `planned` and `in progress`;
+  `api/src/tooling/` is not in the `CLAUDE.md §2` tree.
+
+## 2026-09-21, implement S-02 (review fixes, round 3: the seed and compose --wait), Fable
+- One finding, from the third verify: `docker compose up --wait` exited 1 with "seed exited
+  (0)" once the image was warm, because Docker Compose v2.39.1 counts a container that has
+  already exited as a failed wait unless something declares that exit as expected.
+- Fix, one line of compose: `web` now depends on `seed` with
+  `condition: service_completed_successfully`. That names the seed's clean exit as a condition
+  compose understands, so `up --wait` reports it as Exited and moves on. Nothing else moved:
+  the seed still runs from the api image after api is healthy, still sends the fixed
+  `messageId`, and `web` already waited for api, so its start is not delayed in practice.
+- Red and green measured the same way, `docker compose up --wait; echo $?` three times from a
+  clean state on the default project with a warm image: 1, 1, 1 before; 0, 0, 0 after, in about
+  twenty seconds each, with `PRG-1` readable through the availability endpoint afterwards.
+  `npm run smoke` result three times in a row is in the slice log row.
+- Considered and not taken: running the seed from the api entrypoint (no exiting container,
+  but it puts a publisher next to the app, which the plan deliberately avoided) and a compose
+  profile for the seed (one command would become two, against AC-36).
+
+## 2026-09-21, verify S-02 (fourth pass, after review fixes round 3), Fable
+- VERIFY S-02: PASS on 747c517. `npm run gate` green: unit 67, integration 19, e2e 24, cold
+  start 3, smoke stack healthy in 24 s on a warm image, and the smoke stage no longer trips on
+  the seed. Coverage 10/10 AC and 1/1 INV at the planned levels, no skipped test, layer
+  boundaries clean including the `common/` rule, no style drift in the new commit, prose clean.
+- Cold start by hand from a clean state with the README's own command: `docker compose up
+  --wait` exited 0 in 20 s (it exited 1 in the third pass), every URL the README lists answered
+  200, the availability endpoint answered 401 without a token, 200 with a dev token one second
+  after boot and 401 with an expired token. Teardown clean.
+- Findings, none blocking, unchanged and all for `/ship`: the README says nothing yet about
+  authentication, the dev token command or the availability endpoint; plan rows and slice
+  status still read `planned` and `in progress`; `api/src/tooling/` is not in the
+  `CLAUDE.md §2` tree.
+
+## 2026-09-21, review S-02 (third pass, after review fixes rounds 2 and 3), Fable (fresh context)
+- REVIEW S-02: 6 findings (0/0/6). Pass: no blocker, no major. Diff reviewed: `6053ba4..HEAD`
+  (747c517, working tree carries only the fourth verify's wiki lines), against `CLAUDE.md §2 to §4`,
+  the slice file, AC-20/23/24/25/32/33/35/36/37/40, INV-10, A-05/A-11/A-13/A-14/A-16/A-17/A-18 and
+  ADR-0002/0003/0005/0006/0007.
+- Round 2 and 3 fixes hold: the three amounts are `integer` in the OpenAPI document, the domain
+  lint boundary covers `common/` except `common/errors/`, `duplicate` is a count and not a stored
+  outcome, id widths come from `domain/identifier-limits.ts`, `Announce` is in the glossary, and
+  `web` depending on `seed` completing is what lets `docker compose up --wait` exit 0.
+- Every AC test asserts its Then clause (AC-20 the full body, AC-23 one applied row with count 1
+  and one ledger row, AC-24 limit and outcome, AC-25 dead letter payload and headers plus the
+  applied successor plus a warn line, AC-32/33/35 status and envelope, AC-36/37 through the
+  documented commands, AC-40 both id sets). INV-10 sweeps Express's router and subtracts only
+  `@Public()` controller routes and the documentation prefixes.
+- Minors: (spec) a malformed message that reuses an already processed id is dead-lettered before
+  `RejectTreasuryMessage` sees it is a duplicate, while the `CURRENCY_MISMATCH` path dedupes
+  first; the glossary says a duplicate is not dead-lettered and does not say which wins, so the
+  code decides silently (route to `/spec`). (spec) `creditLimit` accepts `0` with `@Min(0)` and
+  no assumption records that a zero limit is legal, where ADR-0006 states `@Min(1)` for amounts
+  (route to `/spec`). (standards) `jsonInteger` exists twice, in the availability mapper and the
+  dev producer. (spec) the slice file's schema line still lists `duplicate` as a stored outcome,
+  a plan correction for the slice PR. (standards) `dev:treasury --event-time` accepts a zoneless
+  timestamp and converts it with the host zone, the exact thing the consumer DTO refuses.
+  (standards) `api/src/tooling/` is still not in the `CLAUDE.md §2` tree, for `/ship`.
+- Concurrency for the record: INV-10 has no critical section. Consumer idempotency rests on one
+  partition per `programId`, the `treasury_messages` primary key and the `FOR UPDATE` row lock
+  inside one transaction; a reused id on two programs at once fails the second insert, rolls
+  back and is redelivered as a duplicate. Nothing in rounds 2 and 3 touched that.
+
+## 2026-09-21, spec (two sentences after review round 3 of S-02), Fable
+- Marcin asked for both decisions to be made for him; recorded here as his, with the reasoning.
+- A-06 amended: the treasury may lower the limit all the way to zero. A zero-limit program is
+  frozen: nothing new can be reserved, every existing reservation keeps its `held`. Reason:
+  A-06 already lets the treasury set a limit below usage, zero is the end of that range, and
+  refusing a treasury fact would make our state diverge from the source of truth. ADR-0006's
+  `@Min(1)` is about amounts a client sends, not about a limit the treasury states. Changes
+  row added. No AC or INV changed: AC-22 and INV-11 already cover a limit below usage.
+- Glossary, Duplicate: a known message id is a duplicate first, whatever the body says. A
+  repeat that is malformed or would be refused is counted, not dead-lettered, because it is
+  the same message heard again and nothing new about it needs a human. Reason: the entry
+  already said a duplicate is not dead-lettered; the code had picked "both" on one path and
+  "count" on the other, and one reading had to win.
+
+## 2026-09-21, implement S-02 (review fixes, round 4), Fable
+- Review round 3 passed (0 blockers, 0 majors, 6 minors). As in S-01, the minors got one fix
+  round before `/ship`: four here, one folded into the spec entry above, one left for `/ship`
+  (the `CLAUDE.md §2` tree entry for `api/src/tooling/`).
+- Duplicate wins on both rejection paths. `RejectTreasuryMessage.execute` now takes the
+  dead-letter publish as a callback and decides inside its transaction: a known id is counted
+  and nothing is published; otherwise it publishes, then records. The consumer's `reject()`
+  passes the publish and logs `counted as duplicate` or `rejected`. Test first: the consumer
+  unit test for a malformed repeat of a known id failed with two dead letters, then one. The
+  use case tests pin the order (publish before record) and that a failed publish leaves no
+  record, so the message is seen again.
+- `jsonInteger` lives once, in `infrastructure/json-integer.ts`; the availability mapper and
+  the dev producer use it.
+- `npm run dev:treasury -- --event-time` refuses a zone-less time with the same rule the
+  consumer applies, so the dev tooling cannot smuggle the host zone into staleness. Checked by
+  running the command; no unit test, it is three lines of argument validation.
+- Slice file corrected in place, as `CLAUDE.md §6` allows for small plan corrections inside
+  the slice PR: the schema sketch names three stored outcomes and the count.
+- Zero limit needs no code change: the message DTO already had `@Min(0)`, which is what the
+  review noticed was undocumented rather than wrong.
+
+## 2026-09-21, verify S-02 (fifth pass, after review fixes round 4), Fable
+- VERIFY S-02: PASS on 4e169b9. `npm run gate` green: unit 69, integration 19, e2e 24, cold
+  start 3, smoke stack healthy in 33 s. Coverage 10/10 AC and 1/1 INV at the planned levels, no
+  skipped test, layer boundaries clean, no style drift in the round 4 commit, prose clean.
+  `jsonInteger` has one definition with both call sites importing it.
+- Cold start by hand from a clean state with the README's own command: `docker compose up
+  --wait` exited 0 in 20 s, every URL the README lists answered 200, availability 401 without
+  a token, 200 with a dev token one second after boot, 401 with an expired token. Teardown
+  clean.
+- Run because `/ship` refused to start over a verify older than the round 4 commit, which was
+  right: round 4 changed the rejection path's order, not only documents.
+- Findings, none blocking, all for `/ship`: README says nothing yet about authentication or
+  the dev token; plan rows and slice status still read `planned` and `in progress`;
+  `api/src/tooling/` is not in the `CLAUDE.md §2` tree.
+
+## 2026-09-21, review S-02 (fourth pass, after review fixes round 4), Fable (fresh context)
+- REVIEW S-02: 6 findings (0/0/6). Pass: no blocker, no major. Diff reviewed: `6053ba4..HEAD`
+  (4e169b9, working tree carries only the fifth verify's wiki lines), against `CLAUDE.md §2 to §4`,
+  the slice file, AC-20/23/24/25/32/33/35/36/37/40, INV-10, A-05/A-06/A-11/A-13/A-14/A-16/A-17/A-18
+  and ADR-0002/0003/0005/0006/0007.
+- Round 4 fixes hold: `RejectTreasuryMessage` counts a known id and publishes nothing, otherwise
+  publishes before it records, and the consumer unit test pins one dead letter for a malformed
+  repeat; `jsonInteger` has one definition; `dev:treasury --event-time` refuses a zone-less time
+  with the consumer's own rule; the slice schema line names three stored outcomes and the count.
+- Every AC test still asserts its Then clause and INV-10 still sweeps Express's router. No
+  em or en dash in the diff, the wiki or the commit messages. Lint boundaries, DTO validation,
+  error envelope and money representation unchanged since round 3.
+- Minors: (standards) the dead-letter publish now runs inside the open Postgres transaction,
+  which adds no atomicity with the broker and turns a slow publish (kafkajs waits up to 30 s,
+  the transaction 15 s) into an aborted record and a second dead letter on redelivery; (spec) a
+  stale update carrying another currency on a program with something held is recorded `stale`,
+  not `rejected`, and the glossary does not say which wins, the same silence round 3 found for
+  duplicate versus rejected (route to `/spec`); (standards) the glossary's amended Duplicate rule
+  is a requirement change with one log line instead of two, because the glossary has no
+  `## Changes` table and `CLAUDE.md §7` lists only three spec files (route to `/spec`);
+  (standards) `expect(REQUEST_CORRELATION_ID).not.toBe(messageId)` in the AC-40 test compares
+  two constants and cannot fail; (standards) the availability mapper hands `jsonInteger` the
+  currency as the field label, so its RangeError names no field; (standards) `api/src/tooling/`
+  is still not in the `CLAUDE.md §2` tree, for `/ship`.
+- Concurrency for the record: INV-10 has no critical section. Consumer idempotency rests on one
+  partition per `programId`, the `treasury_messages` primary key and the `FOR UPDATE` row lock
+  inside one transaction; the reject path holds no row lock and relies on the primary key alone,
+  which is enough for a single partition. Nothing in round 4 weakened that.
+
+## 2026-09-21, spec (order of the consumer's checks, after review round 4 of S-02), Fable
+- Marcin said yes to both sentences as proposed. A-13 gained clause (5): the checks run in the
+  order written, a known id is a duplicate first whatever the body says, and a stale fact is
+  stale before anything in it is judged, so a stale update with another currency is recorded
+  `stale` rather than `rejected`. Changes row added. The Stale glossary entry says the same in
+  its own words and the Duplicate entry now points at A-13 for the rule and its history, which
+  closes the "logged once" finding: the rule lives in a file with a Changes table.
+- No code changed: both sentences describe what the consumer already does, which is what the
+  review found undocumented rather than wrong.
+
+## 2026-09-21, ship S-02, Fable
+- Preconditions held: verify (fifth pass) PASS and review (fourth round, 0 blockers, 0 majors)
+  both on 4e169b9, the last code commit. The two `/spec` sentences that followed the review are
+  wiki only, so the gates stayed fresh.
+- Requirement checklist: the eleven S-02 rows are `done` with their test files; seventeen
+  `extra` rows cover the tests written beyond the plan. The commit column is filled once the
+  merge commit exists. ADRs: ADR-0005, ADR-0006 and ADR-0007 were accepted before the slice
+  started; nothing is left `proposed` for S-02. Assumptions: A-06 and A-13 were amended
+  through `/spec` during the review rounds, with Changes rows; nothing relied on is missing.
+- Changelog row written, with the four minors from the fourth review named as known
+  limitations and routed to the first commit of S-03, as Marcin decided rather than run a sixth
+  verify and a fifth review for changes of that size.
+- README gained a "Call it" section: mint a token, read `PRG-1`, publish an update, what
+  answers 401, and where the development secret comes from. `CLAUDE.md §2` now lists
+  `api/src/tooling/` in the tree and in the two-tiers bullet, closing the finding carried
+  through four reviews. Slice status `done`, slice index and Home updated, S-03 named next.
+- Pull request proposed and not opened: branch `slice/S-02-programs-from-the-treasury`, to be
+  rebased on `main`, merged with `--no-ff`, merge commit tagged `S-02`.

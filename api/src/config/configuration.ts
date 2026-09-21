@@ -1,12 +1,26 @@
 export type Profile = 'development' | 'test' | 'production';
 
+/** ADR-0005: HS256 with one shared secret; issuer and audience are checked on every token. */
+export interface JwtConfig {
+  readonly secret: string;
+  readonly issuer: string;
+  readonly audience: string;
+}
+
 export interface AppConfig {
   readonly profile: Profile;
   readonly port: number;
   readonly databaseUrl: string;
   readonly kafkaBrokers: readonly string[];
   readonly webOrigin: string;
+  readonly jwt: JwtConfig;
 }
+
+/**
+ * The secret compose and `npm run dev:token` agree on out of the box, so a clean checkout is
+ * runnable with no setup (AC-36, AC-37). Mirrored in docker-compose.yml. Refused in production.
+ */
+export const DEV_JWT_SECRET = 'capacity-dev-secret-not-for-production';
 
 export class ConfigurationError extends Error {
   constructor(readonly problems: readonly string[]) {
@@ -21,6 +35,8 @@ const PROFILES: readonly Profile[] = ['development', 'test', 'production'];
 const DEFAULT_PROFILE: Profile = 'development';
 const DEFAULT_PORT = 3000;
 const DEFAULT_WEB_ORIGIN = 'http://localhost:8080';
+export const DEFAULT_JWT_ISSUER = 'capacity-dev';
+export const DEFAULT_JWT_AUDIENCE = 'capacity-api';
 const PORT_PATTERN = /^[1-9][0-9]*$/;
 const HIGHEST_PORT = 65_535;
 
@@ -31,12 +47,14 @@ const HIGHEST_PORT = 65_535;
  */
 export const loadConfig = (env: Environment): AppConfig => {
   const problems: string[] = [];
+  const profile = readProfile(env.NODE_ENV, problems);
   const config: AppConfig = {
-    profile: readProfile(env.NODE_ENV, problems),
+    profile,
     port: readPort(env.PORT, problems),
     databaseUrl: readRequired(env.DATABASE_URL, 'DATABASE_URL', problems),
     kafkaBrokers: readBrokers(env.KAFKA_BROKERS, problems),
     webOrigin: readWebOrigin(env.WEB_ORIGIN, problems),
+    jwt: readJwt(env, profile, problems),
   };
 
   if (problems.length > 0) throw new ConfigurationError(problems);
@@ -76,6 +94,18 @@ const readWebOrigin = (value: string | undefined, problems: string[]): string =>
     return DEFAULT_WEB_ORIGIN;
   }
   return value;
+};
+
+const readJwt = (env: Environment, profile: Profile, problems: string[]): JwtConfig => {
+  const secret = readRequired(env.JWT_SECRET, 'JWT_SECRET', problems);
+  if (profile === 'production' && secret === DEV_JWT_SECRET) {
+    problems.push('JWT_SECRET must not be the development secret in production');
+  }
+  return {
+    secret,
+    issuer: env.JWT_ISSUER ?? DEFAULT_JWT_ISSUER,
+    audience: env.JWT_AUDIENCE ?? DEFAULT_JWT_AUDIENCE,
+  };
 };
 
 const readRequired = (value: string | undefined, name: string, problems: string[]): string => {

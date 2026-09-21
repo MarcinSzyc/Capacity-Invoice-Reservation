@@ -118,6 +118,11 @@ shows what the treasury changed.
 **Capacity update.** A small Kafka message changing one fact about a program, usually
 its limit. May create a program we have not seen yet.
 
+**Announce.** What the treasury's first message about a program does: it brings the program
+into existence for us, with the currency that message carries. Until then the program does not
+exist here and any request on it is `PROGRAM_NOT_FOUND`. Nobody but the treasury announces a
+program (A-05).
+
 **Reconciliation message (snapshot).** A Kafka message with a program's full state as
 of one moment: limit, currency and the list of active reservations with their `held`.
 Authoritative for that moment, silent about anything after it.
@@ -133,6 +138,44 @@ by the integration and e2e tests. Not registered in production.
 
 **Message id.** The treasury's identifier of one message. Processing the same id twice
 changes nothing.
+
+**Event time (`eventTime`, `limitEventTime`).** The moment, by the treasury's clock, at which
+a capacity update became true. Carried on every capacity update, always with a zone. Not the
+moment we received it: a message can arrive late or out of order. The program remembers the
+event time of the last limit it applied as `limitEventTime`, and a capacity update with an
+older event time is stale. Example: an update stamped 10:05 sets 9 000 000; one stamped 10:00
+that arrives afterwards changes nothing.
+
+**Message outcome.** What became of one treasury message, recorded against its message id once
+it has been consumed. Exactly four: `applied` (it changed the program and left a movement in
+the ledger), `duplicate` (its message id had been seen before, nothing changed; see Duplicate
+under Behaviour words), `stale` (valid, but describing an older moment than the one we already
+hold, nothing changed), `rejected` (it could not be applied, nothing changed). Only `applied`
+changes state; the other three are the record of a message that was heard and deliberately
+left alone.
+
+**Stale.** A valid treasury message describing an older moment than the one the program
+already reflects: a capacity update whose event time is before `limitEventTime`, or a snapshot
+whose `asOf` is before the last one applied. Recorded, never applied. This is what keeps
+out-of-order delivery from reverting state. Staleness is checked first: a stale message is
+never applied, so nothing in its body is judged, and a stale update that also carries another
+currency is recorded `stale`, not `rejected` (A-13).
+
+**Rejected.** A treasury message that cannot be applied at all: not JSON, failing the contract
+(a missing field, a limit that is not an integer, a type we do not know), or refused by a rule
+such as `CURRENCY_MISMATCH`. Recorded with its reason when its message id can be read, set
+aside as a dead letter, and consumption continues with the next message.
+
+**Dead letter.** A copy of a treasury message we could not apply, set aside on a separate topic
+next to the original, with the reason and where it came from attached, so a human can look at
+it later. Every rejected message becomes a dead letter; a duplicate or stale one does not,
+because nothing is wrong with it, there is only nothing to do. Setting a message aside never
+stops consumption.
+
+**Duplicate count.** How many times a treasury message's id has been seen again after the
+first time. Kept on the first record of that message; a redelivery raises the count instead of
+adding a row. Example: `m-1` is applied, then arrives twice more: duplicate count 2, still one
+`limit_set` row in the ledger.
 
 **`CURRENCY_MISMATCH`.** The reason recorded against a treasury message that carries a
 different currency than the program already has, at a moment when the program still has an
@@ -155,7 +198,12 @@ id) without changing anything.
 
 **Duplicate.** A request or message whose identifier we have already processed. Always
 an error response for HTTP (409 with the original outcome in the body), always a silent
-no-op for Kafka.
+no-op for Kafka. For a treasury message the silence is still recorded: the outcome kept
+against the message id is `duplicate` and the first record's duplicate count goes up, so
+"how often did m-1 arrive" has an answer without a second row. A known id is a duplicate
+first, whatever the body says: a repeat that is malformed or would be refused is counted, not
+set aside as a dead letter, because it is the same message heard again and nothing new about
+it needs a human. The rule and its history live in A-13.
 
 ## Technical words used in ADRs
 

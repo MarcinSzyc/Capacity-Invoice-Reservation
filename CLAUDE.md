@@ -62,6 +62,9 @@ api/
   src/persistence/   the database connection, one module, nothing business specific.
   src/messaging/     the Kafka connection: client, admin, subscribe and commit plumbing.
   src/health/        liveness and readiness. Owns no business data.
+  src/tooling/       dev-only command entry points (dev:token, dev:treasury): argument parsing
+                     that delegates to common/ and to a module's infrastructure. Compiled with
+                     the service so the compose seed runs from the same image. No business rule.
   test/              e2e tests (*.e2e-test.ts) and test infrastructure.
 web/
   src/               React + Vite + TypeScript strict. A few tables and forms, plain CSS,
@@ -69,11 +72,11 @@ web/
 ```
 
 - **Two tiers, and only two.** `src/modules/<area>/` holds business areas and is where the
-  three layers apply. `src/persistence/`, `src/messaging/` and `src/health/` are the app-level
-  tier: one folder per module directly under `src/`, which is the NestJS convention (`nest g
-  module health` produces exactly `src/health/`). They carry connections and process-level
-  concerns, never a business rule. A new folder at this level needs a reason in review; a new
-  business area always goes under `src/modules/`.
+  three layers apply. `src/persistence/`, `src/messaging/`, `src/health/` and `src/tooling/` are
+  the app-level tier: one folder per module directly under `src/`, which is the NestJS convention
+  (`nest g module health` produces exactly `src/health/`). They carry connections, process-level
+  concerns and dev command entry points, never a business rule. A new folder at this level
+  needs a reason in review; a new business area always goes under `src/modules/`.
 - **A message is split between the two tiers.** `src/messaging/` owns the connection and the
   loop that pulls bytes off a topic and commits offsets; it knows nothing about programs,
   reservations or the shape of a payload. Validating a message, mapping it to a typed command

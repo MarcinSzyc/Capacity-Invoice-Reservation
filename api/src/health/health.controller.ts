@@ -1,9 +1,12 @@
 import {Controller, Get, HttpStatus, Res} from '@nestjs/common';
 import {ApiOkResponse, ApiServiceUnavailableResponse, ApiTags} from '@nestjs/swagger';
 import type {Response} from 'express';
+import {Public} from '../common/auth/public.decorator';
 import {LivenessDto, ReadinessDto} from './health.dto';
 import {ReadinessService} from './readiness.service';
 
+// A-16: health answers without a token and carries no business data.
+@Public()
 @ApiTags('health')
 @Controller('health')
 export class HealthController {
