@@ -13,8 +13,8 @@ import {
   MESSAGE_ID_MAX_LENGTH,
   MESSAGE_TYPE_MAX_LENGTH,
   PROGRAM_ID_MAX_LENGTH,
-  readableString,
-} from './readable-payload';
+} from '../../domain/identifier-limits';
+import {readableString} from './readable-payload';
 import {
   TREASURY_CONSUMER_GROUP,
   TREASURY_DEAD_LETTER_TOPIC,

@@ -86,6 +86,12 @@ export default tseslint.config(
               group: ['**/infrastructure/**', '**/application/**'],
               message: 'Domain never imports outward; dependencies enter through ports.',
             },
+            {
+              // Everything under common/ except common/errors/, the framework free error base.
+              regex: '(^|/)common/(?!errors/)',
+              message:
+                'Domain is framework free: from common/ only the error base may be imported.',
+            },
           ],
         },
       ],

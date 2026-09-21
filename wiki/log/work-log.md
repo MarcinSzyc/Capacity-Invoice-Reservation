@@ -1035,3 +1035,53 @@ correct with a new one. Format:
   had already decided; nothing new was decided here.
 - Source of the requirement: the review entry of 2026-09-21 in this log, not a feature brief,
   so no file under `wiki/spec/features/` was created.
+
+## 2026-09-21, review S-02 (second pass, after review fixes round 1), Fable (fresh context)
+- REVIEW S-02: 6 findings (1/0/5). Not a pass: one blocker. Diff reviewed: `6053ba4..HEAD`
+  (working tree clean), against `CLAUDE.md §2 to §4`, the slice file, AC-20/23/24/25/32/33/35/36/37/40,
+  INV-10, A-05/A-11/A-13/A-14/A-16/A-17/A-18 and ADR-0002/0003/0005/0006/0007.
+- Round 1 fixes hold: ids are read only when they fit the store column, both rejection paths
+  dead-letter before they record, `eventTime` needs a zone, the INV-10 sweep uses Nest's
+  `RequestMethod`, and the glossary now defines the outcome vocabulary.
+- (blocker, spec) `availability.dto.ts`: `limit`, `reserved` and `available` are published as
+  `type: number` in the OpenAPI document (checked by generating the schema from the DTO), while
+  ADR-0006 fixes every DTO amount as `integer` in that document and `CLAUDE.md §2` makes the
+  document the only contract with `web`. A client generated from the contract accepts fractional
+  money. The wire values are integers; the contract does not say so.
+- (minor) `domain/errors.ts` imports `src/common/errors/domain-error`, and the domain lint
+  boundary does not restrict `**/common/**`, so the logger, guards and filters are importable from
+  `domain/` today without a lint failure. (minor) `duplicate` is a storage enum value nothing
+  writes and `findById` throws for that impossible row. (minor) `announce`/`announced` is a
+  domain verb in code, an error message, the API description and test names with no glossary
+  entry; route `/spec`. (minor) the message DTO repeats the column widths 128 and 64 as literals
+  next to the named constants in `readable-payload.ts`. (minor) `CLAUDE.md §2` still does not
+  list `api/src/tooling/` (round 1, routed to `/ship`, still open).
+- Concurrency for the record: INV-10 has no critical section. The consumer's idempotency rests on
+  the `treasury_messages` primary key and the `FOR UPDATE` row lock inside one transaction, as
+  round 1 stated; nothing in this diff changes that.
+
+## 2026-09-21, implement S-02 (review fixes, round 2), Fable
+- Five of the six round 2 findings closed: the blocker and three minors here, the glossary
+  minor through a one-entry `/spec` change in the same session (Marcin chose to add
+  "Announce" rather than rename the code). The `CLAUDE.md §2` tree entry for
+  `api/src/tooling/` stays with `/ship`.
+- (blocker) The availability DTO now tells the OpenAPI document `type: 'integer'` for `limit`,
+  `reserved` and `available` (ADR-0006). TypeScript has no integer type, so `@ApiProperty` on a
+  `number` field said `number` and a client generated from the contract would have accepted
+  fractional money. Test first: the docs e2e test reads `/openapi.json` and asserts the three
+  properties are `integer`; it failed with `number` before the change.
+- (minor) The domain lint boundary now covers `common/`: everything under it is restricted
+  except `common/errors/`, the framework free error base the domain errors extend. Written as
+  a regex (`(^|/)common/(?!errors/)`) because a negated glob in the same group was not honoured
+  by the rule. Checked both ways with a throwaway file under `domain/` importing `JsonLogger`:
+  one restricted-import error; then removed. `npm run lint` passes with the legitimate import.
+- (minor) `duplicate` is no longer a storage enum value: it was never written, the glossary
+  makes it a count on the first record, and the store's `findById` threw for a row that could
+  not exist, which `§3` forbids. The Prisma enum, the port type and the migration lost the
+  value, the throw is gone. The migration was edited in place rather than followed by a second
+  one: S-02 has not merged, so no database outside a throwaway stack has applied it, and a
+  slice branch is exactly where a migration may still change.
+- (minor) Identifier widths live in one place, `domain/identifier-limits.ts`: the message DTO,
+  the HTTP params DTO and the payload reader import them. The Prisma schema still carries the
+  same numbers as literals because it cannot import; two places instead of four.
+- Round 1 fixes untouched. `npm run gate:quick` result in the slice log row.

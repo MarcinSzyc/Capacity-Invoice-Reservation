@@ -1,10 +1,11 @@
 import {ApiProperty} from '@nestjs/swagger';
 import {IsString, Length} from 'class-validator';
+import {PROGRAM_ID_MAX_LENGTH} from '../../domain/identifier-limits';
 
 export class ProgramIdParams {
   @ApiProperty({example: 'PRG-1', description: 'The treasury identifier of the program.'})
   @IsString()
-  @Length(1, 64)
+  @Length(1, PROGRAM_ID_MAX_LENGTH)
   programId!: string;
 }
 
@@ -16,16 +17,26 @@ export class AvailabilityDto {
   @ApiProperty({example: 'USD', description: 'ISO 4217 code every amount below is in.'})
   currency!: string;
 
+  // ADR-0006: integer on the wire. TypeScript has no integer type, so the document is told.
   @ApiProperty({
+    type: 'integer',
     example: 1_000_000_000,
     description: 'Credit limit in minor units: 1000000000 is 10 000 000.00 USD.',
   })
   limit!: number;
 
-  @ApiProperty({example: 0, description: 'Sum of held of the active reservations, minor units.'})
+  @ApiProperty({
+    type: 'integer',
+    example: 0,
+    description: 'Sum of held of the active reservations, minor units.',
+  })
   reserved!: number;
 
-  @ApiProperty({example: 1_000_000_000, description: 'max(0, limit - reserved), minor units.'})
+  @ApiProperty({
+    type: 'integer',
+    example: 1_000_000_000,
+    description: 'max(0, limit - reserved), minor units.',
+  })
   available!: number;
 
   @ApiProperty({

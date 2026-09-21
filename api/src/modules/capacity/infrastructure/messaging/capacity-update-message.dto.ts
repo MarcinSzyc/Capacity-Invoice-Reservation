@@ -15,6 +15,7 @@ import {
   CAPACITY_UPDATE_TYPE,
   CapacityUpdateCommand,
 } from '../../application/apply-capacity-update.use-case';
+import {MESSAGE_ID_MAX_LENGTH, PROGRAM_ID_MAX_LENGTH} from '../../domain/identifier-limits';
 
 /**
  * The capacity update as the treasury sends it (A-11): amounts are integer minor units, times
@@ -24,14 +25,14 @@ import {
  */
 export class CapacityUpdateMessageDto {
   @IsString()
-  @Length(1, 128)
+  @Length(1, MESSAGE_ID_MAX_LENGTH)
   messageId!: string;
 
   @Equals(CAPACITY_UPDATE_TYPE)
   type!: typeof CAPACITY_UPDATE_TYPE;
 
   @IsString()
-  @Length(1, 64)
+  @Length(1, PROGRAM_ID_MAX_LENGTH)
   programId!: string;
 
   @IsISO4217CurrencyCode()

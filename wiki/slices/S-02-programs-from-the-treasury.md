@@ -73,3 +73,5 @@ Beyond `CLAUDE.md §9`:
 | 2026-09-21 | review | 6 findings (0/2/4): consumer rejection path writes unbounded ids into bounded columns and stalls the partition (major), glossary lacks outcome vocabulary (major, `/spec`), four minors; back to `/implement` |
 | 2026-09-21 | implement (review fixes) | 4 of 6 findings fixed test first (1 major, 3 minors), glossary to `/spec`, tooling tree entry to `/ship`; `npm run gate:quick` green |
 | 2026-09-21 | verify (second pass) | PASS, gate green on d9b15e7, 10/10 AC and 1/1 INV, review round 1 fixes confirmed, 2 minor findings for `/ship` |
+| 2026-09-21 | review (second pass) | 6 findings (1/0/5): OpenAPI publishes the three amounts as `number` against ADR-0006 `integer` (blocker), five minors (lint gap for `common` in domain, unused `duplicate` enum value, `announce` not in glossary, repeated column widths, tooling tree entry); back to `/implement` |
+| 2026-09-21 | implement (review fixes, round 2) | blocker and 3 minors fixed test first, "Announce" added to the glossary via `/spec`, tooling tree entry stays with `/ship`; `npm run gate:quick` green |

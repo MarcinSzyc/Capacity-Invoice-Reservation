@@ -3,6 +3,16 @@ import request from 'supertest';
 import {createProductionApp, createTestApp, httpServer} from './support/test-app';
 
 const DOCUMENTATION_PATHS = ['/openapi.json', '/openapi.yaml', '/docs', '/redoc'];
+const MONEY_FIELDS = ['limit', 'reserved', 'available'];
+
+interface OpenApiDocument {
+  readonly components?: {
+    readonly schemas?: Record<
+      string,
+      {readonly properties?: Record<string, {readonly type?: string}>} | undefined
+    >;
+  };
+}
 
 describe('API documentation by profile', () => {
   describe('outside production', () => {
@@ -19,6 +29,16 @@ describe('API documentation by profile', () => {
     it('should serve every documentation view without a token', async () => {
       for (const path of DOCUMENTATION_PATHS) {
         await request(httpServer(app)).get(path).expect(200);
+      }
+    });
+
+    it('should publish every money field as an integer, never a number (ADR-0006)', async () => {
+      const response = await request(httpServer(app)).get('/openapi.json').expect(200);
+      const document = response.body as OpenApiDocument;
+      const availability = document.components?.schemas?.AvailabilityDto?.properties ?? {};
+
+      for (const field of MONEY_FIELDS) {
+        expect(`${field}: ${availability[field]?.type ?? 'missing'}`).toBe(`${field}: integer`);
       }
     });
   });
