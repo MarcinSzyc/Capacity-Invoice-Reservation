@@ -1085,3 +1085,46 @@ correct with a new one. Format:
   the HTTP params DTO and the payload reader import them. The Prisma schema still carries the
   same numbers as literals because it cannot import; two places instead of four.
 - Round 1 fixes untouched. `npm run gate:quick` result in the slice log row.
+
+## 2026-09-21, verify S-02 (third pass, after review round 2), Fable
+- VERIFY S-02: FAIL on 08274fb. Unit 67, integration 19 and e2e 24 green; the smoke stage failed
+  at `docker compose up --wait`, which exited 1 with "container capacity-smoke-seed-1 exited
+  (0)" while all five services were healthy. Reproduced three times from a clean state on the
+  default project with a warm image: exit 1 every time. Docker Compose v2.39.1 counts a
+  container that has already exited, even with code 0, as a failed wait. The earlier passes
+  were timing: with a cold image the seed was still running when compose checked and showed as
+  Healthy. A flaky cold start is a defect (testing strategy), and the README's one command
+  returning non-zero is a finding against AC-36.
+- Everything else holds: coverage 10/10 AC and 1/1 INV at the planned levels, no skipped test,
+  layer boundaries clean including the new `common/` rule, no style drift in the two new
+  commits, prose clean. Round 2 fixes confirmed: three `integer` money fields in the OpenAPI
+  document (read back from the running stack), no stored `duplicate` outcome, widths from
+  `domain/identifier-limits.ts`, `Announce` in the glossary. Cold start by hand: every README
+  URL 200, availability 401 without a token, 200 with a dev token after one second, and 401
+  with a genuinely expired token this time. Teardown clean.
+- Finding, major, to `/implement`: the compose `seed` one-shot makes the documented start
+  command exit non-zero once its image is warm. Fix candidates for that round: make another
+  service depend on `seed` with `condition: service_completed_successfully` so compose knows
+  the exit is the plan; or run the seed from the api entrypoint after the app is healthy so no
+  container exits; or find the compose flag that accepts a clean exit. Whichever, `npm run
+  smoke` must pass three times in a row on a warm image before the next verify.
+- Findings unchanged and minor, for `/ship`: README says nothing about authentication or the
+  dev token; plan rows and slice status still read `planned` and `in progress`;
+  `api/src/tooling/` is not in the `CLAUDE.md §2` tree.
+
+## 2026-09-21, implement S-02 (review fixes, round 3: the seed and compose --wait), Fable
+- One finding, from the third verify: `docker compose up --wait` exited 1 with "seed exited
+  (0)" once the image was warm, because Docker Compose v2.39.1 counts a container that has
+  already exited as a failed wait unless something declares that exit as expected.
+- Fix, one line of compose: `web` now depends on `seed` with
+  `condition: service_completed_successfully`. That names the seed's clean exit as a condition
+  compose understands, so `up --wait` reports it as Exited and moves on. Nothing else moved:
+  the seed still runs from the api image after api is healthy, still sends the fixed
+  `messageId`, and `web` already waited for api, so its start is not delayed in practice.
+- Red and green measured the same way, `docker compose up --wait; echo $?` three times from a
+  clean state on the default project with a warm image: 1, 1, 1 before; 0, 0, 0 after, in about
+  twenty seconds each, with `PRG-1` readable through the availability endpoint afterwards.
+  `npm run smoke` result three times in a row is in the slice log row.
+- Considered and not taken: running the seed from the api entrypoint (no exiting container,
+  but it puts a publisher next to the app, which the plan deliberately avoided) and a compose
+  profile for the seed (one command would become two, against AC-36).

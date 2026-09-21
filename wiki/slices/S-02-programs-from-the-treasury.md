@@ -75,3 +75,5 @@ Beyond `CLAUDE.md §9`:
 | 2026-09-21 | verify (second pass) | PASS, gate green on d9b15e7, 10/10 AC and 1/1 INV, review round 1 fixes confirmed, 2 minor findings for `/ship` |
 | 2026-09-21 | review (second pass) | 6 findings (1/0/5): OpenAPI publishes the three amounts as `number` against ADR-0006 `integer` (blocker), five minors (lint gap for `common` in domain, unused `duplicate` enum value, `announce` not in glossary, repeated column widths, tooling tree entry); back to `/implement` |
 | 2026-09-21 | implement (review fixes, round 2) | blocker and 3 minors fixed test first, "Announce" added to the glossary via `/spec`, tooling tree entry stays with `/ship`; `npm run gate:quick` green |
+| 2026-09-21 | verify (third pass) | FAIL on 08274fb: `docker compose up --wait` exits 1 once the seed one-shot has exited (0) on a warm image, smoke red; everything else green, 10/10 AC and 1/1 INV |
+| 2026-09-21 | implement (review fixes, round 3) | `web` depends on `seed` completing, so `docker compose up --wait` exits 0 on a warm image (was 1 three times); `npm run smoke` green 3 of 3, `npm run gate:quick` green |
