@@ -1,7 +1,7 @@
 # ADR-0005: Authentication with bearer JWT
 
-- Status: proposed
-- Date: 2026-09-19
+- Status: accepted
+- Date: proposed 2026-09-19, accepted 2026-09-19
 - Slice: S-02
 - Related: A-14, A-16, AC-32, AC-33, AC-34, AC-35, AC-37, INV-10
 
@@ -43,10 +43,37 @@ audience configured. Library: `jose` (no framework coupling) or `@nestjs/jwt`; e
 
 ## Decision
 
-(empty until Marcin decides)
+Option 1 with the global guard, as recommended. HS256 with a shared secret from configuration
+(`JWT_SECRET`), one moving part and nothing to generate before a reviewer can run the service.
+Decided by Marcin on 2026-09-19 following the recommendation.
+
+What that fixes for S-02:
+
+- The algorithm is pinned to HS256 in the verifier. The `alg` field of an incoming token is
+  never trusted, which is what turns the classic `alg: none` and algorithm confusion attacks
+  into an ordinary invalid token.
+- `exp` is required and checked, so a token without an expiry is invalid rather than eternal.
+  `sub` is required and copied to `request.clientId`, which AC-34 records on every movement.
+  Issuer and audience come from configuration and are checked.
+- A global `APP_GUARD` with a `@Public()` decorator for the exempt routes: liveness, readiness
+  and the documentation views (A-16). This is the one-place change A-14 asks for, and per
+  program scopes later become a claim check inside the same guard rather than a second
+  mechanism.
+- The verifier sits behind a `TokenVerifier` port in `src/common/auth/`, so the library choice
+  (`jose` or `@nestjs/jwt`) is not visible to any module.
+- The dev command is `npm run dev:token -- --sub demo-client --ttl 8h` (AC-37), signing with
+  the same secret the service verifies with.
+
+Considered and declined: RS256 with a key pair (Option 2) is the honest shape for a public API
+and the service could then not mint what it verifies, but it puts key generation into compose
+and the cold start, which AC-36 and AC-37 close in this same slice; the symmetric secret is
+defensible while every caller is inside one trust boundary. Static API keys (Option 3) were
+declined because they carry no expiry and no standard claims, so they would not exercise the
+token validation the brief implies by "authenticated".
 
 ## Consequences
 
 The e2e helper mints tokens in-process with the test secret. Switching to RS256 later changes
-the verifier's key source and the dev script, nothing in the modules. The demo page in S-07
+the verifier's key source and the dev script, nothing in the modules, which is the reason the
+symmetric secret is an acceptable starting point rather than a corner painted into. The demo page in S-07
 obtains its token from a dev-only endpoint, so the secret never reaches the browser.

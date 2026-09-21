@@ -777,3 +777,30 @@ correct with a new one. Format:
 - Open question left with Marcin rather than decided here: whether `/ship` should fill this
   column as part of its new step 8, which already runs after the merge, so that the gate cannot
   forget it the way it just did.
+## 2026-09-21, docs: the three ADRs S-02 depends on, Opus
+- Marcin decided all three ADRs that block S-02, each following the recommendation.
+- [[../decisions/ADR-0005-authentication-bearer-jwt]]: HS256 with a shared secret and a global
+  guard. Written into the decision: the algorithm is pinned in the verifier so `alg` from an
+  incoming token is never trusted, `exp` and `sub` are required, `sub` becomes
+  `request.clientId` for AC-34, and `@Public()` exempts health and the documentation views
+  (A-16). The verifier sits behind a `TokenVerifier` port so the library stays invisible to
+  the modules. RS256 was declined for putting key generation into compose and the cold start,
+  which AC-36 and AC-37 close in this same slice, and the move to RS256 later touches the key
+  source and the dev script only.
+- [[../decisions/ADR-0006-money-and-rate-representation]]: `bigint` in the domain, integer JSON
+  on the API, rate as a decimal string parsed into a `Rate` of unscaled `bigint` plus scale,
+  `BIGINT` and `NUMERIC(20,8)` columns, half up rounding once per conversion. `number` was
+  declined because a rule that holds only below 2^53 is a range and not an invariant, which is
+  what INV-08 asks for. The consequences now name the price as well: `bigint` costs something
+  at every boundary that serialises, and S-01 already paid the first instalment when
+  `JSON.stringify` threw inside the logger.
+- [[../decisions/ADR-0007-program-currency-change-from-treasury]]: apply a currency change when
+  the program has no active reservation, reject it as `CURRENCY_MISMATCH` and dead-letter it
+  when it has one. The line is drawn at active reservations because `held` is the thing that
+  would need re-expressing, and only an active reservation holds anything.
+- Dates differ on purpose: ADR-0005 carries 2026-09-19, the other two 2026-09-21, because that
+  is when each decision was actually taken. A tidy single date would read better and be false.
+- **Owed to `/spec`, not done here.** ADR-0007's own consequences say A-12's "currency is
+  overwritten" must be narrowed to "when no reservation is active", with a Changes row, and
+  that `CURRENCY_MISMATCH` joins the glossary. This gate does not edit the spec, so both are
+  left for a `/spec` run before `/implement S-02` starts.
