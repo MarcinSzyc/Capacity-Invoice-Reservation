@@ -333,7 +333,7 @@ that stops consumption (A-13). The limit alone is still overwritten in every cas
 
 ## A-13 Kafka messages are deduplicated, staleness-checked, ordered per program, dead-lettered on failure
 
-- Status: accepted 2026-09-19
+- Status: accepted 2026-09-19, amended 2026-09-21 (order of the checks)
 - Source: Q17, Q18
 
 **Statement.** (1) A `messageId` already processed is a silent no-op. (2) A fact whose
@@ -341,7 +341,11 @@ event time is older than the latest applied fact of that kind for the program do
 overwrite state. (3) Messages are keyed by `programId`, so Kafka delivers them in order
 per program. (4) A malformed or unprocessable message is logged with full context,
 published to a dead-letter topic, and consumption continues. Deduplication and the
-resulting movements are written in one transaction.
+resulting movements are written in one transaction. (5) The checks run in the order
+written: a known `messageId` is a duplicate first, whatever its body says, so a repeat that
+is malformed or would be refused is counted and not dead-lettered; a stale fact is stale
+before anything in it is judged, so a stale update carrying another currency is recorded
+`stale`, not `rejected` (amended 2026-09-21, after review rounds 3 and 4 of S-02).
 
 **Rationale.** Kafka does not promise exactly-once or cross-partition order; the
 treasury may republish. One bad message must not stall other programs.
@@ -445,3 +449,4 @@ program is not an acceptance criterion.
 | 2026-09-19 | A-17 | amended: five compose services, `studio` is the fifth (ADR-0002); stale count found by `/review` in S-01 | slice/S-01-walking-skeleton |
 | 2026-09-21 | A-12 | amended: a currency change applies only to a program with no active reservation, otherwise `CURRENCY_MISMATCH` (ADR-0007) | docs/a-12-currency-change |
 | 2026-09-21 | A-06 | amended: the treasury may set the limit to zero, a frozen program; found by review round 3 of S-02 | slice/S-02-programs-from-the-treasury |
+| 2026-09-21 | A-13 | amended: clause (5), the checks run in order, duplicate before rejected and stale before rejected; found by review rounds 3 and 4 of S-02 | slice/S-02-programs-from-the-treasury |

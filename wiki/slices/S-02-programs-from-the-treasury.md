@@ -1,7 +1,7 @@
 # S-02 Programs from the treasury
 
 - Outcome: the treasury creates and updates a program over Kafka, an authenticated client reads its availability over HTTP, and a clean checkout reaches that state with the documented commands.
-- Status: in progress
+- Status: done
 - AC: AC-20, AC-23, AC-24, AC-25, AC-32, AC-33, AC-35, AC-36, AC-37, AC-40
 - INV: INV-10
 - Risk: medium. It fixes the persistence model (programs, ledger with running balances, treasury message store) and the consumer's idempotency and staleness rules that every later slice relies on. No concurrency between clients yet and no money arithmetic beyond storing a limit. Foundations are set by the ADRs, so implementation risk is contained.
@@ -80,3 +80,6 @@ Beyond `CLAUDE.md §9`:
 | 2026-09-21 | verify (fourth pass) | PASS, gate green on 747c517, README start command exits 0 from clean, 10/10 AC and 1/1 INV, 3 minor findings for `/ship` |
 | 2026-09-21 | review (third pass) | PASS, 6 findings (0/0/6), all minor: two glossary ambiguities for `/spec` (dead letter of a reused id, zero limit), duplicated `jsonInteger`, slice schema line still lists `duplicate`, zoneless `--event-time` in the dev producer, tooling tree entry for `/ship` |
 | 2026-09-21 | implement (review fixes, round 4) | 4 minors fixed test first, 2 spec sentences decided (A-06 zero limit, duplicate wins), 1 left for `/ship`; `npm run gate:quick` green |
+| 2026-09-21 | verify (fifth pass) | PASS, gate green on 4e169b9 after review fixes round 4, 10/10 AC and 1/1 INV, 3 minor findings for `/ship` |
+| 2026-09-21 | review (fourth pass) | PASS, 6 findings (0/0/6), all minor: dead-letter publish inside the database transaction, stale versus rejected on a currency change for `/spec`, glossary Duplicate rule without a Changes row for `/spec`, one tautological assertion in the AC-40 test, `jsonInteger` label in the availability mapper, tooling tree entry for `/ship` |
+| 2026-09-21 | ship | AC-20, AC-23, AC-24, AC-25, AC-32, AC-33, AC-35, AC-36, AC-37, AC-40 and INV-10 closed, changelog and checklist written, README updated, PR proposed |

@@ -43,7 +43,34 @@ containers or delete rows you edited in pgweb.
 | The OpenAPI document both views render | http://localhost:3000/openapi.json |
 
 Health and the documentation need no token (A-16). The documentation views are not served in
-the production profile.
+the production profile. The raw document is also served as YAML at `/openapi.yaml`.
+
+### Call it
+
+Every business route needs a bearer JWT ([ADR-0005](wiki/decisions/ADR-0005-authentication-bearer-jwt.md)).
+After `npm ci`, mint one and read the sample program the stack seeds on start:
+
+```bash
+TOKEN=$(npm run dev:token -- --sub demo-client --ttl 8h | tail -1)
+curl -H "Authorization: Bearer $TOKEN" http://localhost:3000/programs/PRG-1/availability
+```
+
+The answer is the program as the ledger knows it, amounts in integer minor units:
+
+```json
+{"programId":"PRG-1","currency":"USD","limit":1000000000,"reserved":0,"available":1000000000,"overcommitted":false,"asOf":null}
+```
+
+`PRG-1` exists because the `seed` container publishes one capacity update once `api` is
+healthy. To play the treasury yourself, publish another:
+
+```bash
+npm run dev:treasury -- capacity-update --program PRG-2 --currency EUR --limit 500000000
+```
+
+Without a token, or with an expired or wrongly signed one, every business route answers `401`.
+The token command signs with `JWT_SECRET`, or with the development secret compose starts the
+api with when the variable is not set; that value is refused in the production profile.
 
 ## Working on it
 
