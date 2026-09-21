@@ -298,12 +298,15 @@ commands they produce for the domain stay.
 
 ## A-12 Reconciliation is a comparison against the snapshot moment, never a wholesale replace
 
-- Status: accepted 2026-09-19
+- Status: accepted 2026-09-19, amended 2026-09-21 (a currency change needs an empty program,
+  ADR-0007)
 - Source: Q16
 
 **Statement.** A snapshot describes a program at `asOf` and says nothing about what
-happened after. Applying it: limit and currency are overwritten; reservations created
-after `asOf` are kept untouched; for reservations created before `asOf`, one present in
+happened after. Applying it: the limit is overwritten; the currency is overwritten only
+when the program has no active reservation, and a message carrying a different currency
+while at least one reservation is active is rejected instead, leaving the program exactly
+as it was (ADR-0007); reservations created after `asOf` are kept untouched; for reservations created before `asOf`, one present in
 both sets stays (a differing `held` becomes an adjustment), one only in the snapshot is
 added as a reservation with source `reconciliation`, one only local is released by
 adjustment. A snapshot whose `asOf` is older than the last applied one for that program
@@ -317,6 +320,14 @@ matter".
 **Consequence.** Reservations carry `createdAt` compared against `asOf`; two systems'
 clocks are compared. ADR candidate in the plan: tolerance window or "when in doubt keep",
 since keeping a reservation is safer than releasing it.
+
+Amended 2026-09-21, after ADR-0007 was accepted. The statement said limit and currency are
+overwritten, full stop. That is only safe on a program with nothing outstanding: `held` of an
+active reservation is in the old currency, and the service has no rate of its own to
+re-express it (A-02: rates arrive from clients, per reservation). So a currency change is
+applied to an empty program as a re-denomination, and refused otherwise with reason
+`CURRENCY_MISMATCH`, which is a rejection recorded against the message rather than a failure
+that stops consumption (A-13). The limit alone is still overwritten in every case.
 
 ## A-13 Kafka messages are deduplicated, staleness-checked, ordered per program, dead-lettered on failure
 
@@ -430,3 +441,4 @@ program is not an acceptance criterion.
 | 2026-09-19 | A-16 | amended: Swagger UI and Redoc, both views over one OpenAPI document | PR #10 |
 | 2026-09-19 | A-17 | amended: demo moves from a module in the service to the `web` container; four compose services (ADR-0001) | docs/adr-renumber-and-deployment |
 | 2026-09-19 | A-17 | amended: five compose services, `studio` is the fifth (ADR-0002); stale count found by `/review` in S-01 | slice/S-01-walking-skeleton |
+| 2026-09-21 | A-12 | amended: a currency change applies only to a program with no active reservation, otherwise `CURRENCY_MISMATCH` (ADR-0007) | docs/a-12-currency-change |
