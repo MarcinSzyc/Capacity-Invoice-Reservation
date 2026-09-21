@@ -6,6 +6,7 @@ import {
   IsISO8601,
   IsString,
   Length,
+  Matches,
   Max,
   Min,
   validate,
@@ -42,7 +43,9 @@ export class CapacityUpdateMessageDto {
   @Max(Number.MAX_SAFE_INTEGER)
   creditLimit!: number;
 
+  /** A-11: an instant, so a zone is required; the host's zone must never decide staleness. */
   @IsISO8601({strict: true})
+  @Matches(/(Z|[+-]\d{2}:\d{2})$/, {message: 'eventTime must carry a UTC designator or an offset'})
   eventTime!: string;
 }
 

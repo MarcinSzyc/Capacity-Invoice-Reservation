@@ -69,3 +69,6 @@ Beyond `CLAUDE.md §9`:
 | 2026-09-19 | plan | slice written |
 | 2026-09-21 | implement | slice started, branch `slice/S-02-programs-from-the-treasury` |
 | 2026-09-21 | implement | built test first, 11/11 planned tests present, `npm run gate:quick` green, e2e and smoke green, broker restart checked by hand |
+| 2026-09-21 | verify | PASS, gate green on 95ed588, 10/10 AC and 1/1 INV covered at the planned level, 2 minor findings for `/ship` |
+| 2026-09-21 | review | 6 findings (0/2/4): consumer rejection path writes unbounded ids into bounded columns and stalls the partition (major), glossary lacks outcome vocabulary (major, `/spec`), four minors; back to `/implement` |
+| 2026-09-21 | implement (review fixes) | 4 of 6 findings fixed test first (1 major, 3 minors), glossary to `/spec`, tooling tree entry to `/ship`; `npm run gate:quick` green |

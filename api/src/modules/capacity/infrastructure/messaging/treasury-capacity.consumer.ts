@@ -10,6 +10,12 @@ import {ApplyCapacityUpdate} from '../../application/apply-capacity-update.use-c
 import {RejectTreasuryMessage} from '../../application/reject-treasury-message.use-case';
 import {parseCapacityUpdate} from './capacity-update-message.dto';
 import {
+  MESSAGE_ID_MAX_LENGTH,
+  MESSAGE_TYPE_MAX_LENGTH,
+  PROGRAM_ID_MAX_LENGTH,
+  readableString,
+} from './readable-payload';
+import {
   TREASURY_CONSUMER_GROUP,
   TREASURY_DEAD_LETTER_TOPIC,
   TREASURY_TOPIC,
@@ -99,33 +105,33 @@ export class TreasuryCapacityConsumer implements OnApplicationBootstrap, OnModul
     const result = await this.applyCapacityUpdate.execute(update.command);
     if (result.outcome === 'rejected') {
       const error = `${result.reason}: ${result.error}`;
-      await this.deadLetter(message, error);
-      this.logger.warn(
-        `capacity update rejected for ${update.command.programId}: ${error}`,
-        CONTEXT,
-      );
-      return;
+      return this.reject(message, {messageId, payload: parsed.payload}, error, receivedAt);
     }
     this.logger.log(`capacity update ${result.outcome} for ${update.command.programId}`, CONTEXT);
   }
 
+  /**
+   * Dead letter first, record second. If the publish fails the message is delivered again and
+   * both steps run again; if the record fails the dead letter is published twice. Either way it
+   * is never lost, which the other order could not promise (A-13).
+   */
   private async reject(
     message: InboundMessage,
     readable: {messageId: string | null; payload: unknown},
     error: string,
     receivedAt: Date,
   ): Promise<void> {
+    await this.deadLetter(message, error);
     if (readable.messageId !== null) {
       await this.rejectTreasuryMessage.execute({
         messageId: readable.messageId,
-        programId: readableString(readable.payload, 'programId'),
-        type: readableString(readable.payload, 'type'),
+        programId: readableString(readable.payload, 'programId', PROGRAM_ID_MAX_LENGTH),
+        type: readableString(readable.payload, 'type', MESSAGE_TYPE_MAX_LENGTH),
         payload: readable.payload,
         error,
         receivedAt,
       });
     }
-    await this.deadLetter(message, error);
     this.logger.warn(`message rejected: ${error}`, CONTEXT);
   }
 
@@ -168,10 +174,5 @@ const parseJson = (value: Buffer | null): ParsedJson => {
   }
 };
 
-const readableString = (payload: unknown, field: string): string | null => {
-  if (typeof payload !== 'object' || payload === null) return null;
-  const value: unknown = (payload as Record<string, unknown>)[field];
-  return typeof value === 'string' && value !== '' ? value : null;
-};
-
-const readableMessageId = (payload: unknown): string | null => readableString(payload, 'messageId');
+const readableMessageId = (payload: unknown): string | null =>
+  readableString(payload, 'messageId', MESSAGE_ID_MAX_LENGTH);

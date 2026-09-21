@@ -43,8 +43,8 @@ export class ApplyCapacityUpdate {
         return await this.apply(program, command, repositories);
       } catch (error: unknown) {
         if (!(error instanceof CurrencyMismatchError)) throw error;
-        const description = `${error.code}: ${error.message}`;
-        await treasuryMessages.recordOutcome(record(command, 'rejected', description));
+        // Not recorded here: the consumer dead-letters first and records after, so that a
+        // failed publish is retried rather than answered "duplicate" next time (A-13).
         return {outcome: 'rejected', reason: error.code, error: error.message};
       }
     });
@@ -59,27 +59,26 @@ export class ApplyCapacityUpdate {
     const outcome = program.setLimit(limit, command.eventTime, command.messageId);
 
     if (outcome.kind === 'stale') {
-      await treasuryMessages.recordOutcome(record(command, 'stale', null));
+      await treasuryMessages.recordOutcome(record(command, 'stale'));
       return {outcome: 'stale'};
     }
 
     await programs.save(program);
     await ledger.append(outcome.movement);
-    await treasuryMessages.recordOutcome(record(command, 'applied', null));
+    await treasuryMessages.recordOutcome(record(command, 'applied'));
     return {outcome: 'applied'};
   }
 }
 
 const record = (
   command: CapacityUpdateCommand,
-  outcome: TreasuryMessageRecord['outcome'],
-  error: string | null,
+  outcome: 'applied' | 'stale',
 ): TreasuryMessageRecord => ({
   messageId: command.messageId,
   programId: command.programId,
   type: CAPACITY_UPDATE_TYPE,
   payload: command.payload,
   outcome,
-  error,
+  error: null,
   receivedAt: command.receivedAt,
 });

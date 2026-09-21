@@ -286,6 +286,40 @@ describe('TreasuryCapacityConsumer', () => {
     expect((await deadLetterOf(messageId)).headers.correlationId).toBe(messageId);
   });
 
+  it('should dead-letter a message whose messageId does not fit the store and apply the next valid one', async () => {
+    const programId = uniqueId('PRG');
+    const marker = uniqueId('too-long');
+    const overlongId = `${marker}-${'x'.repeat(128)}`;
+    const validId = uniqueId('m');
+
+    await kafka.publish(TREASURY_TOPIC, [
+      {
+        key: programId,
+        value: JSON.stringify({
+          messageId: overlongId,
+          type: 'capacity_update',
+          programId,
+          currency: EUR,
+          creditLimit: 1,
+          eventTime: AT_10_00.toISOString(),
+        }),
+      },
+    ]);
+    await producer.publishCapacityUpdate({
+      messageId: validId,
+      programId,
+      currency: EUR,
+      creditLimit: FIVE_MILLION,
+      eventTime: AT_10_05,
+    });
+
+    expect(await outcomeOf(validId)).toMatchObject({outcome: 'applied'});
+    const deadLetter = await deadLetterOf(marker);
+    expect(deadLetter.headers.error).toContain('messageId');
+    expect(deadLetter.headers.correlationId).not.toBe(overlongId);
+    await expect(messages.findById(overlongId)).resolves.toBeNull();
+  });
+
   it('should dead-letter a message that is not JSON and carry on', async () => {
     const marker = uniqueId('not-json');
     const programId = uniqueId('PRG');

@@ -77,7 +77,7 @@ describe('ApplyCapacityUpdate', () => {
     expect(capacity.repositories.treasuryMessages.byId.get('m-2')?.outcome).toBe('stale');
   });
 
-  it('should reject another currency on a program with something held, record it and change nothing (ADR-0007)', async () => {
+  it('should reject another currency on a program with something held and change nothing, leaving the record to the caller (ADR-0007)', async () => {
     const capacity = inMemoryCapacity();
     await capacity.repositories.programs.save(
       Program.rehydrate({
@@ -104,10 +104,9 @@ describe('ApplyCapacityUpdate', () => {
     expect(program?.currency).toBe(EUR);
     expect(program?.limit).toEqual(Money.of(500_000_000n, EUR));
     expect(capacity.repositories.ledger.movements).toHaveLength(0);
-    expect(capacity.repositories.treasuryMessages.byId.get('m-2')).toMatchObject({
-      outcome: 'rejected',
-      error: expect.stringContaining('CURRENCY_MISMATCH') as string,
-    });
+    // Recording happens after the dead letter is published, in the consumer, so that a failed
+    // publish is retried rather than answered "duplicate" (A-13).
+    expect(capacity.repositories.treasuryMessages.byId.has('m-2')).toBe(false);
   });
 
   it('should re-denominate a program with nothing held when the update carries another currency (ADR-0007)', async () => {
