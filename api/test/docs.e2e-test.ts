@@ -2,7 +2,7 @@ import {INestApplication} from '@nestjs/common';
 import request from 'supertest';
 import {createProductionApp, createTestApp, httpServer} from './support/test-app';
 
-const DOCUMENTATION_PATHS = ['/openapi.json', '/docs', '/redoc'];
+const DOCUMENTATION_PATHS = ['/openapi.json', '/openapi.yaml', '/docs', '/redoc'];
 
 describe('API documentation by profile', () => {
   describe('outside production', () => {

@@ -2,6 +2,7 @@ import {INestApplication, ValidationPipe} from '@nestjs/common';
 import {AllExceptionsFilter} from './common/filters/all-exceptions.filter';
 import {JsonLogger} from './common/logging/json-logger';
 import {correlationIdMiddleware} from './common/logging/correlation-id';
+import {requestLogger} from './common/logging/request-logger';
 import {setupDocs} from './common/docs/setup-docs';
 import type {AppConfig} from './config/config.module';
 
@@ -11,6 +12,7 @@ import type {AppConfig} from './config/config.module';
  */
 export const configureApp = (app: INestApplication, config: AppConfig): void => {
   app.use(correlationIdMiddleware);
+  app.use(requestLogger(app.get(JsonLogger)));
   app.useGlobalPipes(
     new ValidationPipe({whitelist: true, forbidNonWhitelisted: true, transform: true}),
   );
