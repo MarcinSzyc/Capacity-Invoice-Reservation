@@ -9,6 +9,7 @@
     "jest.config.ts",
     "prisma.config.ts",
     "**/*.test.ts",
-    "**/*.integration-test.ts"
+    "**/*.integration-test.ts",
+    "**/*.fake.ts"
   ]
 }
