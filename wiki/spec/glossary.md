@@ -157,7 +157,9 @@ left alone.
 **Stale.** A valid treasury message describing an older moment than the one the program
 already reflects: a capacity update whose event time is before `limitEventTime`, or a snapshot
 whose `asOf` is before the last one applied. Recorded, never applied. This is what keeps
-out-of-order delivery from reverting state.
+out-of-order delivery from reverting state. Staleness is checked first: a stale message is
+never applied, so nothing in its body is judged, and a stale update that also carries another
+currency is recorded `stale`, not `rejected` (A-13).
 
 **Rejected.** A treasury message that cannot be applied at all: not JSON, failing the contract
 (a missing field, a limit that is not an integer, a type we do not know), or refused by a rule
@@ -201,7 +203,7 @@ against the message id is `duplicate` and the first record's duplicate count goe
 "how often did m-1 arrive" has an answer without a second row. A known id is a duplicate
 first, whatever the body says: a repeat that is malformed or would be refused is counted, not
 set aside as a dead letter, because it is the same message heard again and nothing new about
-it needs a human.
+it needs a human. The rule and its history live in A-13.
 
 ## Technical words used in ADRs
 

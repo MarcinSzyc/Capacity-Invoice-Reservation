@@ -1206,3 +1206,76 @@ correct with a new one. Format:
   the slice PR: the schema sketch names three stored outcomes and the count.
 - Zero limit needs no code change: the message DTO already had `@Min(0)`, which is what the
   review noticed was undocumented rather than wrong.
+
+## 2026-09-21, verify S-02 (fifth pass, after review fixes round 4), Fable
+- VERIFY S-02: PASS on 4e169b9. `npm run gate` green: unit 69, integration 19, e2e 24, cold
+  start 3, smoke stack healthy in 33 s. Coverage 10/10 AC and 1/1 INV at the planned levels, no
+  skipped test, layer boundaries clean, no style drift in the round 4 commit, prose clean.
+  `jsonInteger` has one definition with both call sites importing it.
+- Cold start by hand from a clean state with the README's own command: `docker compose up
+  --wait` exited 0 in 20 s, every URL the README lists answered 200, availability 401 without
+  a token, 200 with a dev token one second after boot, 401 with an expired token. Teardown
+  clean.
+- Run because `/ship` refused to start over a verify older than the round 4 commit, which was
+  right: round 4 changed the rejection path's order, not only documents.
+- Findings, none blocking, all for `/ship`: README says nothing yet about authentication or
+  the dev token; plan rows and slice status still read `planned` and `in progress`;
+  `api/src/tooling/` is not in the `CLAUDE.md §2` tree.
+
+## 2026-09-21, review S-02 (fourth pass, after review fixes round 4), Fable (fresh context)
+- REVIEW S-02: 6 findings (0/0/6). Pass: no blocker, no major. Diff reviewed: `6053ba4..HEAD`
+  (4e169b9, working tree carries only the fifth verify's wiki lines), against `CLAUDE.md §2 to §4`,
+  the slice file, AC-20/23/24/25/32/33/35/36/37/40, INV-10, A-05/A-06/A-11/A-13/A-14/A-16/A-17/A-18
+  and ADR-0002/0003/0005/0006/0007.
+- Round 4 fixes hold: `RejectTreasuryMessage` counts a known id and publishes nothing, otherwise
+  publishes before it records, and the consumer unit test pins one dead letter for a malformed
+  repeat; `jsonInteger` has one definition; `dev:treasury --event-time` refuses a zone-less time
+  with the consumer's own rule; the slice schema line names three stored outcomes and the count.
+- Every AC test still asserts its Then clause and INV-10 still sweeps Express's router. No
+  em or en dash in the diff, the wiki or the commit messages. Lint boundaries, DTO validation,
+  error envelope and money representation unchanged since round 3.
+- Minors: (standards) the dead-letter publish now runs inside the open Postgres transaction,
+  which adds no atomicity with the broker and turns a slow publish (kafkajs waits up to 30 s,
+  the transaction 15 s) into an aborted record and a second dead letter on redelivery; (spec) a
+  stale update carrying another currency on a program with something held is recorded `stale`,
+  not `rejected`, and the glossary does not say which wins, the same silence round 3 found for
+  duplicate versus rejected (route to `/spec`); (standards) the glossary's amended Duplicate rule
+  is a requirement change with one log line instead of two, because the glossary has no
+  `## Changes` table and `CLAUDE.md §7` lists only three spec files (route to `/spec`);
+  (standards) `expect(REQUEST_CORRELATION_ID).not.toBe(messageId)` in the AC-40 test compares
+  two constants and cannot fail; (standards) the availability mapper hands `jsonInteger` the
+  currency as the field label, so its RangeError names no field; (standards) `api/src/tooling/`
+  is still not in the `CLAUDE.md §2` tree, for `/ship`.
+- Concurrency for the record: INV-10 has no critical section. Consumer idempotency rests on one
+  partition per `programId`, the `treasury_messages` primary key and the `FOR UPDATE` row lock
+  inside one transaction; the reject path holds no row lock and relies on the primary key alone,
+  which is enough for a single partition. Nothing in round 4 weakened that.
+
+## 2026-09-21, spec (order of the consumer's checks, after review round 4 of S-02), Fable
+- Marcin said yes to both sentences as proposed. A-13 gained clause (5): the checks run in the
+  order written, a known id is a duplicate first whatever the body says, and a stale fact is
+  stale before anything in it is judged, so a stale update with another currency is recorded
+  `stale` rather than `rejected`. Changes row added. The Stale glossary entry says the same in
+  its own words and the Duplicate entry now points at A-13 for the rule and its history, which
+  closes the "logged once" finding: the rule lives in a file with a Changes table.
+- No code changed: both sentences describe what the consumer already does, which is what the
+  review found undocumented rather than wrong.
+
+## 2026-09-21, ship S-02, Fable
+- Preconditions held: verify (fifth pass) PASS and review (fourth round, 0 blockers, 0 majors)
+  both on 4e169b9, the last code commit. The two `/spec` sentences that followed the review are
+  wiki only, so the gates stayed fresh.
+- Requirement checklist: the eleven S-02 rows are `done` with their test files; seventeen
+  `extra` rows cover the tests written beyond the plan. The commit column is filled once the
+  merge commit exists. ADRs: ADR-0005, ADR-0006 and ADR-0007 were accepted before the slice
+  started; nothing is left `proposed` for S-02. Assumptions: A-06 and A-13 were amended
+  through `/spec` during the review rounds, with Changes rows; nothing relied on is missing.
+- Changelog row written, with the four minors from the fourth review named as known
+  limitations and routed to the first commit of S-03, as Marcin decided rather than run a sixth
+  verify and a fifth review for changes of that size.
+- README gained a "Call it" section: mint a token, read `PRG-1`, publish an update, what
+  answers 401, and where the development secret comes from. `CLAUDE.md §2` now lists
+  `api/src/tooling/` in the tree and in the two-tiers bullet, closing the finding carried
+  through four reviews. Slice status `done`, slice index and Home updated, S-03 named next.
+- Pull request proposed and not opened: branch `slice/S-02-programs-from-the-treasury`, to be
+  rebased on `main`, merged with `--no-ff`, merge commit tagged `S-02`.
