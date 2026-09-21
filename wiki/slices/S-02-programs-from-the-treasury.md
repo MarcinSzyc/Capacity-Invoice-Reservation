@@ -1,7 +1,7 @@
 # S-02 Programs from the treasury
 
 - Outcome: the treasury creates and updates a program over Kafka, an authenticated client reads its availability over HTTP, and a clean checkout reaches that state with the documented commands.
-- Status: planned
+- Status: in progress
 - AC: AC-20, AC-23, AC-24, AC-25, AC-32, AC-33, AC-35, AC-36, AC-37, AC-40
 - INV: INV-10
 - Risk: medium. It fixes the persistence model (programs, ledger with running balances, treasury message store) and the consumer's idempotency and staleness rules that every later slice relies on. No concurrency between clients yet and no money arithmetic beyond storing a limit. Foundations are set by the ADRs, so implementation risk is contained.
@@ -67,3 +67,5 @@ Beyond `CLAUDE.md §9`:
 | Date | Gate | Result |
 |---|---|---|
 | 2026-09-19 | plan | slice written |
+| 2026-09-21 | implement | slice started, branch `slice/S-02-programs-from-the-treasury` |
+| 2026-09-21 | implement | built test first, 11/11 planned tests present, `npm run gate:quick` green, e2e and smoke green, broker restart checked by hand |

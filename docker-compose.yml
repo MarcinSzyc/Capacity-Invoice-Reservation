@@ -51,12 +51,16 @@ services:
     build:
       context: .
       dockerfile: api/Dockerfile
+    image: ${API_IMAGE:-capacity-invoice-reservation-api}
     environment:
       NODE_ENV: ${NODE_ENV:-development}
       PORT: 3000
       DATABASE_URL: postgresql://capacity:capacity@db:5432/capacity
       KAFKA_BROKERS: kafka:9092
       WEB_ORIGIN: http://localhost:${WEB_PORT:-8080}
+      # ADR-0005: the secret `npm run dev:token` signs with when JWT_SECRET is not set. The api
+      # refuses this value in the production profile (DEV_JWT_SECRET in api/src/config).
+      JWT_SECRET: ${JWT_SECRET:-capacity-dev-secret-not-for-production}
     ports:
       - '${API_PORT:-3000}:3000'
     depends_on:
@@ -86,6 +90,33 @@ services:
       interval: 5s
       timeout: 5s
       retries: 20
+
+  # Dev only, runs once and exits: the dev producer announces the sample program PRG-1 with
+  # 10 000 000.00 USD (A-05, AC-36), so `docker compose up` ends with a program to reserve on.
+  # Same image as api, so nothing is built twice; a fixed messageId makes a second `up` a
+  # duplicate the consumer ignores instead of a second limit_set row.
+  seed:
+    image: ${API_IMAGE:-capacity-invoice-reservation-api}
+    pull_policy: never
+    entrypoint: ['node', 'api/dist/tooling/dev-treasury.js']
+    command:
+      - capacity-update
+      - --program
+      - PRG-1
+      - --currency
+      - USD
+      - --limit
+      - '1000000000'
+      - --message-id
+      - seed-PRG-1
+      - --event-time
+      - '2026-01-01T00:00:00.000Z'
+    environment:
+      KAFKA_BROKERS: kafka:9092
+    restart: 'no'
+    depends_on:
+      api:
+        condition: service_healthy
 
   # Dev only: browse and edit rows by hand (ADR-0002). Never deployed to production.
   # Prisma Studio was the first choice and cannot be used here: it binds 127.0.0.1 inside its
