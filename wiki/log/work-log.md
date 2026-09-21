@@ -1279,3 +1279,11 @@ correct with a new one. Format:
   through four reviews. Slice status `done`, slice index and Home updated, S-03 named next.
 - Pull request proposed and not opened: branch `slice/S-02-programs-from-the-treasury`, to be
   rebased on `main`, merged with `--no-ff`, merge commit tagged `S-02`.
+
+## 2026-09-21, docs: S-02 traceability commit column, Fable
+- Pull request #21 merged by Marcin's go-ahead as 3090d8b (`--no-ff`, tagged `S-02`) after all
+  three CI checks passed; local `main` fast forwarded. The eleven S-02 rows in
+  `wiki/plan/plan.md` now carry the merge commit next to the tag, as the S-01 rows do, so the
+  requirement checklist is complete for the slice. Same shape as pull request #18 for S-01: a
+  docs branch, because the column can only be filled once the merge commit exists and `main`
+  is never pushed directly.

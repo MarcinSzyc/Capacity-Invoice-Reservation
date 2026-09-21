@@ -29,27 +29,27 @@ Status: `planned`, `in progress`, `done`, `superseded by <id>`.
 | AC-17 | S-05 | planned | `[AC-17] should record the release reason on the movement, defaulting to repaid, without changing the effect` | e2e | | |
 | AC-18 | S-05 | planned | `[AC-18] should reflect a reservation and a release in availability immediately after the response` | e2e | | |
 | AC-19 | S-05 | planned | `[AC-19] should return the reservation with its amounts, rate, status, source and movements` | e2e | | |
-| AC-20 | S-02 | done | `[AC-20] should create the program from the first capacity update and expose its availability` | e2e | `api/test/programs.e2e-test.ts` | |
+| AC-20 | S-02 | done | `[AC-20] should create the program from the first capacity update and expose its availability` | e2e | `api/test/programs.e2e-test.ts` | `3090d8b` (tag `S-02`) |
 | AC-21 | S-03 | planned | `[AC-21] should raise available when the treasury raises the limit above current usage` | e2e | | |
 | AC-22 | S-03 | planned | `[AC-22] should read available 0 and overcommitted true when the limit drops below usage while every held stays` | e2e | | |
-| AC-23 | S-02 | done | `[AC-23] should record a repeated messageId as duplicate and change nothing` | contract | `api/src/modules/capacity/infrastructure/messaging/treasury-capacity.consumer.integration-test.ts` | |
-| AC-24 | S-02 | done | `[AC-24] should keep the newer limit and record an older eventTime update as stale` | contract | `api/src/modules/capacity/infrastructure/messaging/treasury-capacity.consumer.integration-test.ts` | |
-| AC-25 | S-02 | done | `[AC-25] should dead-letter a malformed message, log it and apply the next valid one` | contract | `api/src/modules/capacity/infrastructure/messaging/treasury-capacity.consumer.integration-test.ts` | |
+| AC-23 | S-02 | done | `[AC-23] should record a repeated messageId as duplicate and change nothing` | contract | `api/src/modules/capacity/infrastructure/messaging/treasury-capacity.consumer.integration-test.ts` | `3090d8b` (tag `S-02`) |
+| AC-24 | S-02 | done | `[AC-24] should keep the newer limit and record an older eventTime update as stale` | contract | `api/src/modules/capacity/infrastructure/messaging/treasury-capacity.consumer.integration-test.ts` | `3090d8b` (tag `S-02`) |
+| AC-25 | S-02 | done | `[AC-25] should dead-letter a malformed message, log it and apply the next valid one` | contract | `api/src/modules/capacity/infrastructure/messaging/treasury-capacity.consumer.integration-test.ts` | `3090d8b` (tag `S-02`) |
 | AC-26 | S-06 | planned | `[AC-26] should add an unknown reservation from the snapshot with source reconciliation and an adjustment movement` | e2e | | |
 | AC-27 | S-06 | planned | `[AC-27] should release by adjustment a reservation created before asOf that the snapshot omits` | e2e | | |
 | AC-28 | S-06 | planned | `[AC-28] should keep a reservation created after asOf that the snapshot omits` | e2e | | |
 | AC-29 | S-06 | planned | `[AC-29] should correct held to the snapshot value with an adjustment for the difference` | e2e | | |
 | AC-30 | S-06 | planned | `[AC-30] should ignore a snapshot older than the last applied one and record it as stale` | contract | | |
 | AC-31 | S-06 | planned | `[AC-31] should set limit and currency from the snapshot and expose its asOf in availability` | e2e | | |
-| AC-32 | S-02 | done | `[AC-32] should answer 401 to a business request without a bearer token` | e2e | `api/test/authentication.e2e-test.ts` | |
-| AC-33 | S-02 | done | `[AC-33] should answer 401 to an expired or wrongly signed token` | e2e | `api/test/authentication.e2e-test.ts` | |
+| AC-32 | S-02 | done | `[AC-32] should answer 401 to a business request without a bearer token` | e2e | `api/test/authentication.e2e-test.ts` | `3090d8b` (tag `S-02`) |
+| AC-33 | S-02 | done | `[AC-33] should answer 401 to an expired or wrongly signed token` | e2e | `api/test/authentication.e2e-test.ts` | `3090d8b` (tag `S-02`) |
 | AC-34 | S-05 | planned | `[AC-34] should record the authenticated client id on reserve and release movements` | e2e | | |
-| AC-35 | S-02 | done | `[AC-35] should serve liveness, readiness and the API documentation without a token and without business data` | e2e | `api/test/authentication.e2e-test.ts` | |
-| AC-36 | S-02 | done | `[AC-36] should start from a clean checkout and answer an authenticated availability request for the sample program` | cold start | `api/test/cold-start/programs.smoke-test.ts` | |
-| AC-37 | S-02 | done | `[AC-37] should mint a dev token that the availability request accepts` | cold start | `api/test/cold-start/programs.smoke-test.ts` | |
+| AC-35 | S-02 | done | `[AC-35] should serve liveness, readiness and the API documentation without a token and without business data` | e2e | `api/test/authentication.e2e-test.ts` | `3090d8b` (tag `S-02`) |
+| AC-36 | S-02 | done | `[AC-36] should start from a clean checkout and answer an authenticated availability request for the sample program` | cold start | `api/test/cold-start/programs.smoke-test.ts` | `3090d8b` (tag `S-02`) |
+| AC-37 | S-02 | done | `[AC-37] should mint a dev token that the availability request accepts` | cold start | `api/test/cold-start/programs.smoke-test.ts` | `3090d8b` (tag `S-02`) |
 | AC-38 | S-07 | planned | `[AC-38] should serve the demo page in the dev profile with generator, request log, ledger and treasury panel, and not in production` | e2e | | |
 | AC-39 | S-07 | planned | `[AC-39] should read the same availability and reservations after a restart` | e2e | | |
-| AC-40 | S-02 | done | `[AC-40] should write JSON log lines sharing one correlation id per request and per message` | e2e | `api/test/programs.e2e-test.ts` | |
+| AC-40 | S-02 | done | `[AC-40] should write JSON log lines sharing one correlation id per request and per message` | e2e | `api/test/programs.e2e-test.ts` | `3090d8b` (tag `S-02`) |
 | AC-41 | S-01 | done | `[AC-41] should link the README to the assumptions register, the decision records and the run instructions` | unit | `api/test/readme.test.ts` | `4215d1c` (tag `S-01`) |
 | INV-01 | S-03 | planned | `[INV-01] should never overcommit under parallel reservations on one program` | invariant (e2e) | | |
 | INV-02 | S-05 | planned | `[INV-02] should keep held between 0 and reservedAmount over random release sequences` | unit | | |
@@ -60,7 +60,7 @@ Status: `planned`, `in progress`, `done`, `superseded by <id>`.
 | INV-07 | S-06 | planned | `[INV-07] should reach the same final state for shuffled and reversed message order as for in-order delivery` | invariant (contract) | | |
 | INV-08 | S-04 | planned | `[INV-08] should keep money as integer minor units with a currency, refuse cross-currency arithmetic and round conversions half up` | unit | | |
 | INV-09 | S-03 | planned | `[INV-09] should reject a movement that carries neither clientId nor messageId` | integration | | |
-| INV-10 | S-02 | done | `[INV-10] should answer 401 on every business route without a token` | invariant (e2e) | `api/test/business-routes-guarded.e2e-test.ts` | |
+| INV-10 | S-02 | done | `[INV-10] should answer 401 on every business route without a token` | invariant (e2e) | `api/test/business-routes-guarded.e2e-test.ts` | `3090d8b` (tag `S-02`) |
 | INV-11 | S-03 | planned | `[INV-11] should keep available between 0 and limit over random sequences of reservations and limit changes` | unit | | |
 
 ## Tests beyond the plan
