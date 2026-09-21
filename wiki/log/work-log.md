@@ -804,3 +804,27 @@ correct with a new one. Format:
   overwritten" must be narrowed to "when no reservation is active", with a Changes row, and
   that `CURRENCY_MISMATCH` joins the glossary. This gate does not edit the spec, so both are
   left for a `/spec` run before `/implement S-02` starts.
+
+## 2026-09-21, spec (A-12 narrowed after ADR-0007), Fable
+- Amended A-12 and added one glossary entry, nothing else, closing the debt ADR-0007 recorded
+  against itself when Marcin accepted it.
+- A-12 said limit and currency are overwritten, full stop. That is only safe on a program with
+  nothing outstanding: `held` of an active reservation is an amount in the old currency and the
+  service has no rate of its own to re-express it (A-02, rates arrive from clients per
+  reservation). The statement now says the limit is always overwritten, the currency only when
+  no reservation is active, and a message carrying another currency while one is active is
+  rejected and leaves the program untouched.
+- Amended in place rather than superseded by a new id, as with A-17 and for the same reason:
+  the assumption itself did not change. Reconciliation is still a comparison against the
+  snapshot moment, never a wholesale replace. One clause inside it turned out to be broader
+  than the accepted decision, and a new id would imply a different decision had been taken.
+- `CURRENCY_MISMATCH` added to the glossary under Treasury messages, written to stand on its
+  own: what it is, what happens to the message and the program, and why the message is refused
+  rather than converted. It avoids leaning on "dead letter", which the glossary does not define.
+- Logged twice as §7 requires: a Changes row in [[../spec/assumptions]] pointing at branch
+  `docs/a-12-currency-change`, and this entry. The glossary has no Changes table, and §7 asks
+  for one only in acceptance criteria, invariants and assumptions.
+- Noticed and deliberately not fixed here, since it is outside what was asked: the glossary
+  defines neither "dead letter" nor "rejected" as a message outcome, though A-13 and now this
+  entry both lean on the idea. Worth an entry of its own when S-02 builds the consumer and the
+  words acquire real behaviour behind them.
