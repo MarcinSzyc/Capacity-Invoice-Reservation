@@ -1,5 +1,9 @@
-import {Injectable, LoggerService} from '@nestjs/common';
+import type {Writable} from 'node:stream';
+import {Inject, Injectable, LoggerService, Optional} from '@nestjs/common';
 import {currentCorrelationId} from './correlation-id';
+
+/** Where log lines go. Unbound in production (stdout); tests bind a stream they can read back. */
+export const LOG_OUTPUT = Symbol('LogOutput');
 
 type Level = 'debug' | 'verbose' | 'info' | 'warn' | 'error';
 
@@ -14,6 +18,12 @@ interface LogLine {
 
 @Injectable()
 export class JsonLogger implements LoggerService {
+  private readonly out: Writable;
+
+  constructor(@Optional() @Inject(LOG_OUTPUT) out?: Writable) {
+    this.out = out ?? process.stdout;
+  }
+
   log(message: unknown, context?: string): void {
     this.write('info', message, context);
   }
@@ -43,7 +53,7 @@ export class JsonLogger implements LoggerService {
       ...(stack === undefined ? {} : {stack}),
       ...withCorrelationId(),
     };
-    process.stdout.write(`${JSON.stringify(line)}\n`);
+    this.out.write(`${JSON.stringify(line)}\n`);
   }
 }
 

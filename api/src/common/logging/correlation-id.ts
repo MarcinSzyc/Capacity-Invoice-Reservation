@@ -16,6 +16,12 @@ export const runWithCorrelationId = <T>(correlationId: string, work: () => T): T
   storage.run(correlationId, work);
 
 /**
+ * For log lines a library writes on its own schedule, such as a broker reconnecting: they would
+ * otherwise inherit the id of whatever request or message started the async chain they run in.
+ */
+export const withoutCorrelationId = <T>(work: () => T): T => storage.exit(work);
+
+/**
  * A-18: every log line of one request carries the same id, so a reviewer can follow a request
  * across layers. An id sent by the caller wins, so the id spans our service and theirs.
  */

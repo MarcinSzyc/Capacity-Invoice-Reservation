@@ -16,6 +16,8 @@ const withInfrastructure = {
 } as const;
 
 const config: Config = {
+  // Jest applies the timeout of hooks from the root configuration, not from a project's.
+  testTimeout: 180_000,
   projects: [
     {
       ...shared,

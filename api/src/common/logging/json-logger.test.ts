@@ -1,3 +1,4 @@
+import {MemoryStream} from '../../../test/support/memory-stream';
 import {JsonLogger} from './json-logger';
 
 const CONTEXT = 'Test';
@@ -16,6 +17,17 @@ const captureLine = (write: () => void): Record<string, unknown> => {
 };
 
 describe('JsonLogger', () => {
+  it('should write to the stream it is given, one JSON line per call', () => {
+    const stream = new MemoryStream();
+
+    new JsonLogger(stream).log('first', CONTEXT);
+    new JsonLogger(stream).warn('second', CONTEXT);
+
+    expect(stream.chunks).toHaveLength(2);
+    expect(JSON.parse(stream.chunks[0] ?? '')).toMatchObject({message: 'first', level: 'info'});
+    expect(JSON.parse(stream.chunks[1] ?? '')).toMatchObject({message: 'second', level: 'warn'});
+  });
+
   it('should write a message that carries a bigint, which money is (ADR-0001)', () => {
     const line = captureLine(() => new JsonLogger().log({reservedAmount: 1_200_000n}, CONTEXT));
 
