@@ -118,6 +118,11 @@ shows what the treasury changed.
 **Capacity update.** A small Kafka message changing one fact about a program, usually
 its limit. May create a program we have not seen yet.
 
+**Announce.** What the treasury's first message about a program does: it brings the program
+into existence for us, with the currency that message carries. Until then the program does not
+exist here and any request on it is `PROGRAM_NOT_FOUND`. Nobody but the treasury announces a
+program (A-05).
+
 **Reconciliation message (snapshot).** A Kafka message with a program's full state as
 of one moment: limit, currency and the list of active reservations with their `held`.
 Authoritative for that moment, silent about anything after it.
