@@ -3,7 +3,7 @@
 CREATE TYPE "capacity_movement_kind" AS ENUM ('limit_set', 'reserve', 'release', 'adjustment');
 
 -- CreateEnum
-CREATE TYPE "treasury_message_outcome" AS ENUM ('applied', 'duplicate', 'stale', 'rejected');
+CREATE TYPE "treasury_message_outcome" AS ENUM ('applied', 'stale', 'rejected');
 
 -- CreateTable
 CREATE TABLE "programs" (

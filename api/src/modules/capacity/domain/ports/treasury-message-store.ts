@@ -1,5 +1,8 @@
-/** What became of a treasury message. `duplicate` is a count on the first record, not a row. */
-export type TreasuryMessageOutcome = 'applied' | 'duplicate' | 'stale' | 'rejected';
+/**
+ * What is recorded against a message id (glossary: message outcome). The fourth outcome,
+ * duplicate, is not a record of its own: it is a count on the first record, so it is not here.
+ */
+export type TreasuryMessageOutcome = 'applied' | 'stale' | 'rejected';
 
 export interface TreasuryMessageRecord {
   readonly messageId: string;
@@ -7,7 +10,7 @@ export interface TreasuryMessageRecord {
   readonly programId: string | null;
   readonly type: string | null;
   readonly payload: unknown;
-  readonly outcome: Exclude<TreasuryMessageOutcome, 'duplicate'>;
+  readonly outcome: TreasuryMessageOutcome;
   readonly error: string | null;
   readonly receivedAt: Date;
 }

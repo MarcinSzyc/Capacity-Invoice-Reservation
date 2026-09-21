@@ -50,11 +50,6 @@ export class PrismaTreasuryMessageStore implements TreasuryMessageStore {
       client.treasuryMessage.findUnique({where: {messageId}}),
     );
     if (row === null) return null;
-    if (row.outcome === 'duplicate') {
-      throw new Error(
-        `Message ${messageId} is stored as duplicate, which is a count, not an outcome`,
-      );
-    }
     return {
       messageId: row.messageId,
       programId: row.programId,

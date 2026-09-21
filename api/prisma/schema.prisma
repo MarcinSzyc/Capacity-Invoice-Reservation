@@ -59,9 +59,9 @@ model CapacityMovement {
   @@map("capacity_movements")
 }
 
+/// The fourth outcome of the glossary, duplicate, is `duplicate_count` on the first record.
 enum TreasuryMessageOutcome {
   applied
-  duplicate
   stale
   rejected
 

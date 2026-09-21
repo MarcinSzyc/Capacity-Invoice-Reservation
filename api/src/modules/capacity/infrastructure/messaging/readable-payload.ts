@@ -1,12 +1,8 @@
 /**
- * Column widths of the message store. A rejected message is recorded under whatever of its ids
- * can still be read, and "readable" includes "fits the column": an id that does not would fail
- * the insert, roll back, leave the offset uncommitted and stall the partition (A-13, AC-25).
+ * A rejected message is recorded under whatever of its ids can still be read, and "readable"
+ * includes "fits the column": an id that does not would fail the insert, roll back, leave the
+ * offset uncommitted and stall the partition (A-13, AC-25).
  */
-export const MESSAGE_ID_MAX_LENGTH = 128;
-export const PROGRAM_ID_MAX_LENGTH = 64;
-export const MESSAGE_TYPE_MAX_LENGTH = 32;
-
 export const readableString = (
   payload: unknown,
   field: string,
