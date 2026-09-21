@@ -11,21 +11,31 @@ export interface TreasuryMessageRejection {
   readonly receivedAt: Date;
 }
 
+export type RejectTreasuryMessageResult = 'rejected' | 'duplicate';
+
 /**
- * A-13: a malformed message is recorded and consumption continues. Recording it here rather
- * than only in the dead-letter topic keeps one place to ask "what happened to message m-7".
+ * A-13: a message that cannot be applied is recorded and consumption continues. Recording it
+ * here rather than only in the dead-letter topic keeps one place to ask "what happened to
+ * message m-7". A known id is a duplicate first, whatever the body says (glossary): it is
+ * counted and nothing is published. Otherwise the dead letter goes out before the record is
+ * written, so a failed publish is delivered again rather than answered "duplicate".
  */
 @Injectable()
 export class RejectTreasuryMessage {
   constructor(@Inject(UNIT_OF_WORK) private readonly unitOfWork: UnitOfWork) {}
 
-  execute(rejection: TreasuryMessageRejection): Promise<void> {
+  execute(
+    rejection: TreasuryMessageRejection,
+    publishDeadLetter: () => Promise<void>,
+  ): Promise<RejectTreasuryMessageResult> {
     return this.unitOfWork.run(async ({treasuryMessages}) => {
       if (await treasuryMessages.wasProcessed(rejection.messageId)) {
         await treasuryMessages.recordDuplicate(rejection.messageId);
-        return;
+        return 'duplicate';
       }
+      await publishDeadLetter();
       await treasuryMessages.recordOutcome({...rejection, outcome: 'rejected'});
+      return 'rejected';
     });
   }
 }

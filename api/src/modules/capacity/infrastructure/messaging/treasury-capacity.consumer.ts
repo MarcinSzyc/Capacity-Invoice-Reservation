@@ -111,9 +111,9 @@ export class TreasuryCapacityConsumer implements OnApplicationBootstrap, OnModul
   }
 
   /**
-   * Dead letter first, record second. If the publish fails the message is delivered again and
-   * both steps run again; if the record fails the dead letter is published twice. Either way it
-   * is never lost, which the other order could not promise (A-13).
+   * With a readable id the use case decides: a known id is counted as a duplicate and nothing
+   * is published; otherwise the dead letter goes out and then the record is written, so a
+   * failed publish is delivered again (A-13). Without an id there is nothing to count against.
    */
   private async reject(
     message: InboundMessage,
@@ -121,16 +121,25 @@ export class TreasuryCapacityConsumer implements OnApplicationBootstrap, OnModul
     error: string,
     receivedAt: Date,
   ): Promise<void> {
-    await this.deadLetter(message, error);
-    if (readable.messageId !== null) {
-      await this.rejectTreasuryMessage.execute({
+    if (readable.messageId === null) {
+      await this.deadLetter(message, error);
+      this.logger.warn(`message rejected: ${error}`, CONTEXT);
+      return;
+    }
+    const result = await this.rejectTreasuryMessage.execute(
+      {
         messageId: readable.messageId,
         programId: readableString(readable.payload, 'programId', PROGRAM_ID_MAX_LENGTH),
         type: readableString(readable.payload, 'type', MESSAGE_TYPE_MAX_LENGTH),
         payload: readable.payload,
         error,
         receivedAt,
-      });
+      },
+      () => this.deadLetter(message, error),
+    );
+    if (result === 'duplicate') {
+      this.logger.log(`message ${readable.messageId} seen again, counted as duplicate`, CONTEXT);
+      return;
     }
     this.logger.warn(`message rejected: ${error}`, CONTEXT);
   }
