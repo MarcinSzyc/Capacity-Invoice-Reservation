@@ -198,7 +198,10 @@ id) without changing anything.
 an error response for HTTP (409 with the original outcome in the body), always a silent
 no-op for Kafka. For a treasury message the silence is still recorded: the outcome kept
 against the message id is `duplicate` and the first record's duplicate count goes up, so
-"how often did m-1 arrive" has an answer without a second row.
+"how often did m-1 arrive" has an answer without a second row. A known id is a duplicate
+first, whatever the body says: a repeat that is malformed or would be refused is counted, not
+set aside as a dead letter, because it is the same message heard again and nothing new about
+it needs a human.
 
 ## Technical words used in ADRs
 
