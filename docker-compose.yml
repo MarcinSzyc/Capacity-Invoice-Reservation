@@ -85,6 +85,10 @@ services:
     depends_on:
       api:
         condition: service_healthy
+      # The seed is a one-shot. Naming its clean exit as a condition here tells compose that the
+      # exit is the plan, so `up --wait` does not count an already finished seed as a failure.
+      seed:
+        condition: service_completed_successfully
     healthcheck:
       test: ['CMD-SHELL', 'wget --spider -q http://127.0.0.1:80/']
       interval: 5s
