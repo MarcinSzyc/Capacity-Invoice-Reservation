@@ -828,3 +828,97 @@ correct with a new one. Format:
   defines neither "dead letter" nor "rejected" as a message outcome, though A-13 and now this
   entry both lean on the idea. Worth an entry of its own when S-02 builds the consumer and the
   words acquire real behaviour behind them.
+
+## 2026-09-21, implement S-02 (programs from the treasury), Fable
+- Branch `slice/S-02-programs-from-the-treasury`, cut from `main` at 6053ba4. Built test first,
+  one layer at a time, each layer driven by its own red test: `Money` and `Program` (unit),
+  `ApplyCapacityUpdate`, `RejectTreasuryMessage` and `GetAvailability` (unit, in-memory fakes),
+  the Prisma adapters and `KafkaService` (integration), the treasury consumer (contract tests
+  AC-23, AC-24, AC-25 over the real broker), the JWT verifier (unit), then the controller, the
+  guard and the e2e tests (AC-20, AC-32, AC-33, AC-35, AC-40, INV-10) and the cold start tests
+  (AC-36, AC-37). Because of that order the e2e tests for AC-20 and AC-40 passed on their first
+  run; they were still written before the controller and the request log line existed.
+- New module `src/modules/capacity/` in the three layers `CLAUDE.md §2` asks for. Domain:
+  `Money` (`bigint` minor units plus ISO 4217, same currency arithmetic only, ADR-0006),
+  `Program` (`announce`, `setLimit` returning `applied` or `stale`, `available`,
+  `overcommitted`, re-denomination per ADR-0007), `CapacityMovement`, four ports
+  (`ProgramRepository`, `LedgerRepository`, `TreasuryMessageStore`, `UnitOfWork`) and two errors
+  (`ProgramNotFoundError`, `CurrencyMismatchError`). Application: the three use cases above.
+  Infrastructure: Prisma repositories behind one `PrismaUnitOfWork` (one `$transaction`, a
+  `SELECT ... FOR UPDATE` row lock in `lockById`, ADR-0002), the Kafka consumer, the message
+  DTO, the dev producer and the availability controller.
+- `src/messaging/` now owns the loop: `KafkaService` implements a generic `MessageSource`
+  (`subscribe` with manual commit after the handler returns, `publish`). ADR-0003 calls the port
+  `TreasuryMessageSource`; it is named `MessageSource` here because `CLAUDE.md §2` says a file
+  under `src/messaging/` may not name a business word. The treasury-specific part (topics,
+  group, validation, dispatch) lives in `src/modules/capacity/infrastructure/messaging/`.
+- Idempotency, staleness and rejection are one transaction: lock or announce the program, check
+  `messageId`, apply `setLimit`, append the movement, record the outcome. A `messageId` seen
+  before increments `duplicate_count` on its first record instead of adding a row. A message
+  that is not JSON, fails the DTO, has an unknown `type` (the snapshot, until S-06) or carries
+  another currency on a program with something held is recorded `rejected` when its
+  `messageId` is readable, published to `treasury.capacity.dlq` with `error`, `sourceTopic`,
+  `sourcePartition`, `sourceOffset` and `correlationId` headers, logged at `warn`, and the
+  offset is committed. Anything else (a database that is away) propagates, the offset stays
+  uncommitted and the broker delivers the message again; `KafkaService` has a test for exactly
+  that.
+- Authentication per ADR-0005: `JoseTokenVerifier` behind the `TokenVerifier` port, HS256
+  pinned, `exp` and `sub` required, issuer and audience checked; `JwtAuthGuard` as the global
+  `APP_GUARD`; `@Public()` on the health controller. `jose` 6 was chosen over `@nestjs/jwt`: it
+  is ESM-only, which the Jest setup already handles for NestJS 12, and the dev token command can
+  use it without a Nest context. `JWT_SECRET` is required; `JWT_ISSUER` and `JWT_AUDIENCE`
+  default to `capacity-dev` and `capacity-api`. The development secret compose and
+  `npm run dev:token` agree on is refused in the production profile.
+- The INV-10 sweep reads every route off the Express router, subtracts the controller routes
+  that carry `@Public()` (found through `ModulesContainer` and the route metadata) and the
+  documentation paths, and calls each remaining route without a token. Swagger also registers a
+  YAML document; it now lives at `/openapi.yaml` next to `/openapi.json` so the documentation
+  allowlist is four known paths rather than a pattern.
+- Logging (AC-40): `JsonLogger` takes an optional output stream (`LOG_OUTPUT`), so e2e tests
+  read the lines back; a request log middleware writes one line per answered request under the
+  request's correlation id; the consumer runs every message under `messageId` as correlation
+  id, or a fresh UUID when the message has none.
+- Dev tooling in `src/tooling/`, a new folder at the app level and therefore something for
+  review to weigh: `dev-token.ts` (AC-37) and `dev-treasury.ts` (the seed). They compile into
+  `dist/` with the service so the compose `seed` one-shot can run from the same image, and run
+  on the host through `ts-node` (`npm run dev:token`, `npm run dev:treasury`). The seed sends a
+  fixed `messageId` (`seed-PRG-1`) and a fixed `eventTime`, so a second `docker compose up` is
+  a duplicate the consumer ignores rather than a second `limit_set` row.
+- Schema deviations from the slice sketch, both small: `capacity_movements.currency` was added
+  because a ledger row must rebuild `Money` and stay readable after a re-denomination
+  (ADR-0007); `treasury_messages.program_id` and `type` are nullable because a malformed message
+  may carry neither. Kinds and outcomes are Postgres enums. INV-09 is a CHECK constraint added
+  by hand to the generated migration. The test global setup runs `prisma migrate deploy`
+  against the container before any test.
+- Borderline local choices, not ADRs: the message DTO refuses unknown fields (we own the
+  contract, A-11); `Money.subtract` refuses to go negative and only `Program.available` floors
+  at zero, so an over-release can never be hidden by arithmetic; an update with the same
+  `eventTime` as the last applied one is applied, since "older" (A-13) does not include equal.
+- Tooling findings: TypeScript 6 needs an explicit `rootDir` for `ts-node`, set in
+  `api/tsconfig.json`; Jest reads hook timeouts from the root configuration, not from a
+  project's, so `testTimeout` moved to the root; the consumer's `maxWaitTimeInMs` is one second
+  so a shutdown never waits five seconds for an idle fetch.
+- Tests beyond the plan, for `/ship` to add to the checklist: `Money` (6 unit), `Program` (7
+  unit), `ApplyCapacityUpdate` (5 unit), `RejectTreasuryMessage` (2 unit), `GetAvailability`
+  (2 unit), `JoseTokenVerifier` (8 unit), `loadConfig` (3 new unit), `JsonLogger` (1 new unit),
+  Prisma adapters (6 integration), `KafkaService` (2 integration), consumer contract (3
+  untagged: re-denomination per ADR-0007, unknown type, non-JSON), authentication (2 untagged:
+  non-bearer scheme, valid token reaches the route), programs (2 untagged: 404
+  `PROGRAM_NOT_FOUND`, 400 on an overlong id).
+- Checked by hand, as the slice's definition of done asks: with the dev stack up,
+  `docker compose restart kafka`, then `npm run dev:treasury -- capacity-update --program PRG-1
+  --currency USD --limit 1200000000`. The api logged kafkajs's reconnection attempts, applied
+  the update within a second of publication, and the ledger held exactly two `limit_set` rows
+  for `PRG-1` (seed and this one) with `duplicate_count` 0 on both messages. While doing that,
+  noticed that kafkajs's own log lines inherited the correlation id of the last message handled,
+  through the async context the consumer loop runs in; broker log lines now run outside any
+  correlation context (`withoutCorrelationId`), so they carry none rather than a wrong one.
+- The pre-commit hook of the second commit failed on both Kafka integration suites with "This
+  server does not host this topic-partition", after three green full runs. kafkajs's
+  `createTopics` with `waitForLeaders` asks for metadata before a fresh single node broker lists
+  the topic and gives up. Fixed at the cause rather than retried (testing strategy: a flaky test
+  is a defect): `KafkaService.ensureTopic` creates the topic without kafkajs's wait and polls the
+  topic metadata until every partition has a leader.
+- Left for `/ship`: README (start, mint a token, curl `PRG-1`), changelog, checklist, slice
+  status. Left for `/spec` (noticed, not done here): the glossary has no entry for "dead
+  letter" or for `rejected` as a message outcome, as the previous entry already observed.
