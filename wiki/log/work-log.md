@@ -922,3 +922,79 @@ correct with a new one. Format:
 - Left for `/ship`: README (start, mint a token, curl `PRG-1`), changelog, checklist, slice
   status. Left for `/spec` (noticed, not done here): the glossary has no entry for "dead
   letter" or for `rejected` as a message outcome, as the previous entry already observed.
+
+## 2026-09-21, verify S-02, Fable
+- VERIFY S-02: PASS on 95ed588. `npm run gate` green: unit 57, integration 18, e2e 23, cold
+  start 3, smoke stack healthy in 37 s from a cached image. Coverage 10/10 AC and 1/1 INV, every
+  tag on a test that ran and passed, no `.only`, `.skip` or `xit`, no trivially true body.
+- Test levels match the plan: AC-20, AC-32, AC-33, AC-35 and AC-40 go through HTTP with
+  supertest; AC-23, AC-24 and AC-25 publish over the real broker and read the store, the ledger
+  and the dead-letter topic; AC-36 and AC-37 run the documented token command against the
+  compose stack; INV-10 sweeps the Express router of the running application.
+- Layer boundaries clean: no `@nestjs` import under `domain/`, no Prisma or kafkajs import
+  under `domain/` or `application/`, no business word in `src/messaging/`. Diff scan for nested
+  ternaries and braced one-line `if`s found nothing (one false positive on a `??` default with
+  a URL). Prose check clean.
+- Cold start by hand from a clean state with the README's own command: five containers healthy
+  in 21 s (image cached), every URL the README lists answered 200, the availability endpoint
+  answered 401 without a token and 200 with a dev token one second after boot, `docker compose
+  down -v` left nothing behind. The expired-token case was not probed by hand (a shell quoting
+  slip in the one-liner); the AC-33 e2e test covers it and passed in this run.
+- Findings, none blocking: (minor) the README does not yet mention authentication, the dev token
+  command or the availability endpoint; what it says still works as written, and README is
+  `/ship`'s to update. (minor) `wiki/plan/plan.md` rows for S-02 still read `planned` with
+  empty test file and commit columns, and the slice status is `in progress`; both are `/ship`'s.
+  (note for `/review`) `api/src/tooling/` is a new app-level folder, as the implement entry
+  already flags.
+
+## 2026-09-21, review S-02, Fable (fresh context)
+- REVIEW S-02: 6 findings (0/2/4). Not a pass: two majors. Diff reviewed: `6053ba4..HEAD` plus
+  the working tree, against `CLAUDE.md §2 to §4`, the slice file, AC-20/23/24/25/32/33/35/36/37/40,
+  INV-10, A-05/A-11/A-13/A-14/A-16/A-17/A-18 and ADR-0002/0003/0005/0006/0007.
+- (major, spec) The consumer's rejection path trusts the shape it just refused: `messageId`,
+  `programId` and `type` are read raw from a malformed payload with no length bound and written
+  into `VARCHAR(128)`, `VARCHAR(64)` and `VARCHAR(32)` columns. A malformed message with an
+  overlong id fails the insert, the transaction throws, the offset is never committed and the
+  broker redelivers it forever: one bad message stalls the partition, which A-13 (4) and AC-25
+  forbid. The same unbounded id becomes the correlation id of every log line and DLQ header.
+- (major, spec) Words in code, API and storage with no glossary entry: `stale`, `rejected` and
+  the message outcome set (`applied`, `duplicate`, `stale`, `rejected`), `dead letter`,
+  `eventTime` / `limitEventTime`, `duplicateCount`. Route: `/spec`, since only Marcin adds
+  glossary entries; the implement entry already flagged two of them.
+- (minor) A message the use case recorded `rejected` is dead-lettered after the transaction
+  committed; if that publish fails, the redelivery is answered `duplicate` and never
+  dead-lettered, unlike the validation-failure path. (minor) The message DTO accepts a
+  zone-less ISO 8601 time and reads it in the process's local zone while A-11 says UTC.
+  (minor) The INV-10 sweep's method name table does not match Nest's `RequestMethod` enum at
+  `ALL`, `OPTIONS`, `HEAD`; fails safe (spurious failure), never silently passes. (minor)
+  `api/src/tooling/` is a new app-level folder: reason accepted (entry points, no business
+  rule), the `CLAUDE.md §2` tree should list it.
+- Concurrency note for the record: INV-10 has no critical section. For the consumer
+  transaction, one program's messages share a partition and the handler is sequential; across
+  a rebalance the same message could run twice, and then the `FOR UPDATE` row lock plus the
+  primary key on `treasury_messages.message_id` make the second run a rollback and a redelivery
+  that reads `duplicate`. Idempotency is guaranteed by the schema, not by luck.
+
+## 2026-09-21, implement S-02 (review fixes, round 1), Fable
+- Four of the six review findings fixed, each test first; the glossary finding is `/spec`'s and
+  the `CLAUDE.md §2` tree entry for `api/src/tooling/` is `/ship`'s.
+- (major) The rejection path no longer trusts the payload it refused. `readableString` in
+  `readable-payload.ts` takes a bound equal to the column width (`message_id` 128,
+  `program_id` 64, `type` 32) and answers null for anything longer, so an over-long id is
+  "unreadable": the message is dead-lettered under a fresh correlation id, no row is written,
+  and the offset commits. Contract test: an over-long `messageId` followed by a valid update;
+  the valid one applies, the dead letter names `messageId`, the store has no row for it.
+  Unit tests for the helper's bound and shapes.
+- (minor) Both rejection paths now dead-letter first and record second, in one `reject()`.
+  `ApplyCapacityUpdate` returns `rejected` on a currency mismatch without recording; the
+  consumer records after the dead letter is out. If the publish fails, the redelivery repeats
+  both steps; if the record fails, the dead letter goes out twice. At least once on the DLQ,
+  which the previous order could not promise. Unit tests with a fake message source whose
+  publish fails once, for both the use case path and the validation path.
+- (minor) `eventTime` must carry `Z` or an offset (`@Matches` after `IsISO8601`), so the host
+  zone never decides staleness (A-11, AC-24). DTO unit tests: offset read as the same instant,
+  zone-less time and bare date refused, unknown field refused.
+- (minor) The INV-10 sweep names methods with Nest's own `RequestMethod[method]` instead of a
+  hand written table.
+- Not changed, on purpose: the message store keeps `program_id` and `type` nullable, which is
+  what makes recording a malformed message possible at all.

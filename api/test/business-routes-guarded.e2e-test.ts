@@ -1,4 +1,4 @@
-import {INestApplication} from '@nestjs/common';
+import {INestApplication, RequestMethod} from '@nestjs/common';
 import {MetadataScanner, ModulesContainer, Reflector} from '@nestjs/core';
 import {METHOD_METADATA, PATH_METADATA} from '@nestjs/common/constants';
 import request from 'supertest';
@@ -19,25 +19,6 @@ interface Route {
 interface ExpressLayer {
   readonly route?: {readonly path: string; readonly methods: Record<string, boolean>};
 }
-
-const HTTP_METHOD_NAMES: readonly string[] = [
-  'get',
-  'post',
-  'put',
-  'delete',
-  'patch',
-  'options',
-  'head',
-  'all',
-  'search',
-  'propfind',
-  'proppatch',
-  'mkcol',
-  'copy',
-  'move',
-  'lock',
-  'unlock',
-];
 
 // A-16: what may answer without a token. The documentation views are Express routes rather than
 // controllers, so they are named here; every controller route must carry @Public() to be exempt.
@@ -84,12 +65,12 @@ const publicControllerRoutes = (app: INestApplication): Route[] => {
       const handler = (prototype as Record<string, unknown>)[name];
       if (typeof handler !== 'function') return [];
       const methodPath = reflector.get<string | string[]>(PATH_METADATA, handler) ?? '';
-      const method = reflector.get<number>(METHOD_METADATA, handler);
+      const method = reflector.get<RequestMethod>(METHOD_METADATA, handler);
       const isPublic = reflector.getAllAndOverride<boolean>(IS_PUBLIC, [handler, controller]);
       if (method === undefined || isPublic !== true) return [];
       return [
         {
-          method: HTTP_METHOD_NAMES[method] ?? 'unknown',
+          method: RequestMethod[method].toLowerCase(),
           path: joinPath(String(controllerPath), String(methodPath)),
         },
       ];
