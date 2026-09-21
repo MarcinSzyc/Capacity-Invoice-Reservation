@@ -9,7 +9,7 @@ Status: `planned`, `in progress`, `done`, `superseded by <id>`.
 
 | Id | Slice | Status | Test name | Level | Test file | Commit |
 |---|---|---|---|---|---|---|
-| AC-00 | S-01 | done | `[AC-00] should start with docker compose up, turn ready and answer GET /health and both documentation views without a token` | cold start | `api/test/cold-start/stack.smoke-test.ts` | |
+| AC-00 | S-01 | done | `[AC-00] should start with docker compose up, turn ready and answer GET /health and both documentation views without a token` | cold start | `api/test/cold-start/stack.smoke-test.ts` | `4215d1c` (tag `S-01`) |
 | AC-01 | S-03 | planned | `[AC-01] should reserve within capacity and show the amounts, active status and reduced availability` | e2e | | |
 | AC-02 | S-03 | planned | `[AC-02] should reserve exactly the remaining capacity and leave availability at zero` | e2e | | |
 | AC-03 | S-03 | planned | `[AC-03] should reject a reservation that exceeds available capacity with CAPACITY_EXCEEDED and the available amount` | e2e | | |
@@ -50,7 +50,7 @@ Status: `planned`, `in progress`, `done`, `superseded by <id>`.
 | AC-38 | S-07 | planned | `[AC-38] should serve the demo page in the dev profile with generator, request log, ledger and treasury panel, and not in production` | e2e | | |
 | AC-39 | S-07 | planned | `[AC-39] should read the same availability and reservations after a restart` | e2e | | |
 | AC-40 | S-02 | planned | `[AC-40] should write JSON log lines sharing one correlation id per request and per message` | e2e | | |
-| AC-41 | S-01 | done | `[AC-41] should link the README to the assumptions register, the decision records and the run instructions` | unit | `api/test/readme.test.ts` | |
+| AC-41 | S-01 | done | `[AC-41] should link the README to the assumptions register, the decision records and the run instructions` | unit | `api/test/readme.test.ts` | `4215d1c` (tag `S-01`) |
 | INV-01 | S-03 | planned | `[INV-01] should never overcommit under parallel reservations on one program` | invariant (e2e) | | |
 | INV-02 | S-05 | planned | `[INV-02] should keep held between 0 and reservedAmount over random release sequences` | unit | | |
 | INV-03 | S-03 | planned | `[INV-03] should keep program reserved equal to the sum of held of active reservations after every scenario` | invariant (e2e) | | |
