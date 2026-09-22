@@ -42,6 +42,32 @@ describe('RejectTreasuryMessage', () => {
     });
   });
 
+  it('should publish the dead letter outside any unit of work, so a slow broker cannot time a transaction out', async () => {
+    const capacity = inMemoryCapacity();
+    const useCase = new RejectTreasuryMessage(capacity);
+    const inTransactionWhilePublishing: boolean[] = [];
+    const publishDeadLetter = (): Promise<void> => {
+      inTransactionWhilePublishing.push(capacity.inTransaction);
+      return Promise.resolve();
+    };
+
+    const result = await useCase.execute(
+      {
+        messageId: 'm-bad',
+        programId: null,
+        type: null,
+        payload: MALFORMED,
+        error: 'creditLimit must be an integer',
+        receivedAt: RECEIVED_AT,
+      },
+      publishDeadLetter,
+    );
+
+    expect(result).toBe('rejected');
+    expect(inTransactionWhilePublishing).toEqual([false]);
+    expect(capacity.repositories.treasuryMessages.byId.get('m-bad')?.outcome).toBe('rejected');
+  });
+
   it('should count a repeated rejected messageId as a duplicate and publish nothing', async () => {
     const capacity = inMemoryCapacity();
     const useCase = new RejectTreasuryMessage(capacity);

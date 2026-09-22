@@ -63,15 +63,25 @@ export class InMemoryTreasuryMessages implements TreasuryMessageStore {
  * so a use case that throws leaves the fakes as they were, like a real transaction would.
  */
 export class InMemoryUnitOfWork implements UnitOfWork {
+  private depth = 0;
+
   constructor(readonly repositories: CapacityRepositories & InMemoryRepositories) {}
+
+  /** Whether some work is running right now, so a test can see what happens inside one. */
+  get inTransaction(): boolean {
+    return this.depth > 0;
+  }
 
   async run<T>(work: (repositories: CapacityRepositories) => Promise<T>): Promise<T> {
     const snapshot = this.snapshot();
+    this.depth += 1;
     try {
       return await work(this.repositories);
     } catch (error: unknown) {
       this.restore(snapshot);
       throw error;
+    } finally {
+      this.depth -= 1;
     }
   }
 

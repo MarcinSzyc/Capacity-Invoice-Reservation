@@ -18,24 +18,31 @@ export type RejectTreasuryMessageResult = 'rejected' | 'duplicate';
  * here rather than only in the dead-letter topic keeps one place to ask "what happened to
  * message m-7". A known id is a duplicate first, whatever the body says (glossary): it is
  * counted and nothing is published. Otherwise the dead letter goes out before the record is
- * written, so a failed publish is delivered again rather than answered "duplicate".
+ * written, so a failed publish is delivered again rather than answered "duplicate". The publish
+ * waits on the broker, so it runs between two short transactions and never inside one.
  */
 @Injectable()
 export class RejectTreasuryMessage {
   constructor(@Inject(UNIT_OF_WORK) private readonly unitOfWork: UnitOfWork) {}
 
-  execute(
+  async execute(
     rejection: TreasuryMessageRejection,
     publishDeadLetter: () => Promise<void>,
   ): Promise<RejectTreasuryMessageResult> {
+    if (await this.countIfKnown(rejection.messageId)) return 'duplicate';
+
+    await publishDeadLetter();
+    await this.unitOfWork.run(({treasuryMessages}) =>
+      treasuryMessages.recordOutcome({...rejection, outcome: 'rejected'}),
+    );
+    return 'rejected';
+  }
+
+  private countIfKnown(messageId: string): Promise<boolean> {
     return this.unitOfWork.run(async ({treasuryMessages}) => {
-      if (await treasuryMessages.wasProcessed(rejection.messageId)) {
-        await treasuryMessages.recordDuplicate(rejection.messageId);
-        return 'duplicate';
-      }
-      await publishDeadLetter();
-      await treasuryMessages.recordOutcome({...rejection, outcome: 'rejected'});
-      return 'rejected';
+      if (!(await treasuryMessages.wasProcessed(messageId))) return false;
+      await treasuryMessages.recordDuplicate(messageId);
+      return true;
     });
   }
 }
