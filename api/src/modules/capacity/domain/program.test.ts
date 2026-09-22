@@ -1,4 +1,4 @@
-import {CurrencyMismatchError} from './errors';
+import {CapacityExceededError, CurrencyMismatchError} from './errors';
 import {Money} from './money';
 import {Program} from './program';
 
@@ -13,6 +13,15 @@ const AT_10_00 = new Date('2026-09-21T10:00:00.000Z');
 const AT_10_05 = new Date('2026-09-21T10:05:00.000Z');
 const MESSAGE_1 = 'm-1';
 const MESSAGE_2 = 'm-2';
+const CLIENT = 'client-e2e';
+const RESERVATION_ID = '4d2f0c1e-0000-4000-8000-000000000001';
+const AT_10_10 = new Date('2026-09-21T10:10:00.000Z');
+
+const announcedWith = (limit: Money): Program => {
+  const program = Program.announce(PROGRAM_ID, limit.currency);
+  program.setLimit(limit, AT_10_00, MESSAGE_1);
+  return program;
+};
 
 describe('Program', () => {
   it('should be announced by the treasury with no limit, nothing reserved and no reconciliation yet', () => {
@@ -118,5 +127,79 @@ describe('Program', () => {
     expect(program.currency).toBe(EUR);
     expect(program.limit).toEqual(FIVE_MILLION_EUR);
     expect(program.limitEventTime).toEqual(AT_10_00);
+  });
+
+  it('should reserve within capacity, raise reserved and record a reserve movement attributed to the client', () => {
+    const program = announcedWith(FIVE_MILLION_EUR);
+    const held = Money.of(120_000_000n, EUR);
+
+    const movement = program.reserve(held, CLIENT, RESERVATION_ID, AT_10_10);
+
+    expect(program.reserved).toEqual(held);
+    expect(program.available).toEqual(Money.of(380_000_000n, EUR));
+    expect(program.overcommitted).toBe(false);
+    expect(movement).toEqual({
+      kind: 'reserve',
+      programId: PROGRAM_ID,
+      reservationId: RESERVATION_ID,
+      deltaHeld: held,
+      limitAfter: FIVE_MILLION_EUR,
+      reservedAfter: held,
+      availableAfter: Money.of(380_000_000n, EUR),
+      attribution: {clientId: CLIENT},
+      occurredAt: AT_10_10,
+    });
+  });
+
+  it('should allow a reservation equal to the remaining capacity and leave nothing available (A-06)', () => {
+    const program = announcedWith(FIVE_MILLION_EUR);
+
+    program.reserve(FIVE_MILLION_EUR, CLIENT, RESERVATION_ID, AT_10_10);
+
+    expect(program.available).toEqual(Money.zero(EUR));
+    expect(program.overcommitted).toBe(false);
+  });
+
+  it('should refuse a reservation beyond available capacity, naming what is available, and change nothing', () => {
+    const program = announcedWith(FIVE_MILLION_EUR);
+    const tooMuch = Money.of(500_000_001n, EUR);
+
+    let thrown: unknown;
+    try {
+      program.reserve(tooMuch, CLIENT, RESERVATION_ID, AT_10_10);
+    } catch (error: unknown) {
+      thrown = error;
+    }
+
+    expect(thrown).toBeInstanceOf(CapacityExceededError);
+    expect((thrown as CapacityExceededError).available).toEqual(FIVE_MILLION_EUR);
+    expect((thrown as CapacityExceededError).details).toEqual({available: 500_000_000n});
+    expect(program.reserved).toEqual(Money.zero(EUR));
+    expect(program.available).toEqual(FIVE_MILLION_EUR);
+  });
+
+  it('should refuse a reservation of nothing, so no reservation is ever born closed', () => {
+    const program = announcedWith(FIVE_MILLION_EUR);
+
+    expect(() => program.reserve(Money.zero(EUR), CLIENT, RESERVATION_ID, AT_10_10)).toThrow(
+      RangeError,
+    );
+    expect(program.reserved).toEqual(Money.zero(EUR));
+  });
+
+  it('should refuse any positive reservation on an overcommitted program with available zero (AC-09)', () => {
+    const program = Program.rehydrate({
+      programId: PROGRAM_ID,
+      currency: EUR,
+      limit: Money.of(300_000_000n, EUR),
+      reserved: Money.of(400_000_000n, EUR),
+      limitEventTime: AT_10_00,
+      asOf: null,
+    });
+
+    expect(() => program.reserve(Money.of(1n, EUR), CLIENT, RESERVATION_ID, AT_10_10)).toThrow(
+      CapacityExceededError,
+    );
+    expect(program.reserved).toEqual(Money.of(400_000_000n, EUR));
   });
 });

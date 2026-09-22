@@ -73,6 +73,19 @@ recomputed from the ledger as reserve minus the sum of releases for that invoice
 
 **Active reservation.** `held > 0`. **Closed reservation.** `held = 0`.
 
+**Reservation source (`source`).** Who brought a reservation into existence. Exactly two
+values: `client`, when a client reserved the invoice over HTTP (the reserve movement then
+carries that client's id), and `reconciliation`, when a treasury snapshot listed an invoice
+we did not know and the service created the reservation as an adjustment (A-12, S-06). Fixed
+at creation, never changes, shown on every reservation the API returns. It answers the
+question "did we learn about this invoice from the client or from the treasury", which is
+what a reader of the ledger needs when the two disagree.
+
+**Reservation identity.** On the API a reservation is named by its invoice id within a
+program, because the pair (program, invoice id) is unique (A-07): there is no separate
+public reservation number. Storage may give a reservation an internal id so the ledger can
+point at one row; that id never appears in a request, a response or a message.
+
 **Release.** Giving part or all of a reservation's `held` back to capacity because the
 invoice was repaid. Expressed by the client in invoice currency, converted with the
 reservation's own rate. A full repayment is a release of 100% of what is left. A release
@@ -86,6 +99,13 @@ movement, changes no rule. Default `repaid`.
 transaction id). Sent with every release. The same id twice means the same repayment
 sent twice, which is rejected as a duplicate and changes nothing; a new id on a closed
 reservation is a real error.
+
+**Currency code.** The three letter ISO 4217 code that names a currency, `USD` or `EUR`.
+Every boundary uppercases what it is given before it validates it, so a client that sends
+`usd` reserves against a `USD` program and reads `USD` back; only a code that is not
+three letters, or not an ISO 4217 code at all, is refused (A-10). Inside the service a
+code is always upper case, and two codes are the same currency when the strings are
+equal.
 
 **Conversion rate.** The rate used once, at reservation time, to express the invoice
 amount in program currency. Supplied by the client in the reservation request (the

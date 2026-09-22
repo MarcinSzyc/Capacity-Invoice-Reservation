@@ -1,12 +1,15 @@
 import {CapacityMovement} from '../../domain/capacity-movement';
 import {LedgerRepository} from '../../domain/ports/ledger.repository';
+import {Clock} from '../../domain/ports/clock';
 import {ProgramRepository} from '../../domain/ports/program.repository';
+import {ReservationRepository} from '../../domain/ports/reservation.repository';
 import {
   TreasuryMessageRecord,
   TreasuryMessageStore,
 } from '../../domain/ports/treasury-message-store';
 import {CapacityRepositories, UnitOfWork} from '../../domain/ports/unit-of-work';
 import {Program} from '../../domain/program';
+import {Reservation} from '../../domain/reservation';
 
 /** Working in-memory adapters for the capacity ports: arrays and maps, no call expectations. */
 export class InMemoryPrograms implements ProgramRepository {
@@ -23,6 +26,29 @@ export class InMemoryPrograms implements ProgramRepository {
   save(program: Program): Promise<void> {
     this.byId.set(program.programId, program);
     return Promise.resolve();
+  }
+}
+
+export class InMemoryReservations implements ReservationRepository {
+  readonly all: Reservation[] = [];
+
+  findByInvoice(programId: string, invoiceId: string): Promise<Reservation | null> {
+    const found = this.all.find((r) => r.programId === programId && r.invoiceId === invoiceId);
+    return Promise.resolve(found ?? null);
+  }
+
+  add(reservation: Reservation): Promise<void> {
+    this.all.push(reservation);
+    return Promise.resolve();
+  }
+}
+
+/** A clock that answers the moment it was given, so `createdAt` can be asserted exactly. */
+export class FixedClock implements Clock {
+  constructor(private readonly moment: Date) {}
+
+  now(): Date {
+    return this.moment;
   }
 }
 
@@ -63,31 +89,43 @@ export class InMemoryTreasuryMessages implements TreasuryMessageStore {
  * so a use case that throws leaves the fakes as they were, like a real transaction would.
  */
 export class InMemoryUnitOfWork implements UnitOfWork {
+  private depth = 0;
+
   constructor(readonly repositories: CapacityRepositories & InMemoryRepositories) {}
+
+  /** Whether some work is running right now, so a test can see what happens inside one. */
+  get inTransaction(): boolean {
+    return this.depth > 0;
+  }
 
   async run<T>(work: (repositories: CapacityRepositories) => Promise<T>): Promise<T> {
     const snapshot = this.snapshot();
+    this.depth += 1;
     try {
       return await work(this.repositories);
     } catch (error: unknown) {
       this.restore(snapshot);
       throw error;
+    } finally {
+      this.depth -= 1;
     }
   }
 
   private snapshot(): Snapshot {
-    const {programs, ledger, treasuryMessages} = this.repositories;
+    const {programs, reservations, ledger, treasuryMessages} = this.repositories;
     return {
       programs: new Map(programs.byId),
+      reservations: [...reservations.all],
       movements: [...ledger.movements],
       messages: new Map([...treasuryMessages.byId].map(([id, m]) => [id, {...m}])),
     };
   }
 
   private restore(snapshot: Snapshot): void {
-    const {programs, ledger, treasuryMessages} = this.repositories;
+    const {programs, reservations, ledger, treasuryMessages} = this.repositories;
     programs.byId.clear();
     snapshot.programs.forEach((program, id) => programs.byId.set(id, program));
+    reservations.all.splice(0, reservations.all.length, ...snapshot.reservations);
     ledger.movements.splice(0, ledger.movements.length, ...snapshot.movements);
     treasuryMessages.byId.clear();
     snapshot.messages.forEach((message, id) => treasuryMessages.byId.set(id, message));
@@ -96,12 +134,14 @@ export class InMemoryUnitOfWork implements UnitOfWork {
 
 interface InMemoryRepositories {
   programs: InMemoryPrograms;
+  reservations: InMemoryReservations;
   ledger: InMemoryLedger;
   treasuryMessages: InMemoryTreasuryMessages;
 }
 
 interface Snapshot {
   programs: Map<string, Program>;
+  reservations: Reservation[];
   movements: CapacityMovement[];
   messages: Map<string, StoredTreasuryMessage>;
 }
@@ -109,6 +149,7 @@ interface Snapshot {
 export const inMemoryCapacity = (): InMemoryUnitOfWork =>
   new InMemoryUnitOfWork({
     programs: new InMemoryPrograms(),
+    reservations: new InMemoryReservations(),
     ledger: new InMemoryLedger(),
     treasuryMessages: new InMemoryTreasuryMessages(),
   });

@@ -10,15 +10,15 @@ Status: `planned`, `in progress`, `done`, `superseded by <id>`.
 | Id | Slice | Status | Test name | Level | Test file | Commit |
 |---|---|---|---|---|---|---|
 | AC-00 | S-01 | done | `[AC-00] should start with docker compose up, turn ready and answer GET /health and both documentation views without a token` | cold start | `api/test/cold-start/stack.smoke-test.ts` | `4215d1c` (tag `S-01`) |
-| AC-01 | S-03 | planned | `[AC-01] should reserve within capacity and show the amounts, active status and reduced availability` | e2e | | |
-| AC-02 | S-03 | planned | `[AC-02] should reserve exactly the remaining capacity and leave availability at zero` | e2e | | |
-| AC-03 | S-03 | planned | `[AC-03] should reject a reservation that exceeds available capacity with CAPACITY_EXCEEDED and the available amount` | e2e | | |
-| AC-04 | S-03 | planned | `[AC-04] should answer 404 PROGRAM_NOT_FOUND for a reservation on an unknown program` | e2e | | |
-| AC-05 | S-03 | planned | `[AC-05] should answer 409 RESERVATION_ALREADY_EXISTS with the existing reservation for a repeated invoice` | e2e | | |
+| AC-01 | S-03 | done | `[AC-01] should reserve within capacity and show the amounts, active status and reduced availability` | e2e | `api/test/reservations.e2e-test.ts` | |
+| AC-02 | S-03 | done | `[AC-02] should reserve exactly the remaining capacity and leave availability at zero` | e2e | `api/test/reservations.e2e-test.ts` | |
+| AC-03 | S-03 | done | `[AC-03] should reject a reservation that exceeds available capacity with CAPACITY_EXCEEDED and the available amount` | e2e | `api/test/reservations.e2e-test.ts` | |
+| AC-04 | S-03 | done | `[AC-04] should answer 404 PROGRAM_NOT_FOUND for a reservation on an unknown program` | e2e | `api/test/reservations.e2e-test.ts` | |
+| AC-05 | S-03 | done | `[AC-05] should answer 409 RESERVATION_ALREADY_EXISTS with the existing reservation for a repeated invoice` | e2e | `api/test/reservations.e2e-test.ts` | |
 | AC-06 | S-04 | planned | `[AC-06] should convert a EUR invoice at the given rate, store the rate and reduce availability by the converted amount` | e2e | | |
 | AC-07 | S-04 | planned | `[AC-07] should answer 400 naming rate when it is missing for a cross-currency reservation or not 1 for a same-currency one` | e2e | | |
-| AC-08 | S-03 | planned | `[AC-08] should answer 400 naming the field for a non-positive, non-integer or non-ISO-4217 reservation` | e2e | | |
-| AC-09 | S-03 | planned | `[AC-09] should reject any reservation on an overcommitted program with CAPACITY_EXCEEDED and available 0` | e2e | | |
+| AC-08 | S-03 | done | `[AC-08] should answer 400 naming the field for a non-positive, non-integer or non-ISO-4217 reservation` | e2e | `api/test/reservations.e2e-test.ts` | |
+| AC-09 | S-03 | done | `[AC-09] should reject any reservation on an overcommitted program with CAPACITY_EXCEEDED and available 0` | e2e | `api/test/reservations.e2e-test.ts` | |
 | AC-10 | S-05 | planned | `[AC-10] should apply a partial release in invoice currency, reduce held by the converted amount and grow availability` | e2e | | |
 | AC-11 | S-05 | planned | `[AC-11] should close the reservation when the release carries no amount` | e2e | | |
 | AC-12 | S-05 | planned | `[AC-12] should close exactly at zero when the final instalment does not divide evenly by the rate` | e2e | | |
@@ -30,8 +30,8 @@ Status: `planned`, `in progress`, `done`, `superseded by <id>`.
 | AC-18 | S-05 | planned | `[AC-18] should reflect a reservation and a release in availability immediately after the response` | e2e | | |
 | AC-19 | S-05 | planned | `[AC-19] should return the reservation with its amounts, rate, status, source and movements` | e2e | | |
 | AC-20 | S-02 | done | `[AC-20] should create the program from the first capacity update and expose its availability` | e2e | `api/test/programs.e2e-test.ts` | `3090d8b` (tag `S-02`) |
-| AC-21 | S-03 | planned | `[AC-21] should raise available when the treasury raises the limit above current usage` | e2e | | |
-| AC-22 | S-03 | planned | `[AC-22] should read available 0 and overcommitted true when the limit drops below usage while every held stays` | e2e | | |
+| AC-21 | S-03 | done | `[AC-21] should raise available when the treasury raises the limit above current usage` | e2e | `api/test/reservations.e2e-test.ts` | |
+| AC-22 | S-03 | done | `[AC-22] should read available 0 and overcommitted true when the limit drops below usage while every held stays` | e2e | `api/test/reservations.e2e-test.ts` | |
 | AC-23 | S-02 | done | `[AC-23] should record a repeated messageId as duplicate and change nothing` | contract | `api/src/modules/capacity/infrastructure/messaging/treasury-capacity.consumer.integration-test.ts` | `3090d8b` (tag `S-02`) |
 | AC-24 | S-02 | done | `[AC-24] should keep the newer limit and record an older eventTime update as stale` | contract | `api/src/modules/capacity/infrastructure/messaging/treasury-capacity.consumer.integration-test.ts` | `3090d8b` (tag `S-02`) |
 | AC-25 | S-02 | done | `[AC-25] should dead-letter a malformed message, log it and apply the next valid one` | contract | `api/src/modules/capacity/infrastructure/messaging/treasury-capacity.consumer.integration-test.ts` | `3090d8b` (tag `S-02`) |
@@ -51,17 +51,17 @@ Status: `planned`, `in progress`, `done`, `superseded by <id>`.
 | AC-39 | S-07 | planned | `[AC-39] should read the same availability and reservations after a restart` | e2e | | |
 | AC-40 | S-02 | done | `[AC-40] should write JSON log lines sharing one correlation id per request and per message` | e2e | `api/test/programs.e2e-test.ts` | `3090d8b` (tag `S-02`) |
 | AC-41 | S-01 | done | `[AC-41] should link the README to the assumptions register, the decision records and the run instructions` | unit | `api/test/readme.test.ts` | `4215d1c` (tag `S-01`) |
-| INV-01 | S-03 | planned | `[INV-01] should never overcommit under parallel reservations on one program` | invariant (e2e) | | |
+| INV-01 | S-03 | done | `[INV-01] should never overcommit under parallel reservations on one program` | invariant (e2e) | `api/test/capacity-invariant.e2e-test.ts` | |
 | INV-02 | S-05 | planned | `[INV-02] should keep held between 0 and reservedAmount over random release sequences` | unit | | |
-| INV-03 | S-03 | planned | `[INV-03] should keep program reserved equal to the sum of held of active reservations after every scenario` | invariant (e2e) | | |
-| INV-04 | S-03 | planned | `[INV-04] should chain reserved_after from the previous row plus delta_held and recompute the stored state` | unit + e2e helper | | |
+| INV-03 | S-03 | done | `[INV-03] should keep program reserved equal to the sum of held of active reservations after every scenario` | invariant (e2e) | `api/test/capacity-invariant.e2e-test.ts`, `api/test/support/ledger-invariants.ts` | |
+| INV-04 | S-03 | done | `[INV-04] should chain reserved_after from the previous row plus delta_held and recompute the stored state` | unit + e2e helper | `api/src/modules/capacity/domain/ledger.test.ts`, `api/test/support/ledger-invariants.ts` | |
 | INV-05 | S-06 | planned | `[INV-05] should leave every balance and ledger row unchanged when every message and request of a scenario is replayed` | invariant (e2e) | | |
 | INV-06 | S-06 | planned | `[INV-06] should never alter a reservation by a snapshot whose asOf precedes its creation` | invariant (e2e) | | |
 | INV-07 | S-06 | planned | `[INV-07] should reach the same final state for shuffled and reversed message order as for in-order delivery` | invariant (contract) | | |
 | INV-08 | S-04 | planned | `[INV-08] should keep money as integer minor units with a currency, refuse cross-currency arithmetic and round conversions half up` | unit | | |
-| INV-09 | S-03 | planned | `[INV-09] should reject a movement that carries neither clientId nor messageId` | integration | | |
+| INV-09 | S-03 | done | `[INV-09] should reject a movement that carries neither clientId nor messageId` | integration | `api/src/modules/capacity/infrastructure/persistence/prisma-capacity.integration-test.ts` | |
 | INV-10 | S-02 | done | `[INV-10] should answer 401 on every business route without a token` | invariant (e2e) | `api/test/business-routes-guarded.e2e-test.ts` | `3090d8b` (tag `S-02`) |
-| INV-11 | S-03 | planned | `[INV-11] should keep available between 0 and limit over random sequences of reservations and limit changes` | unit | | |
+| INV-11 | S-03 | done | `[INV-11] should keep available between 0 and limit over random sequences of reservations and limit changes` | unit | `api/src/modules/capacity/domain/program.invariants.test.ts` | |
 
 ## Tests beyond the plan
 
@@ -98,3 +98,12 @@ than closing a requirement of their own (`CLAUDE.md §4`).
 | S-01 | extra | CORS allows the `web` origin in the dev profile and no origin in production | `api/test/cors.e2e-test.ts` |
 | S-01 | extra | Compose and Testcontainers name the same PostgreSQL and Kafka images, so drift fails the gate (ADR-0004) | `api/test/support/images.test.ts` |
 | S-01 | extra | The `web` page renders its heading and links to the health endpoint and both documentation views of the api | `web/src/app.test.tsx` |
+| S-03 | extra | `Reservation` opens active with the whole reserved amount held and its own id, reads closed once nothing is held, and describes itself without its internal id | `api/src/modules/capacity/domain/reservation.test.ts` |
+| S-03 | extra | `Program.reserve` takes capacity up to exactly what is available, refuses more naming `available`, refuses a reservation of nothing and anything on an overcommitted program, and records a reserve movement attributed to the client | `api/src/modules/capacity/domain/program.test.ts` |
+| S-03 | extra | The ledger check reports the first row whose `reserved_after` does not chain, an `available_after` that is not the floored difference, and a limit change that is not a `limit_set`, and recomputes a re-denominated program in its new currency | `api/src/modules/capacity/domain/ledger.test.ts` |
+| S-03 | extra | `ReserveCapacity` opens, raises reserved and stamps the clock; answers `PROGRAM_NOT_FOUND`, `CURRENCY_MISMATCH`, `RESERVATION_ALREADY_EXISTS` (checked before capacity) and `CAPACITY_EXCEEDED` leaving every store untouched, all against in-memory fakes | `api/src/modules/capacity/application/reserve-capacity.use-case.test.ts` |
+| S-03 | extra | An older update in another currency is recorded stale, not rejected (A-13 (5)), and the dead letter is published outside any unit of work (carried S-02 minors) | `api/src/modules/capacity/application/apply-capacity-update.use-case.test.ts`, `api/src/modules/capacity/application/reject-treasury-message.use-case.test.ts` |
+| S-03 | extra | An amount that does not fit a JSON integer is refused naming the field, in the error body and in the availability mapper (ADR-0006) | `api/src/common/filters/error-body.test.ts`, `api/src/modules/capacity/infrastructure/http/availability.mapper.test.ts` |
+| S-03 | extra | A currency code is uppercased on both edges and one that is not ISO 4217 is still refused: `usd` announces and reserves as `USD` (A-10) | `api/src/modules/capacity/infrastructure/messaging/capacity-update-message.dto.test.ts`, `api/test/reservations.e2e-test.ts` |
+| S-03 | extra | The Prisma reservation adapter round-trips a reservation, refuses a second one for the same invoice (A-07) and a reserve movement naming a reservation that does not exist | `api/src/modules/capacity/infrastructure/persistence/prisma-capacity.integration-test.ts` |
+| S-03 | extra | An invoice in another currency than the program answers `422 CURRENCY_MISMATCH` over HTTP until S-04 brings the rate | `api/test/reservations.e2e-test.ts` |
