@@ -1,7 +1,8 @@
 import {ApiProperty} from '@nestjs/swagger';
-import {IsInt, IsISO4217CurrencyCode, IsString, Length, Matches, Max, Min} from 'class-validator';
+import {IsInt, IsString, Length, Max, Min} from 'class-validator';
 import {INVOICE_ID_MAX_LENGTH} from '../../domain/identifier-limits';
 import {ReservationSource, ReservationStatus} from '../../domain/reservation';
+import {IsCurrencyCode} from '../currency-code';
 
 /** A-07, A-10: what a client sends to reserve. `rate` arrives with S-04; until then it is refused. */
 export class ReserveRequestDto {
@@ -21,10 +22,12 @@ export class ReserveRequestDto {
   @Max(Number.MAX_SAFE_INTEGER)
   invoiceAmount!: number;
 
-  // The library validator uppercases before it checks, so `usd` would pass it (AC-08).
-  @ApiProperty({example: 'USD', description: 'ISO 4217 code of the invoice, upper case.'})
-  @Matches(/^[A-Z]{3}$/, {message: 'invoiceCurrency must be an upper case ISO 4217 code'})
-  @IsISO4217CurrencyCode()
+  @ApiProperty({
+    example: 'USD',
+    description:
+      'ISO 4217 code of the invoice. Uppercased on the way in, so `usd` reads back as `USD` (A-10).',
+  })
+  @IsCurrencyCode()
   invoiceCurrency!: string;
 }
 

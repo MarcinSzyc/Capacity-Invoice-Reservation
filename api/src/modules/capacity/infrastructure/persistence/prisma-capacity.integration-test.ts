@@ -185,33 +185,6 @@ describe('Prisma capacity adapters', () => {
     ).rejects.toThrow(/unique/i);
   });
 
-  it('should list the active reservations of a program in creation order and leave out closed ones', async () => {
-    const programId = uniqueId('PRG');
-    await announcedProgram(programId);
-    const first = openReservation(programId, 'INV-1', AT_10_10);
-    const second = openReservation(programId, 'INV-2', AT_10_00);
-    const closed = Reservation.rehydrate({
-      reservationId: randomUUID(),
-      programId,
-      invoiceId: 'INV-3',
-      invoiceAmount: ONE_MILLION_EUR,
-      reservedAmount: ONE_MILLION_EUR,
-      held: Money.zero(EUR),
-      source: 'client',
-      clientId: CLIENT,
-      createdAt: AT_10_10,
-    });
-    await unitOfWork.run(async ({reservations}) => {
-      await reservations.add(second);
-      await reservations.add(first);
-      await reservations.add(closed);
-    });
-
-    const active = await new PrismaReservationRepository(prisma).findActiveByProgram(programId);
-
-    expect(active.map((r) => r.invoiceId)).toEqual(['INV-2', 'INV-1']);
-  });
-
   it('should point a reserve movement at its reservation and refuse one that names a reservation that does not exist', async () => {
     const programId = uniqueId('PRG');
     const program = await announcedProgram(programId);

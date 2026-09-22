@@ -100,6 +100,13 @@ transaction id). Sent with every release. The same id twice means the same repay
 sent twice, which is rejected as a duplicate and changes nothing; a new id on a closed
 reservation is a real error.
 
+**Currency code.** The three letter ISO 4217 code that names a currency, `USD` or `EUR`.
+Every boundary uppercases what it is given before it validates it, so a client that sends
+`usd` reserves against a `USD` program and reads `USD` back; only a code that is not
+three letters, or not an ISO 4217 code at all, is refused (A-10). Inside the service a
+code is always upper case, and two codes are the same currency when the strings are
+equal.
+
 **Conversion rate.** The rate used once, at reservation time, to express the invoice
 amount in program currency. Supplied by the client in the reservation request (the
 platform knows the rate the treasury will pay out at), stored on the reservation and

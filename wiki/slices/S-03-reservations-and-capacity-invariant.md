@@ -73,9 +73,11 @@ Domain (`domain/`):
   `CurrencyMismatchError` already exist and are reused.
 - `identifier-limits.ts` gains `INVOICE_ID_MAX_LENGTH = 128`, the width the ledger's
   `reservation_id` column already has for the surrogate and the width `invoice_id` gets.
-- Ports: `ReservationRepository` (`findByInvoice(programId, invoiceId)`, `add(reservation)`,
-  `findActiveByProgram(programId)`) joins `CapacityRepositories`; `Clock` (`now(): Date`,
-  token `CLOCK`) in `ports/clock.ts`.
+- Ports: `ReservationRepository` (`findByInvoice(programId, invoiceId)`, `add(reservation)`)
+  joins `CapacityRepositories`; `Clock` (`now(): Date`, token `CLOCK`) in `ports/clock.ts`.
+  A planned third method, `findActiveByProgram(programId)`, was dropped in the round 2 fix: the
+  ledger helper needs closed rows too, so it reads them itself and nothing in production called
+  the port method.
 
 Application (`application/`):
 - `ReserveCapacity` use case, command `{programId, invoiceId, invoiceAmount: bigint,
@@ -93,20 +95,29 @@ Application (`application/`):
 
 Infrastructure (`infrastructure/`):
 - Migration `reservations(id UUID PK, program_id VARCHAR(64) FK programs, invoice_id
-  VARCHAR(128), invoice_amount BIGINT, invoice_currency CHAR(3), reserved_amount BIGINT, held
-  BIGINT, source reservation_source ENUM ('client', 'reconciliation'), client_id VARCHAR(128)
-  NULL, created_at TIMESTAMPTZ, updated_at TIMESTAMPTZ, UNIQUE (program_id, invoice_id))`,
-  plus `CHECK (held >= 0 AND held <= reserved_amount)` as the storage backstop INV-02 will
-  lean on in S-05, and `capacity_movements.reservation_id` becomes a foreign key to
+  VARCHAR(128), invoice_amount BIGINT, invoice_currency CHAR(3), currency CHAR(3),
+  reserved_amount BIGINT, held BIGINT, source reservation_source ENUM ('client',
+  'reconciliation'), client_id VARCHAR(128) NULL, created_at TIMESTAMPTZ, updated_at
+  TIMESTAMPTZ, UNIQUE (program_id, invoice_id))`. `currency` (the program currency
+  `reserved_amount` and `held` are in) was added while implementing and is not a join away from
+  the program: a closed reservation keeps the currency it was taken in after a re-denomination
+  (A-12), so reading it from the program would rehydrate the row in the wrong currency. The
+  migration also adds `CHECK (held >= 0 AND held <= reserved_amount)` as the storage backstop
+  INV-02 will lean on in S-05, and `capacity_movements.reservation_id` becomes a foreign key to
   `reservations.id` (the column exists since S-02; only the constraint is added). Generated the
   way S-02 generated its migration, with the CHECK appended by hand.
 - `PrismaReservationRepository` bound to the transaction scope like the others;
   `PrismaUnitOfWork` hands it out as `reservations`. Mappers in `mappers.ts`.
 - `SystemClock` (`infrastructure/system-clock.ts`), bound to `CLOCK` in `CapacityModule`.
+- `IsCurrencyCode()` (`infrastructure/currency-code.ts`), added by the round 2 fix: the one
+  casing rule of A-10 (uppercase, then ISO 4217) as a decorator both DTOs wear, the HTTP
+  `ReserveRequestDto` and the Kafka `CapacityUpdateMessageDto`, so the two edges cannot drift
+  apart again.
 - `POST /programs/:programId/reservations`, body `{invoiceId, invoiceAmount, invoiceCurrency}`
   (`ReserveRequestDto`: `invoiceId` string of 1 to 128 characters, `invoiceAmount` a JSON
-  integer from 1 to `Number.MAX_SAFE_INTEGER` per ADR-0006, `invoiceCurrency` ISO 4217; any
-  other field, `rate` included, is refused by `forbidNonWhitelisted` until S-04 adds it).
+  integer from 1 to `Number.MAX_SAFE_INTEGER` per ADR-0006, `invoiceCurrency` ISO 4217 through
+  `@IsCurrencyCode()`; any other field, `rate` included, is refused by `forbidNonWhitelisted`
+  until S-04 adds it).
   `201` with `ReservationDto` `{programId, invoiceId, invoiceAmount, invoiceCurrency,
   reservedAmount, held, status, source, createdAt}`; the three amounts are declared
   `type: 'integer'` so the S-02 documentation test that checks every money field keeps
@@ -201,7 +212,9 @@ so review can hold the code to them.
 | `it('[AC-03] should reject a reservation that exceeds available capacity with CAPACITY_EXCEEDED and the available amount')` | e2e | 500 000.01 on 500 000.00 available: `422`, `code` `CAPACITY_EXCEEDED`, `available` 50 000 000 at the top level of the body; availability unchanged; the ledger helper finds no reservation |
 | `it('[AC-04] should answer 404 PROGRAM_NOT_FOUND for a reservation on an unknown program')` | e2e | |
 | `it('[AC-05] should answer 409 RESERVATION_ALREADY_EXISTS with the existing reservation for a repeated invoice')` | e2e | same amount, then a different amount: both `409`, `reservation` in the body deep equals the `201` body of the first call, availability unchanged |
-| `it('[AC-08] should answer 400 naming the field for a non-positive, non-integer or non-ISO-4217 reservation')` | e2e | five requests: amount 0, amount -1, amount 12.5, currency `usd`, currency `XXXX`; each `400 VALIDATION_FAILED` with a `details` entry starting with `invoiceAmount` or `invoiceCurrency` respectively |
+| `it('[AC-08] should answer 400 naming the field for a non-positive, non-integer or non-ISO-4217 reservation')` | e2e | five requests: amount 0, amount -1, amount 12.5, currency `XYZ` (three letters, no such code), currency `XXXX`; each `400 VALIDATION_FAILED` with a `details` entry starting with `invoiceAmount` or `invoiceCurrency` respectively. The `usd` case moved out in the round 2 fix: A-10 now normalises case, so a lower case code is no longer a `400` |
+| `it('should uppercase a currency code on both edges, so a lower case code reserves normally (A-10)')` | e2e | added by the round 2 fix, untagged: a program announced with `currency: usd` and a reservation sent with `invoiceCurrency: usd` both read back `USD` and the reservation is `201`, which is the pair that used to answer `CURRENCY_MISMATCH` forever |
+| `it('should uppercase a currency code and still refuse one that is not ISO 4217 (A-10)')` | unit | added by the round 2 fix, untagged: `parseCapacityUpdate` maps `usd` to `USD` and refuses `XYZ`, `US` and `EURO` naming `currency` |
 | `it('[AC-09] should reject any reservation on an overcommitted program with CAPACITY_EXCEEDED and available 0')` | e2e | reserve 4 000 000.00, capacity update lowers the limit to 3 000 000.00 (awaited through availability), reserve 0.01: `422`, `available` 0 |
 | `it('[AC-21] should raise available when the treasury raises the limit above current usage')` | e2e | reserved 4 000 000.00, update to 12 000 000.00, `available` 8 000 000.00 |
 | `it('[AC-22] should read available 0 and overcommitted true when the limit drops below usage while every held stays')` | e2e | two reservations of 2 000 000.00, update to 3 000 000.00: `available` 0, `overcommitted` true, `reserved` still 4 000 000.00; `held` of each reservation asserted through the ledger helper (the read endpoint arrives in S-05) |
@@ -242,8 +255,9 @@ Beyond `CLAUDE.md §9`:
   the `Rate` value object, `rate` in request and response, and replaces the interim
   `422 CURRENCY_MISMATCH` on reserve with AC-07's `400` naming `rate`.
 - S-05: the release route and the reservation read use `:invoiceId`; the `@ClientId()`
-  decorator and `ReservationRepository` are in place; `findActiveByProgram` is what the ledger
-  helper uses and the read model can extend.
+  decorator and `ReservationRepository` are in place. The read model adds its own query: the
+  ledger helper reads the rows directly (it needs closed ones too), so the port carries no
+  listing method to extend.
 - S-06: `Clock` gives INV-06 controlled time; `source: 'reconciliation'` with `clientId` null
   is already a legal state of the entity and the table.
 
@@ -258,3 +272,7 @@ Beyond `CLAUDE.md §9`:
 | 2026-09-22 | verify | PASS, gate green on c94f8d5, 14/14 AC and INV covered at the planned level, 2 minor findings for `/ship` (ledger helper not in afterEach of capacity-invariant.e2e-test.ts, README reserve example missing) |
 | 2026-09-22 | review | REVIEW S-03: 7 findings (1/0/6); blocker: glossary entry for `source` missing (`/spec`); 6 minors in style, dead test helpers and the invariant suite wiring; INV-01 critical section confirmed sound under ADR-0008 |
 | 2026-09-22 | implement (review fixes, round 1) | 5 of 6 minors fixed test first, braces minor declined (lint requires them on a wrapped throw), glossary `source` via `/spec`, ledger helper reads in one transaction; `npm run gate:quick` green, e2e 36/36 |
+| 2026-09-22 | verify | PASS (second pass), gate green on aadded9, 14/14 AC and INV covered at the planned level, all six review round 1 findings confirmed fixed, 1 minor still owed to `/ship` (README reserve example) |
+| 2026-09-22 | review | REVIEW S-03: 4 findings (0/1/3), second pass; major: ISO 4217 casing differs between the reserve DTO and the treasury DTO, so a `usd` program can never be reserved on (`/spec` for A-10, `/implement` for one rule on both edges); 3 minors: dead `findActiveByProgram`, dead `withToken` parameter, `reservations.currency` missing from the slice file; INV-01 critical section confirmed sound under ADR-0008 |
+| 2026-09-22 | spec | A-10 amended by Marcin's decision: currency codes are normalised to upper case at every boundary rather than refused for their case; glossary gains `Currency code`; no AC or INV changed |
+| 2026-09-22 | implement (review fixes, round 2) | major closed with one `IsCurrencyCode()` decorator worn by both DTOs (red first on the Kafka unit case); AC-08's `usd` case replaced by `XYZ`, two untagged casing tests added; `findActiveByProgram` and the `withToken` parameter removed; slice file corrected (currency column, S-05 hand-off note, decorator, test rows); `npm run gate:quick` green, reservations e2e 11/11 |

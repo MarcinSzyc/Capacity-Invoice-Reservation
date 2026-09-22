@@ -19,6 +19,7 @@ const THREE_MILLION_USD = 300_000_000n;
 const TWO_MILLION_USD = 200_000_000;
 const ONE_POINT_TWO_MILLION_USD = 120_000_000;
 const HALF_A_MILLION_USD = 50_000_000;
+const USD_IN_LOWER_CASE = 'usd';
 const INVOICE_A = 'INV-A';
 const INVOICE_B = 'INV-B';
 const AT_10_05 = new Date('2026-09-21T10:05:00.000Z');
@@ -52,14 +53,10 @@ describe('Reservations', () => {
     await app.close();
   });
 
-  const reserve = (
-    programId: string,
-    body: Record<string, unknown>,
-    withToken: string = token,
-  ): request.Test =>
+  const reserve = (programId: string, body: Record<string, unknown>): request.Test =>
     request(httpServer(app))
       .post(`/programs/${programId}/reservations`)
-      .set('Authorization', bearer(withToken))
+      .set('Authorization', bearer(token))
       .send(body);
 
   it('[AC-01] should reserve within capacity and show the amounts, active status and reduced availability', async () => {
@@ -181,7 +178,7 @@ describe('Reservations', () => {
       {body: {...valid, invoiceAmount: 0}, field: 'invoiceAmount'},
       {body: {...valid, invoiceAmount: -1}, field: 'invoiceAmount'},
       {body: {...valid, invoiceAmount: 12.5}, field: 'invoiceAmount'},
-      {body: {...valid, invoiceCurrency: 'usd'}, field: 'invoiceCurrency'},
+      {body: {...valid, invoiceCurrency: 'XYZ'}, field: 'invoiceCurrency'},
       {body: {...valid, invoiceCurrency: 'XXXX'}, field: 'invoiceCurrency'},
     ];
 
@@ -193,6 +190,26 @@ describe('Reservations', () => {
     }
     const availability = await readAvailability(app, programId, token).expect(200);
     expect(availability.body).toMatchObject({reserved: 0});
+  });
+
+  it('should uppercase a currency code on both edges, so a lower case code reserves normally (A-10)', async () => {
+    const programId = await announceProgram(app, {
+      currency: USD_IN_LOWER_CASE,
+      creditLimit: TEN_MILLION_USD,
+    });
+
+    const response = await reserve(programId, {
+      invoiceId: INVOICE_A,
+      invoiceAmount: ONE_POINT_TWO_MILLION_USD,
+      invoiceCurrency: USD_IN_LOWER_CASE,
+    }).expect(201);
+
+    expect(response.body).toMatchObject({invoiceCurrency: USD});
+    const availability = await readAvailability(app, programId, token).expect(200);
+    expect(availability.body).toMatchObject({
+      currency: USD,
+      reserved: ONE_POINT_TWO_MILLION_USD,
+    });
   });
 
   it('should refuse an invoice in another currency than the program with CURRENCY_MISMATCH until S-04 brings the rate', async () => {
