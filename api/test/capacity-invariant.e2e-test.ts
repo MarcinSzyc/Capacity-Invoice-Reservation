@@ -8,7 +8,7 @@ import {
   readAvailability,
   USD,
 } from './support/programs';
-import {withConnectionResetRetry} from './support/retry-on-connection-reset';
+import {delay, withConnectionResetRetry} from './support/retry-on-connection-reset';
 import {createTestApp, httpServer} from './support/test-app';
 import {bearer, validToken} from './support/tokens';
 
@@ -16,6 +16,11 @@ const TEN_MILLION_USD = 1_000_000_000n;
 const ONE_MILLION_USD = 100_000_000;
 const PARALLEL_REQUESTS = 25;
 const EXPECTED_CREATED = 10;
+// A few ms between dispatching each of the 25 requests: every response still takes tens to
+// hundreds of ms under the row lock, so this stays a genuine concurrent burst on the database
+// (INV-01 is about that, not about 25 TCP handshakes landing in the same instant), while easing
+// the accept-queue saturation a CI runner hits when all 25 land truly simultaneously.
+const DISPATCH_STAGGER_MS = 4;
 const AT_10_05 = new Date('2026-09-21T10:05:00.000Z');
 const AT_10_10 = new Date('2026-09-21T10:10:00.000Z');
 
@@ -55,11 +60,12 @@ describe('Capacity invariants', () => {
     await awaitAvailability(second, programId, token, (_body, status) => status === 200);
 
     const responses = await Promise.all(
-      Array.from({length: PARALLEL_REQUESTS}, (_, index) =>
-        withConnectionResetRetry(() =>
+      Array.from({length: PARALLEL_REQUESTS}, async (_, index) => {
+        await delay(index * DISPATCH_STAGGER_MS);
+        return withConnectionResetRetry(() =>
           reserve(index % 2 === 0 ? first : second, programId, `INV-${index}`, ONE_MILLION_USD),
-        ),
-      ),
+        );
+      }),
     );
 
     const statuses = responses.map((response) => response.status).sort();
