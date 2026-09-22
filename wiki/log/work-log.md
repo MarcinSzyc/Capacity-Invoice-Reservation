@@ -1663,3 +1663,27 @@ correct with a new one. Format:
   land in the exact same instant.
 - `npm run gate:quick` green; a clean full `test:e2e` run (37/37) passed once locally. Pushed
   for another round of clean CI validation per Marcin's decision.
+
+## 2026-09-22, setup: the real cause of the INV-01 ECONNRESET, supertest closing the listener, Fable
+- Root cause found, and it is not network jitter. `createTestApp` only called `app.init()`, so a
+  test app never listened on a port of its own. supertest opens one for any app that is not
+  listening and closes it again when that single request finishes
+  (`supertest/lib/test.js`: `serverAddress` sets `this._server = app.listen(0)`, `end` calls
+  `server.close()`). Proved directly: `address()` was `null` after `init()` and `null` again
+  after one completed request, so every request had been opening and closing its own listener.
+- Why that produced the flake: in INV-01 the 25 requests are created in one tick, so the first
+  of them opens the listener and the other 24 connect to that same port. The moment the fastest
+  response completes, that request closes the listener. Sibling connections still in the accept
+  queue are reset before the server ever accepts them, which is exactly what the CI logs showed:
+  24 of 25 responses logged and one request with no log line at all. It is load dependent, which
+  is why it hit a slow CI runner far more often than a laptop, and why only INV-01 (the one test
+  with a parallel burst) ever failed.
+- Fix: `buildApp` in `api/test/support/test-app.ts` now calls `await app.listen(0)`, so each app
+  keeps one stable port for its whole life, supertest never takes ownership of the listener and
+  never closes it. Eight lines including the comment; no production code touched.
+- Both earlier attempts are reverted, because both were mitigations for wrong diagnoses: the
+  keep-alive change (already reverted) and the connection-reset retry with backoff plus the
+  staggered dispatch (reverted here, `retry-on-connection-reset.ts` deleted). The net change of
+  this branch against `main` is `test-app.ts` and this log.
+- `npm run gate:quick` green. The full e2e suite run six times in a row: 6 passes, 0 failures,
+  against a roughly one-in-three failure rate before the fix.
