@@ -255,3 +255,5 @@ Beyond `CLAUDE.md §9`:
 | 2026-09-22 | plan (revision) | reconciled with shipped S-02 code and accepted ADR-0008; carried S-02 minors listed; eight local decisions fixed; test names unchanged, 9/9 AC and 5/5 INV named |
 | 2026-09-22 | implement | slice started, branch `slice/S-03-reservations-and-capacity-invariant`, from `main` at ccad5c3 |
 | 2026-09-22 | implement | built test first: 14/14 planned tests present and green (9 AC, 5 INV), INV-01 across two application instances, `npm run gate:quick` green, e2e 36/36, integration 24/24 |
+| 2026-09-22 | verify | PASS, gate green on c94f8d5, 14/14 AC and INV covered at the planned level, 2 minor findings for `/ship` (ledger helper not in afterEach of capacity-invariant.e2e-test.ts, README reserve example missing) |
+| 2026-09-22 | review | REVIEW S-03: 7 findings (1/0/6); blocker: glossary entry for `source` missing (`/spec`); 6 minors in style, dead test helpers and the invariant suite wiring; INV-01 critical section confirmed sound under ADR-0008 |
