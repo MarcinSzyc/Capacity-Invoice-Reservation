@@ -1426,3 +1426,25 @@ correct with a new one. Format:
   reaches the API, the invoice id within a program is the public name (A-07).
 - No AC, INV or assumption changed, so no `## Changes` row is owed. Written on the slice
   branch, as the S-02 glossary words were.
+
+## 2026-09-22, implement S-03 (review fixes, round 1), Fable
+- Five of the six minors fixed; one declined with the reason on record. Test first where a
+  test applies: `Program.reserve` now refuses a zero `held` with a `RangeError` (a red domain
+  test first), so no path, HTTP or the Kafka one S-06 brings, can open a reservation that is
+  closed at birth with an empty reserve row. `SeededRandom.int` and `FixedClock.set` are gone
+  (dead code); the ledger helper's `describe` is `explain` and its per-program function is
+  module local now that the invariant suite no longer calls it; the capacity-invariant suite
+  runs `expectLedgerInvariants` in `afterEach` like the other two suites that create programs,
+  which also closes the verify minor.
+- Declined: the braces around the `CapacityExceededError` throw in `Program.reserve`. The
+  statement does not fit one line at the Prettier width, so Prettier wraps it, and ESLint
+  `curly: multi-line` (CLAUDE.md §3) then requires the braces. Removing them fails lint; the
+  code was right as written.
+- Found while fixing: the ledger helper read program, movements and reservations in three
+  separate queries, which is only sound when nothing writes in between. Running two e2e suites
+  in parallel workers by hand (the gate runs them in band) made AC-02's `afterEach` see a
+  half-committed view of a program the other suite was changing. The three reads now happen in
+  one repeatable-read transaction, so the helper is correct under any interleaving. Not a
+  finding against the product code; the gate had never run the suites that way.
+- `npm run gate:quick` green, e2e 36/36 in band. Glossary entry for `source` landed in the
+  docs commit before this one. Ready for `/verify` (second pass) and `/review` (second pass).

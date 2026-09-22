@@ -178,6 +178,15 @@ describe('Program', () => {
     expect(program.available).toEqual(FIVE_MILLION_EUR);
   });
 
+  it('should refuse a reservation of nothing, so no reservation is ever born closed', () => {
+    const program = announcedWith(FIVE_MILLION_EUR);
+
+    expect(() => program.reserve(Money.zero(EUR), CLIENT, RESERVATION_ID, AT_10_10)).toThrow(
+      RangeError,
+    );
+    expect(program.reserved).toEqual(Money.zero(EUR));
+  });
+
   it('should refuse any positive reservation on an overcommitted program with available zero (AC-09)', () => {
     const program = Program.rehydrate({
       programId: PROGRAM_ID,
