@@ -254,3 +254,4 @@ Beyond `CLAUDE.md §9`:
 | 2026-09-19 | plan | slice written |
 | 2026-09-22 | plan (revision) | reconciled with shipped S-02 code and accepted ADR-0008; carried S-02 minors listed; eight local decisions fixed; test names unchanged, 9/9 AC and 5/5 INV named |
 | 2026-09-22 | implement | slice started, branch `slice/S-03-reservations-and-capacity-invariant`, from `main` at ccad5c3 |
+| 2026-09-22 | implement | built test first: 14/14 planned tests present and green (9 AC, 5 INV), INV-01 across two application instances, `npm run gate:quick` green, e2e 36/36, integration 24/24 |

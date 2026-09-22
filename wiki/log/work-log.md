@@ -1326,3 +1326,52 @@ correct with a new one. Format:
   in this slice and has no glossary entry; without it `/review` will raise a finding.
 - Branch `docs/plan-S-03` cut from `main` at caffd7e. Files: the S-03 slice file, `Home.md`,
   this entry. Nothing committed; the plan PR needs no ADR decision because ADR-0008 is accepted.
+
+## 2026-09-22, implement S-03 (reservations and the capacity invariant), Fable
+- Branch `slice/S-03-reservations-and-capacity-invariant` from `main` at ccad5c3, after the plan
+  revision PR #24 merged. Marcin gave one yes for the first commit and a standing yes for the
+  commits of this slice's loop; push stays a separate question.
+- First commit 932febc: the four minors carried from S-02, each test first. The dead letter is
+  now published between two short units of work (the in-memory unit of work exposes whether work
+  is running so the test can see it), the AC-40 tautology is gone, the availability mapper labels
+  a range error with the field name, and "stale before currency" is pinned by a use case test
+  that passes on purpose: it records behaviour A-13 (5) already had.
+- Loop, red first at every level: AC-01 e2e (404 on the route), then `Reservation`,
+  `Program.reserve`, `CapacityExceededError` and `ReservationAlreadyExistsError` in the domain,
+  `ReserveCapacity` with the in-memory fakes and a `FixedClock`, the `reservations` migration,
+  `PrismaReservationRepository`, the POST route with its DTOs, `@ClientId()`, and the filter
+  rendering `bigint` and `Date` in error details. The remaining AC e2e tests confirm wiring the
+  unit tests drove; AC-08 alone went red first for a real reason: the library's ISO 4217 check
+  uppercases before it compares, so `usd` passed and reached the use case as a currency mismatch.
+  The DTO now requires an upper case code. `Ledger.recompute` (INV-04) and the INV-09
+  constraint test went red first; INV-11 is a property over `Program` with a seeded generator
+  and passed at once, which is what an invariant test over finished code should do.
+- Migration generated with `prisma migrate diff` against a throwaway container and checked for
+  drift (empty diff), with two hand edits: the ledger's `reservation_id` changes type in place
+  rather than being dropped, and the foreign key from the ledger restricts deletes rather than
+  nulling attribution. `reservations` stores the program currency next to the invoice currency,
+  so `reservedAmount` and `held` rehydrate without a join (ADR-0007 fixes it for life). The
+  INV-02 CHECK on `held` is in the migration for S-05 to lean on.
+- Two fixture mistakes on my side, corrected as fixtures: a helper that saves a program without
+  its `limit_set` row, and an ordering test whose two rows shared one `createdAt`, so the tie
+  fell to random ids. Two test ids that collided across tests sharing one database now use
+  fresh UUIDs.
+- INV-01 runs 25 parallel requests split across two Nest applications in one Jest process on
+  one PostgreSQL container: exactly 10 created, 15 refused, `reserved` 10 000 000.00, ledger
+  helper green. Prisma's default `maxWait` was enough; nothing was raised.
+- The ledger helper (`test/support/ledger-invariants.ts`) runs in `afterEach` of the programs,
+  reservations and capacity-invariant suites and checks every program in the database.
+- Borderline local choices, noted here: `Reservation.describe()` is the one plain view both the
+  `201` body and the `409` body are built from, so the two shapes cannot drift (AC-05 pins
+  them); the OpenAPI integer check now covers the reservation schemas too; one commit for the
+  slice body rather than several, because the pre-commit hook validates the working tree, not
+  the index, so a partial commit would be one that never passed a gate on its own.
+- Deferred to `/ship`: README reserve example with the four error codes, the extra tests list in
+  `wiki/plan/plan.md`. For `/spec` before `/review`: the glossary entry for `source`.
+- Tests beyond the plan (untagged): `Reservation` opens, rehydrates and describes itself;
+  `ReserveCapacity` for not found, currency mismatch, duplicate before capacity, shortage leaving
+  the fakes untouched; `Ledger.recompute` broken chains and re-denomination; `toErrorBody`
+  rendering; `toAvailabilityDto` labels; the reservation adapter round trip, unique pair, active
+  ordering and ledger foreign key; the reject use case publishing outside a transaction; the
+  stale before currency pin; the e2e `CURRENCY_MISMATCH` case; the `Reservation` schemas in the
+  OpenAPI integer check.

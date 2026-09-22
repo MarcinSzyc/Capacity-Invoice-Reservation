@@ -1,7 +1,7 @@
 import {Inject, Injectable} from '@nestjs/common';
 import {MESSAGE_SOURCE, MessageSource} from '../../../../messaging/message-source';
 import {CAPACITY_UPDATE_TYPE} from '../../application/apply-capacity-update.use-case';
-import {jsonInteger} from '../json-integer';
+import {jsonInteger} from '../../../../common/json-integer';
 import {TREASURY_TOPIC} from './treasury-topics';
 
 export interface CapacityUpdateToPublish {

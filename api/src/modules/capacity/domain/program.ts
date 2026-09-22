@@ -1,5 +1,5 @@
 import {CapacityMovement} from './capacity-movement';
-import {CurrencyMismatchError} from './errors';
+import {CapacityExceededError, CurrencyMismatchError} from './errors';
 import {Money} from './money';
 
 export interface ProgramState {
@@ -84,6 +84,28 @@ export class Program {
 
     this.state = {...this.state, limit, limitEventTime: eventTime};
     return {kind: 'applied', movement: this.movement('limit_set', {messageId}, eventTime)};
+  }
+
+  /**
+   * A client takes `held` from the capacity (A-06). Equal to what is available is allowed; more
+   * is refused with what is available in the error, and on an overcommitted program that is
+   * zero, so nothing positive gets through (AC-09). ADR-0008: the caller holds the row lock.
+   */
+  reserve(
+    held: Money,
+    clientId: string,
+    reservationId: string,
+    occurredAt: Date,
+  ): CapacityMovement {
+    if (held.isGreaterThan(this.available)) {
+      throw new CapacityExceededError(this.programId, this.available);
+    }
+    this.state = {...this.state, reserved: this.reserved.add(held)};
+    return {
+      ...this.movement('reserve', {clientId}, occurredAt),
+      reservationId,
+      deltaHeld: held,
+    };
   }
 
   private redenominate(currency: string): void {
