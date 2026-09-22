@@ -1711,3 +1711,27 @@ correct with a new one. Format:
 - Branch `docs/plan-S-04` cut from `main` at 2d159f6. Files: the S-04 slice file,
   `wiki/plan/plan.md`, `Home.md`, this entry. Nothing committed; the plan PR needs no ADR
   decision.
+
+## 2026-09-22, spec: A-10 gains the minor unit exponent and the canonical rate, Opus
+- Records the two rules Marcin decided while the S-04 plan was being revised, both of which
+  neither A-10 nor ADR-0006 had said. They are listed as decisions 2 and 3 in
+  [[../slices/S-04-cross-currency-reservations]] and the slice's definition of done names this
+  `/spec` run.
+- A-10 amended, two paragraphs added to the statement. First: a currency's minor unit is the
+  one ISO 4217 gives it, JPY none, KWD three, most codes two, so a conversion scales by the
+  difference between the two exponents and 1 000 JPY at `0.0067` is 670 USD minor units rather
+  than 7. Second: `rate` reads back canonical, trailing fractional zeros dropped and no
+  fractional part on an integer, so `"1.10"` reads `"1.1"` and a same-currency reservation
+  reads `"1"`; rates already compare numerically under ADR-0006.
+- Rationale extended with why each alternative was declined (two decimals everywhere would
+  book a JPY invoice a hundred times too small; refusing non-two-decimal currencies would give
+  a stable code to a limitation rather than a rule; echoing the sent scale would mean storing
+  a scale for presentation only). `If wrong.` extended for the echo-exactly case.
+- Glossary gains `Minor unit, minor unit exponent` with the USD, JPY and KWD examples, since
+  S-04 puts the word in code. The glossary has no `## Changes` table, so no row is owed there.
+- No AC or INV changed. AC-06 stays true as written: it says the rate 1.10 is stored on the
+  reservation, not which string the API echoes, and `1.10` and `1.1` are one rate numerically.
+  Worth knowing when reading the AC next to the S-04 test note, which asserts `"1.1"` in the
+  body.
+- No new open question. Branch `docs/a-10-minor-units-and-rate-format` from `main` at b8de6a6.
+  Wiki only, nothing under `api/` touched.

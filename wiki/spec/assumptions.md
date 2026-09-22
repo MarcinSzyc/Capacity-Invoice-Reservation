@@ -282,6 +282,18 @@ is not three letters, or three letters that are not an ISO 4217 code, is still r
 to the minor unit of the program currency. Amounts are integers in minor units
 everywhere; no floats.
 
+A currency's minor unit is the one ISO 4217 gives it, not always two decimals: JPY has
+none, KWD has three, most codes have two. A conversion therefore scales by the difference
+between the two currencies' exponents, so 1 000 JPY (1 000 minor units) at `0.0067`
+becomes 670 USD minor units (6.70), not 7 minor units. The list of exceptions is small,
+about twenty five codes, and a code the list does not name has two.
+
+The rate a client sends is read back in canonical form: trailing fractional zeros are
+dropped and an integer rate has no fractional part, so `"1.10"` reads `"1.1"` and a
+same-currency reservation reads `"1"`. Rates compare numerically (ADR-0006), so `"1"`,
+`"1.0"` and `"1.00"` are the same rate; the canonical form is what the API returns, and
+the OpenAPI description of `rate` says so.
+
 **Rationale.** One currency per program keeps the limit comparison trivial. Half up is
 the conventional, predictable choice; the difference from any other rule is at most one
 minor unit per reservation and is documented rather than ignored. Casing is normalised
@@ -291,12 +303,21 @@ refused over a casing difference becomes a dead letter for a code that is otherw
 correct. Leaving each edge to its own rule is what actually hurt: a program announced as
 `usd` compares by `===` against every correct `USD` reservation and answers
 `CURRENCY_MISMATCH` forever, so the program can never be used. One rule, applied at both
-boundaries, removes both failures.
+boundaries, removes both failures. The minor unit exponent is a fact about a currency
+code, so treating every currency as two decimals would book a JPY invoice a hundred times
+too small and a KWD one ten times too large; the alternative, refusing any currency
+outside the two decimal codes, would answer a stable error code for a limitation rather
+than a rule. The rate is canonicalised rather than echoed exactly because keeping the
+scale a client happened to type would mean storing it for presentation only, and two
+rates that are numerically equal already count as one rate everywhere else.
 
 **If wrong.** If a real treasury contract turns out to be case sensitive and expects us
 to reject rather than repair a lower case code, the normalisation moves from the two DTO
 boundaries to a rejection at each, and a treasury message carrying `usd` becomes a dead
-letter. The domain is unaffected either way: it only ever sees an upper case code.
+letter. The domain is unaffected either way: it only ever sees an upper case code. If a
+client turns out to need the rate echoed exactly as it was sent, the sent scale has to be
+stored next to the rate and rendered from there; the stored rate itself does not change,
+because it is already exact.
 
 ## A-11 The treasury message contract is defined by us
 
@@ -469,3 +490,4 @@ program is not an acceptance criterion.
 | 2026-09-21 | A-06 | amended: the treasury may set the limit to zero, a frozen program; found by review round 3 of S-02 | slice/S-02-programs-from-the-treasury |
 | 2026-09-21 | A-13 | amended: clause (5), the checks run in order, duplicate before rejected and stale before rejected; found by review rounds 3 and 4 of S-02 | slice/S-02-programs-from-the-treasury |
 | 2026-09-22 | A-10 | amended: currency codes are normalised to upper case at both boundaries, not refused for their case; the two edges disagreed, found by review round 2 of S-03 | slice/S-03-reservations-and-capacity-invariant |
+| 2026-09-22 | A-10 | amended: conversion respects each currency's ISO 4217 minor unit exponent (JPY 0, KWD 3, default 2) and `rate` reads back canonical; gaps found while revising the S-04 plan | docs/a-10-minor-units-and-rate-format |

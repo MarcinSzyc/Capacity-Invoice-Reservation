@@ -107,6 +107,13 @@ three letters, or not an ISO 4217 code at all, is refused (A-10). Inside the ser
 code is always upper case, and two codes are the same currency when the strings are
 equal.
 
+**Minor unit, minor unit exponent.** The smallest unit a currency is counted in, and how
+many decimal places that is. USD and EUR have two (a cent is 0.01), JPY has none (the yen
+is the unit itself, so 1 000 JPY is 1 000 minor units), KWD has three (a fils is 0.001).
+Every amount in this service is an integer count of minor units, so the exponent is what
+says where the decimal point goes when a number is shown to a person, and converting
+between two currencies has to account for both currencies' exponents (A-10).
+
 **Conversion rate.** The rate used once, at reservation time, to express the invoice
 amount in program currency. Supplied by the client in the reservation request (the
 platform knows the rate the treasury will pay out at), stored on the reservation and
