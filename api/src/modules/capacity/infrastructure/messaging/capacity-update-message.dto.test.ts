@@ -45,6 +45,20 @@ describe('parseCapacityUpdate', () => {
     }
   });
 
+  it('should uppercase a currency code and still refuse one that is not ISO 4217 (A-10)', async () => {
+    const normalised = await parseCapacityUpdate({...VALID, currency: 'usd'}, RECEIVED_AT);
+
+    expect(normalised.ok).toBe(true);
+    if (!normalised.ok) return;
+    expect(normalised.command.currency).toBe('USD');
+
+    for (const currency of ['XYZ', 'US', 'EURO']) {
+      const parsed = await parseCapacityUpdate({...VALID, currency}, RECEIVED_AT);
+
+      expect(parsed).toEqual({ok: false, error: expect.stringContaining('currency') as string});
+    }
+  });
+
   it('should name the field when a value is of the wrong shape', async () => {
     const parsed = await parseCapacityUpdate({...VALID, creditLimit: 'a lot'}, RECEIVED_AT);
 

@@ -272,13 +272,31 @@ duplicates are errors, never silent successes.
 
 **Statement.** Reservations convert once, at creation, to program currency using the
 client-supplied rate (A-02); `reservedAmount` and `held` are in program currency.
-Currency codes are validated as ISO 4217 syntactically; same-currency reservations need
-no rate. Converted amounts are rounded half up to the minor unit of the program
-currency. Amounts are integers in minor units everywhere; no floats.
+Currency codes are normalised to upper case at every boundary, before validation and
+before the domain sees them, and then validated as ISO 4217 syntactically: `usd` is
+accepted and read as `USD` on an HTTP reservation request and on a treasury capacity
+update alike. The normalisation is part of the published contract, so the description of
+every currency property in the OpenAPI document says the value is uppercased. A code that
+is not three letters, or three letters that are not an ISO 4217 code, is still refused
+(AC-08). Same-currency reservations need no rate. Converted amounts are rounded half up
+to the minor unit of the program currency. Amounts are integers in minor units
+everywhere; no floats.
 
 **Rationale.** One currency per program keeps the limit comparison trivial. Half up is
 the conventional, predictable choice; the difference from any other rule is at most one
-minor unit per reservation and is documented rather than ignored.
+minor unit per reservation and is documented rather than ignored. Casing is normalised
+rather than refused because the two boundaries cannot refuse alike: the HTTP edge can
+answer a client `400`, but the Kafka edge has no one to answer, so a treasury message
+refused over a casing difference becomes a dead letter for a code that is otherwise
+correct. Leaving each edge to its own rule is what actually hurt: a program announced as
+`usd` compares by `===` against every correct `USD` reservation and answers
+`CURRENCY_MISMATCH` forever, so the program can never be used. One rule, applied at both
+boundaries, removes both failures.
+
+**If wrong.** If a real treasury contract turns out to be case sensitive and expects us
+to reject rather than repair a lower case code, the normalisation moves from the two DTO
+boundaries to a rejection at each, and a treasury message carrying `usd` becomes a dead
+letter. The domain is unaffected either way: it only ever sees an upper case code.
 
 ## A-11 The treasury message contract is defined by us
 
@@ -450,3 +468,4 @@ program is not an acceptance criterion.
 | 2026-09-21 | A-12 | amended: a currency change applies only to a program with no active reservation, otherwise `CURRENCY_MISMATCH` (ADR-0007) | docs/a-12-currency-change |
 | 2026-09-21 | A-06 | amended: the treasury may set the limit to zero, a frozen program; found by review round 3 of S-02 | slice/S-02-programs-from-the-treasury |
 | 2026-09-21 | A-13 | amended: clause (5), the checks run in order, duplicate before rejected and stale before rejected; found by review rounds 3 and 4 of S-02 | slice/S-02-programs-from-the-treasury |
+| 2026-09-22 | A-10 | amended: currency codes are normalised to upper case at both boundaries, not refused for their case; the two edges disagreed, found by review round 2 of S-03 | slice/S-03-reservations-and-capacity-invariant |

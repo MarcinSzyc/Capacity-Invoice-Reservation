@@ -1326,3 +1326,276 @@ correct with a new one. Format:
   in this slice and has no glossary entry; without it `/review` will raise a finding.
 - Branch `docs/plan-S-03` cut from `main` at caffd7e. Files: the S-03 slice file, `Home.md`,
   this entry. Nothing committed; the plan PR needs no ADR decision because ADR-0008 is accepted.
+
+## 2026-09-22, implement S-03 (reservations and the capacity invariant), Fable
+- Branch `slice/S-03-reservations-and-capacity-invariant` from `main` at ccad5c3, after the plan
+  revision PR #24 merged. Marcin gave one yes for the first commit and a standing yes for the
+  commits of this slice's loop; push stays a separate question.
+- First commit 932febc: the four minors carried from S-02, each test first. The dead letter is
+  now published between two short units of work (the in-memory unit of work exposes whether work
+  is running so the test can see it), the AC-40 tautology is gone, the availability mapper labels
+  a range error with the field name, and "stale before currency" is pinned by a use case test
+  that passes on purpose: it records behaviour A-13 (5) already had.
+- Loop, red first at every level: AC-01 e2e (404 on the route), then `Reservation`,
+  `Program.reserve`, `CapacityExceededError` and `ReservationAlreadyExistsError` in the domain,
+  `ReserveCapacity` with the in-memory fakes and a `FixedClock`, the `reservations` migration,
+  `PrismaReservationRepository`, the POST route with its DTOs, `@ClientId()`, and the filter
+  rendering `bigint` and `Date` in error details. The remaining AC e2e tests confirm wiring the
+  unit tests drove; AC-08 alone went red first for a real reason: the library's ISO 4217 check
+  uppercases before it compares, so `usd` passed and reached the use case as a currency mismatch.
+  The DTO now requires an upper case code. `Ledger.recompute` (INV-04) and the INV-09
+  constraint test went red first; INV-11 is a property over `Program` with a seeded generator
+  and passed at once, which is what an invariant test over finished code should do.
+- Migration generated with `prisma migrate diff` against a throwaway container and checked for
+  drift (empty diff), with two hand edits: the ledger's `reservation_id` changes type in place
+  rather than being dropped, and the foreign key from the ledger restricts deletes rather than
+  nulling attribution. `reservations` stores the program currency next to the invoice currency,
+  so `reservedAmount` and `held` rehydrate without a join (ADR-0007 fixes it for life). The
+  INV-02 CHECK on `held` is in the migration for S-05 to lean on.
+- Two fixture mistakes on my side, corrected as fixtures: a helper that saves a program without
+  its `limit_set` row, and an ordering test whose two rows shared one `createdAt`, so the tie
+  fell to random ids. Two test ids that collided across tests sharing one database now use
+  fresh UUIDs.
+- INV-01 runs 25 parallel requests split across two Nest applications in one Jest process on
+  one PostgreSQL container: exactly 10 created, 15 refused, `reserved` 10 000 000.00, ledger
+  helper green. Prisma's default `maxWait` was enough; nothing was raised.
+- The ledger helper (`test/support/ledger-invariants.ts`) runs in `afterEach` of the programs,
+  reservations and capacity-invariant suites and checks every program in the database.
+- Borderline local choices, noted here: `Reservation.describe()` is the one plain view both the
+  `201` body and the `409` body are built from, so the two shapes cannot drift (AC-05 pins
+  them); the OpenAPI integer check now covers the reservation schemas too; one commit for the
+  slice body rather than several, because the pre-commit hook validates the working tree, not
+  the index, so a partial commit would be one that never passed a gate on its own.
+- Deferred to `/ship`: README reserve example with the four error codes, the extra tests list in
+  `wiki/plan/plan.md`. For `/spec` before `/review`: the glossary entry for `source`.
+- Tests beyond the plan (untagged): `Reservation` opens, rehydrates and describes itself;
+  `ReserveCapacity` for not found, currency mismatch, duplicate before capacity, shortage leaving
+  the fakes untouched; `Ledger.recompute` broken chains and re-denomination; `toErrorBody`
+  rendering; `toAvailabilityDto` labels; the reservation adapter round trip, unique pair, active
+  ordering and ledger foreign key; the reject use case publishing outside a transaction; the
+  stale before currency pin; the e2e `CURRENCY_MISMATCH` case; the `Reservation` schemas in the
+  OpenAPI integer check.
+
+## 2026-09-22, verify S-03, Sonnet
+- Ran on branch `slice/S-03-reservations-and-capacity-invariant` at c94f8d5. `npm run gate`
+  green end to end: 95 unit, 24 integration, 36 e2e across 9 suites, 3 cold start (fresh
+  `docker compose down -v` / `up --wait` / authenticated call / `down -v`, stack healthy in
+  43s). No flaky retries.
+- Coverage: 14/14 planned tests present, each tag found exactly once, none skipped or
+  `.only`. Test names diffed byte for byte against `wiki/plan/plan.md`: identical. Test
+  levels match the plan (AC e2e over real HTTP via supertest, INV-01 across two `Promise.all`
+  application instances sharing one database, INV-09 against a real Postgres CHECK
+  constraint, INV-11 a unit property test).
+- Prose check clean. No nested ternary or braced one-line `if` found in the diff since
+  ccad5c3 (lint already enforces both and passed). Layer boundaries hold: no `@nestjs`
+  import under `domain/`, no Prisma or kafkajs import outside `infrastructure/`.
+- `/implement` touched only `wiki/log/work-log.md` and this slice's status and `Log`
+  section, as required.
+- Two minor findings, neither blocking: `capacity-invariant.e2e-test.ts` calls the ledger
+  helper inline at the end of each test body instead of wiring it into `afterEach`, so a
+  test added later to that file without remembering the call would skip the check, unlike
+  the slice's own Definition of done; the README has no reserve curl example or the four
+  reservation error codes yet, which the slice's Definition of done also names. Carried to
+  `/ship`, per changelog.
+- Result: PASS.
+
+## 2026-09-22, review S-03, Fable (fresh context)
+- Reviewed the diff `ccad5c3..HEAD` plus the uncommitted wiki lines against `CLAUDE.md §2, §3,
+  §4`, the slice file, AC-01 to AC-05, AC-08, AC-09, AC-21, AC-22, INV-01, INV-03, INV-04,
+  INV-09, INV-11, ADR-0002, ADR-0006, ADR-0008 and the assumptions register.
+- Concurrency: the critical section of INV-01 is `ReserveCapacity.execute`, one interactive
+  transaction whose first statement is the raw `SELECT ... FOR UPDATE` on the program row;
+  under `READ COMMITTED` the waiting transaction receives the row as the winner committed it,
+  the duplicate read, the capacity check, the reservation insert, the ledger row and the
+  absolute `reserved` upsert all happen under that lock, and the two instance e2e test proves
+  it. The mechanism guarantees INV-01 and INV-04 by construction, as ADR-0008 states.
+- REVIEW S-03: 7 findings (1/0/6). Blocker: `source` (`client`, `reconciliation`) is in code
+  and on the API with no glossary entry (`CLAUDE.md §2`; the slice DoD had named it); the fix
+  is a `/spec` glossary entry, not code. Minors: braces around a one-line `if` in
+  `Program.reserve`; `SeededRandom.int` and `FixedClock.set` have no caller; `const describe`
+  in the ledger helper shadows Jest's global; `capacity-invariant.e2e-test.ts` calls the
+  ledger helper inline instead of `afterEach`; `Program.reserve` accepts a zero `held`, guarded
+  only by the DTO. No spec file changed in the diff, so no `## Changes` row is owed.
+
+## 2026-09-22, spec (glossary words after review round 1 of S-03), Fable
+- Revision run for the one blocker of the first S-03 review: `source` (`client`,
+  `reconciliation`) is in code and on the API with no glossary entry. No open question: the
+  meaning was fixed by A-12 and the S-03 slice file, so the entry records it rather than decides
+  anything. Added "Reservation source" under Reservation, plus "Reservation identity" for the
+  reviewer's second point: the storage id of a reservation exists for the ledger and never
+  reaches the API, the invoice id within a program is the public name (A-07).
+- No AC, INV or assumption changed, so no `## Changes` row is owed. Written on the slice
+  branch, as the S-02 glossary words were.
+
+## 2026-09-22, implement S-03 (review fixes, round 1), Fable
+- Five of the six minors fixed; one declined with the reason on record. Test first where a
+  test applies: `Program.reserve` now refuses a zero `held` with a `RangeError` (a red domain
+  test first), so no path, HTTP or the Kafka one S-06 brings, can open a reservation that is
+  closed at birth with an empty reserve row. `SeededRandom.int` and `FixedClock.set` are gone
+  (dead code); the ledger helper's `describe` is `explain` and its per-program function is
+  module local now that the invariant suite no longer calls it; the capacity-invariant suite
+  runs `expectLedgerInvariants` in `afterEach` like the other two suites that create programs,
+  which also closes the verify minor.
+- Declined: the braces around the `CapacityExceededError` throw in `Program.reserve`. The
+  statement does not fit one line at the Prettier width, so Prettier wraps it, and ESLint
+  `curly: multi-line` (CLAUDE.md §3) then requires the braces. Removing them fails lint; the
+  code was right as written.
+- Found while fixing: the ledger helper read program, movements and reservations in three
+  separate queries, which is only sound when nothing writes in between. Running two e2e suites
+  in parallel workers by hand (the gate runs them in band) made AC-02's `afterEach` see a
+  half-committed view of a program the other suite was changing. The three reads now happen in
+  one repeatable-read transaction, so the helper is correct under any interleaving. Not a
+  finding against the product code; the gate had never run the suites that way.
+- `npm run gate:quick` green, e2e 36/36 in band. Glossary entry for `source` landed in the
+  docs commit before this one. Ready for `/verify` (second pass) and `/review` (second pass).
+
+## 2026-09-22, verify S-03 (second pass, after review round 1), Sonnet
+- Ran on branch `slice/S-03-reservations-and-capacity-invariant` at aadded9. `npm run gate`
+  green end to end: 96 unit, 24 integration, 36 e2e across 9 suites, 3 cold start (fresh
+  `docker compose down -v` / `up --wait` / authenticated call / `down -v`, stack healthy in
+  37s). No flaky retries.
+- Coverage unchanged from the first pass: 14/14 planned tests present, each tag found once,
+  none skipped or `.only`, test names identical to `wiki/plan/plan.md`.
+- Confirmed each of the six review round 1 findings against the code: `Program.reserve`
+  throws `RangeError` on a zero `held` before the capacity check; `SeededRandom.int` and
+  `FixedClock.set` are gone; the ledger helper's shadowing `describe` is `explain`;
+  `capacity-invariant.e2e-test.ts` now runs `expectLedgerInvariants` in `afterEach`, closing
+  the verify minor from the first pass too. The declined brace finding checked out: with the
+  braces removed, `eslint . --max-warnings 0` fails on `curly: multi-line` against the wrapped
+  throw, so keeping them was correct.
+- Prose check clean, no nested ternary or braced one-line `if` introduced since c94f8d5, layer
+  boundaries hold. `/implement` touched only `wiki/log/work-log.md` and this slice's `Log`
+  section in the fix commit.
+- One finding remains open from the first pass, unchanged and still owed to `/ship`: the
+  README has no reserve curl example or the four reservation error codes.
+- Result: PASS.
+
+## 2026-09-22, review S-03 (second pass, after review round 1), Fable (fresh context)
+- Reviewed the diff `ccad5c3..HEAD` (aadded9) plus the uncommitted wiki lines against
+  `CLAUDE.md §2, §3, §4`, the slice file, AC-01 to AC-05, AC-08, AC-09, AC-21, AC-22, INV-01,
+  INV-03, INV-04, INV-09, INV-11, ADR-0002, ADR-0006, ADR-0008 and the assumptions register.
+  All six round 1 findings are closed in the code as the verify pass reported.
+- Concurrency: unchanged from round 1 and still sound. `ReserveCapacity.execute` is one
+  interactive transaction (15 s timeout, READ COMMITTED) whose first statement is the raw
+  `SELECT ... FOR UPDATE`; duplicate read, capacity check, reservation insert, ledger row and the
+  absolute `reserved` upsert all run under that lock; the treasury consumer takes the same lock and
+  both test instances share one consumer group. INV-01 and INV-04 hold by construction.
+- REVIEW S-03: 4 findings (0/1/3). Major: the two edges disagree on what an ISO 4217 code is.
+  `ReserveRequestDto` refuses `usd` (AC-08) but `CapacityUpdateMessageDto` keeps
+  `@IsISO4217CurrencyCode()` alone, which uppercases before it compares, so a treasury update with
+  `currency: usd` announces a program on which every correct `USD` reservation is
+  `422 CURRENCY_MISMATCH`; the code relies on an unwritten "codes are upper case" assumption
+  (A-10 does not say it). Minors: `findActiveByProgram` has no production caller (the ledger
+  helper reads `reservation.findMany` directly); the `withToken` parameter of the e2e `reserve`
+  helper is never passed; the `reservations.currency` column is not in the slice file's migration
+  list. Findings go back to `/implement` (and `/spec` for the casing rule), then `/verify` and
+  `/review` run again.
+
+## 2026-09-22, spec: A-10 gains a currency casing rule (S-03 review round 2), Fable
+- Marcin decided the major finding of review round 2: currency codes are normalised to upper
+  case at every boundary, not refused for their case. `usd` is accepted and read as `USD` on
+  the HTTP reserve request and on a treasury capacity update alike, and the normalisation is
+  part of the published contract, so the OpenAPI description of every currency property says
+  the value is uppercased. A code that is not three letters, or not an ISO 4217 code, is still
+  refused.
+- A-10 amended: the casing rule in the statement, the reason for normalising rather than
+  refusing in the rationale (the Kafka edge has no one to answer a `400`, so refusing a casing
+  difference costs a dead letter, while leaving each edge its own rule is what produced the
+  unusable program), and an `If wrong.` paragraph for a case sensitive treasury contract.
+  Changes row added.
+- Glossary gains `Currency code`: three letters, uppercased at every boundary before
+  validation, equal strings mean the same currency. The glossary has no `## Changes` table, so
+  no row is owed there.
+- No AC or INV changed. AC-08 stays true as written: `usd` is a valid ISO 4217 code in the
+  wrong case, not a code that is not ISO 4217. Its e2e case that asserts `usd` is a `400` is
+  now wrong against the spec and is `/implement` work, not a spec change.
+- No new open question. Wiki only, nothing under `api/` touched.
+
+## 2026-09-22, implement S-03 (fix round 2, after review round 2), Opus
+- Major closed. One casing rule now lives in one place: `IsCurrencyCode()` in
+  `api/src/modules/capacity/infrastructure/currency-code.ts` uppercases the value and then
+  checks ISO 4217, and both DTOs wear it, `ReserveRequestDto.invoiceCurrency` and
+  `CapacityUpdateMessageDto.currency`. The reserve DTO's `@Matches(/^[A-Z]{3}$/)` is gone,
+  redundant against the transform, and its `ApiProperty` description says the value is
+  uppercased, because A-10 makes the normalisation part of the published contract. Red first:
+  the new unit case in `capacity-update-message.dto.test.ts` failed with `Received: "usd"`,
+  which is the bug exactly.
+- The decorator sits in the capacity module, not in `common/`: it names a business word, and
+  both of its users are that module's own edges (`CLAUDE.md §2`).
+- AC-08 changed shape, not meaning. Its `usd` case is now wrong against A-10 and was replaced
+  by `XYZ`, three letters that are not a code, so the e2e still proves a real ISO 4217
+  refusal alongside `XXXX`. Two untagged tests were added for the casing rule itself: the unit
+  case above, and an e2e that announces a program with `currency: usd` and reserves with
+  `invoiceCurrency: usd`, the pair that used to answer `CURRENCY_MISMATCH` forever. Untagged
+  because A-10 is an assumption, not an AC or INV.
+- Three minors closed. `findActiveByProgram` is out of the port, the Prisma adapter, the fake
+  and its integration test: the ledger helper reads the rows itself because it needs closed
+  ones too, so nothing in production called it. The `withToken` parameter of the e2e `reserve`
+  helper is gone. The slice file now lists the `reservations.currency` column with its reason
+  (a closed reservation keeps its currency through a re-denomination, A-12), corrects the S-05
+  hand-off note that claimed the ledger helper uses the port method, and records the new
+  decorator and the changed test rows.
+- Slice content was edited, which `/implement` normally may not do. Deliberate, under
+  `CLAUDE.md §6`: a plan correction found while implementing goes into the slice PR, and three
+  of the four findings were exactly that the slice file no longer describes the code.
+- `npm run gate:quick` green, reservations e2e green (11 tests). Nothing committed.
+
+## 2026-09-22, verify S-03 (third pass, after review round 2), Sonnet
+- `npm run gate` green on 5545f3a: prose clean, unit 97/97, integration 23/23 (one fewer, the
+  `findActiveByProgram` test left with its method), e2e 37/37 (one more, the A-10 casing test),
+  cold start 3/3, web green.
+- Coverage 14/14 at the planned level, unchanged files: AC-01 to AC-05, AC-08, AC-09, AC-21,
+  AC-22 through HTTP in `reservations.e2e-test.ts`; INV-01 with 25 parallel requests over two
+  instances and INV-03 in `capacity-invariant.e2e-test.ts`; INV-04 and INV-11 unit; INV-09
+  integration. AC-08 still proves a real ISO 4217 refusal (`XYZ`, `XXXX`). No skipped or
+  focused tests, no `@nestjs` in `domain/`, no ORM or Kafka import outside `infrastructure/`,
+  no nested ternary or braced one-line `if` in `aadded9..HEAD`.
+- Cold start from `docker compose down -v`: `up --wait` healthy, `/health` and
+  `/health/ready` 200, availability of `PRG-1` 401 without a token and, with the README's
+  token command, exactly the JSON the README shows. The round 2 fix checked live on the same
+  stack: `dev:treasury --currency usd` announced `PRG-LC` as `USD`, a reservation with
+  `invoiceCurrency: usd` answered `201` reading `USD`, `XYZ` answered `400 VALIDATION_FAILED`,
+  and `/openapi.json` carries the "Uppercased on the way in" description. Stack torn down.
+- Carried minor, unchanged and still owed to `/ship`: the README has no reserve example or the
+  reservation error codes.
+- Result: PASS.
+
+## 2026-09-22, review S-03 (third pass, after review round 2), Fable (fresh context)
+- Reviewed the diff `ccad5c3..HEAD` (5545f3a) against `CLAUDE.md §2, §3, §4`, the slice file,
+  AC-01 to AC-05, AC-08, AC-09, AC-21, AC-22, INV-01, INV-03, INV-04, INV-09, INV-11,
+  ADR-0002, ADR-0006, ADR-0008 and the assumptions register. All four round 2 findings are
+  closed in the code: one `IsCurrencyCode()` decorator worn by both DTOs, `findActiveByProgram`
+  and the `withToken` parameter gone, `reservations.currency` in the slice file.
+- Concurrency: unchanged from round 2 and still sound. `ReserveCapacity.execute` is one
+  interactive transaction (15 s timeout) whose first statement is the raw
+  `SELECT ... FROM programs ... FOR UPDATE`; under `READ COMMITTED` a waiting transaction
+  receives the row as the winner committed it, so the duplicate read, the capacity check, the
+  reservation insert, the ledger row and the `reserved` upsert all run under that lock and
+  judge the real state. `Program.reserve` mutates state before building its movement, so
+  `reservedAfter`/`availableAfter` on the row are exactly what the lock left behind (INV-04 by
+  construction). The 25-request, two-instance INV-01 e2e test and the `afterEach` INV-03/INV-04
+  helper in every suite that touches a program confirm it empirically.
+- Traced every planned test name against the slice file and the code: all 9 AC and 5 INV tags
+  match exactly, each asserts its Then clause (not a weaker one, e.g. AC-03 and AC-05 also
+  assert availability is unchanged, AC-22 asserts `held` survives a limit cut through a 409
+  replay). The four carried S-02 minors (C1 to C4) each have the test the slice file names.
+  No `any`, no nested ternary, no `if` nested past one level, no braced one-line `if`, no em or
+  en dash in the diff. Domain (`reservation.ts`, `program.ts`, `ledger.ts`, `errors.ts`) has no
+  `@nestjs` or ORM import; the one `node:crypto` call in `Reservation.open` is a documented
+  local decision (slice file, decision 3), not undocumented I/O. `source` and `Currency code`
+  are in the glossary; A-10's amendment has its `## Changes` row.
+- REVIEW S-03: 0 findings (0/0/0). Pass.
+
+## 2026-09-22, ship S-03, Sonnet
+- Preconditions held: VERIFY PASS (third pass) and REVIEW 0 findings (third pass), both on
+  5545f3a; only docs commits since.
+- `wiki/plan/plan.md`: the 14 S-03 rows are `done` with their test files; nine `extra` rows for
+  the supporting tests written during the slice (domain, use case, adapters, the A-10 casing
+  tests, the interim `CURRENCY_MISMATCH` e2e). Commit column waits for the merge commit.
+- README gains the reserve example and the five reservation error codes, closing the minor
+  carried since the first verify pass. Run literally on a fresh `docker compose up --wait`:
+  `201` with the reservation, availability down by 120 000 000, then `422 CAPACITY_EXCEEDED`
+  with `available` 880 000 000.
+- ADR-0008 was accepted before the slice; no ADR to finalise. No assumption the code relies on
+  is missing from the register: the one gap, currency casing, went through `/spec` as A-10.
+- Changelog row, slice status `done`, slice index and Home updated; Home names S-04 next.

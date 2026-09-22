@@ -4,6 +4,7 @@ import {CapacityRepositories, UnitOfWork} from '../../domain/ports/unit-of-work'
 import {TransactionScope} from './client-access';
 import {PrismaLedgerRepository} from './prisma-ledger.repository';
 import {PrismaProgramRepository} from './prisma-program.repository';
+import {PrismaReservationRepository} from './prisma-reservation.repository';
 import {PrismaTreasuryMessageStore} from './prisma-treasury-message.store';
 
 // Long enough for a row lock to wait behind another writer, short enough that a stuck
@@ -21,6 +22,7 @@ export class PrismaUnitOfWork implements UnitOfWork {
           const scope = new TransactionScope(transaction);
           return work({
             programs: new PrismaProgramRepository(scope),
+            reservations: new PrismaReservationRepository(scope),
             ledger: new PrismaLedgerRepository(scope),
             treasuryMessages: new PrismaTreasuryMessageStore(scope),
           });

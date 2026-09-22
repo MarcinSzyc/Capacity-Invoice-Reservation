@@ -1,11 +1,13 @@
 import {LedgerRepository} from './ledger.repository';
 import {ProgramRepository} from './program.repository';
+import {ReservationRepository} from './reservation.repository';
 import {TreasuryMessageStore} from './treasury-message-store';
 
 export const UNIT_OF_WORK = Symbol('UnitOfWork');
 
 export interface CapacityRepositories {
   readonly programs: ProgramRepository;
+  readonly reservations: ReservationRepository;
   readonly ledger: LedgerRepository;
   readonly treasuryMessages: TreasuryMessageStore;
 }
