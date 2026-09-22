@@ -25,7 +25,13 @@ const buildApp = async (config: AppConfig, logOutput?: Writable): Promise<INestA
   const moduleRef = await builder.compile();
   const app = moduleRef.createNestApplication({logger: false});
   configureApp(app, config);
-  await app.init();
+  // Listen on an ephemeral port rather than only `init()`. supertest opens its own listener for
+  // any app that is not listening and closes it again when that one request finishes
+  // (`supertest/lib/test.js`, `serverAddress` and `end`). Under INV-01's parallel burst the
+  // fastest response then closes the listener while sibling connections are still in the accept
+  // queue, and those are reset before the server ever sees them: `read ECONNRESET`, with no
+  // request line in the log. Listening here keeps one stable port per app for its whole life.
+  await app.listen(0);
   return app;
 };
 

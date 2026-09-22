@@ -24,8 +24,8 @@ describe('Capacity invariants', () => {
   let token: string;
 
   beforeAll(async () => {
-    // Two application instances, one database (INV-01, ADR-0008). Neither listens on a port:
-    // supertest binds each to its own ephemeral one.
+    // Two application instances, one database (INV-01, ADR-0008). Each listens on its own
+    // ephemeral port for its whole life, which is what keeps the burst below stable.
     [first, second] = await Promise.all([createTestApp(), createTestApp()]);
     token = await validToken();
   });
