@@ -1287,3 +1287,17 @@ correct with a new one. Format:
   requirement checklist is complete for the slice. Same shape as pull request #18 for S-01: a
   docs branch, because the column can only be filled once the merge commit exists and `main`
   is never pushed directly.
+
+## 2026-09-21, docs: ADR-0008 accepted for S-03, Fable
+- Marcin accepted ADR-0008 with Option 1, the pessimistic row lock on the program, after asking
+  what the problem is, who decides which of two simultaneous requests wins, and what in the SQL
+  makes the lock. The decision section now carries those answers: the database arbitrates at
+  the lock, `FOR UPDATE` inside one transaction is the mechanism, a waiting `FOR UPDATE` sees
+  the winner's committed row under `READ COMMITTED`, lock order program-then-reservation rules
+  out deadlock, and the transaction stays short.
+- Recorded as well: S-02 already built this shape (`PrismaUnitOfWork`, `lockById`, the consumer
+  locking before a capacity update), so the decision confirms existing code and S-03 adds
+  reservations behind the same lock.
+- S-03 names no other ADR candidate, so its plan PR needs no further decision before
+  `/implement S-03`. The four minors carried out of S-02 still want a "Carried from S-02" list
+  in the S-03 slice file, which is `/plan`'s to add as a revision.

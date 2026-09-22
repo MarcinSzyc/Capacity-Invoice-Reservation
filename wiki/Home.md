@@ -17,7 +17,7 @@ Obsidian vault root is this folder. Working rules: `../CLAUDE.md`.
 | Gate | State |
 |---|---|
 | spec | done 2026-09-19: 28 questions answered, A-01..A-19, AC-01..AC-41, INV-01..INV-11 |
-| plan | done 2026-09-19: 7 slices S-01..S-07, 53 requirement rows, 11 ADRs; ADR-0001 to ADR-0007 accepted |
+| plan | done 2026-09-19: 7 slices S-01..S-07, 53 requirement rows, 11 ADRs; ADR-0001 to ADR-0008 accepted |
 
 | Slice | State |
 |---|---|
@@ -29,7 +29,6 @@ Obsidian vault root is this folder. Working rules: `../CLAUDE.md`.
 | S-06 Reconciliation snapshots | planned |
 | S-07 Demo page and operations | planned |
 
-Next: review and merge the S-02 pull request, then decide
-[[decisions/ADR-0008-concurrency-control-per-program]] and the other ADR candidates S-03 names
-before `/implement S-03`, which is `risk: high` and runs on Fable. The four minors carried out
-of S-02 (see [[log/changelog]]) go into the first commit of S-03.
+Next: `/plan` adds a "Carried from S-02" list to the S-03 slice file (the four minors in
+[[log/changelog]]), then `/implement S-03`, which is `risk: high` and runs on Fable.
+[[decisions/ADR-0008-concurrency-control-per-program]] is accepted; S-03 names no other ADR.
