@@ -1599,3 +1599,91 @@ correct with a new one. Format:
 - ADR-0008 was accepted before the slice; no ADR to finalise. No assumption the code relies on
   is missing from the register: the one gap, currency casing, went through `/spec` as A-10.
 - Changelog row, slice status `done`, slice index and Home updated; Home names S-04 next.
+
+## 2026-09-22, setup: mitigate an intermittent ECONNRESET in the two-instance e2e burst, Sonnet
+- Main CI failed after the S-03 merge: `[INV-01] should never overcommit under parallel
+  reservations on one program` (`api/test/capacity-invariant.e2e-test.ts`) failed with
+  `read ECONNRESET` during its 25-parallel-request burst, a network-level connection drop, not
+  a wrong assertion. Re-running the same commit's CI job passed clean (Gate 4m57s), which rules
+  out a code regression from the merge: the same code, same test, different runner outcome.
+- Diagnosis: Node 24's global `http.Agent` defaults to `keepAlive: true` (changed from Node 19
+  onward), while a Node `http.Server`'s default `keepAliveTimeout` is 5 000 ms. Under a burst of
+  parallel requests through one shared client agent, the server can close an idle persistent
+  socket at the exact moment the agent tries to reuse it, which surfaces as `ECONNRESET`. This
+  is the documented Node 19+ keep-alive race, not specific to this repo's code.
+- Fix: `api/test/support/disable-http-keepalive.ts` replaces `http.globalAgent` with one that
+  has `keepAlive: false`, wired into the `e2e` Jest project via `setupFiles` in
+  `api/jest.config.ts`. Test-only; nothing in `src/` changed.
+- Confidence: my local stress-testing (20+ rapid Testcontainers cycles to gauge the failure
+  rate before and after the fix) left roughly 60 orphaned Postgres and Kafka containers on this
+  machine, since `timeout`-killed runs did not let Testcontainers' Ryuk reaper clean up, and I
+  was blocked from force-removing them. Later local runs, including one after the fix, are
+  contaminated by that resource pressure, one of them failing in an unrelated way (a Kafka
+  message not propagating within 30 s). I cannot claim from local numbers that the race is
+  fully eliminated; the fix is the standard, minimal mitigation for the exact symptom CI
+  produced and cannot make things worse. Marcin decided: commit, push, validate with repeated
+  clean CI runs before merging, no further local stress-testing.
+- Branch `setup/e2e-http-agent-keepalive-race` from `main`. Nothing committed yet.
+
+## 2026-09-22, setup: correction, replace the keep-alive mitigation with a connection-reset retry, Sonnet
+- The keep-alive fix did not work. Validated on three clean CI runs of PR #27 with the fix in
+  place: run 1 and 2 passed, run 3 failed with the identical `read ECONNRESET` in INV-01. I had
+  also misreported run 2 and 3 as green by checking only one sub-job's tail instead of the
+  overall run status; both corrections are recorded here plainly.
+- Downloaded run 3's full CI log and counted the server-side responses for the failing burst:
+  10×201 and 14×422 logged, 24 of the 25 requests. Exactly one connection was reset within
+  milliseconds of the burst starting, before the server logged anything for it, which is not
+  the 5 s idle keep-alive race I diagnosed earlier; that theory is wrong and the mitigation for
+  it is removed (`api/test/support/disable-http-keepalive.ts` deleted, `jest.config.ts`
+  reverted).
+- Real fix: `api/test/support/retry-on-connection-reset.ts`, `withConnectionResetRetry`,
+  wraps a request factory with up to three attempts, retrying only on a network-level error
+  (`ECONNRESET`, `ECONNREFUSED`, `socket hang up`, `EPIPE`), never on a wrong status or a
+  thrown assertion. Wired into every HTTP call in
+  `api/test/capacity-invariant.e2e-test.ts` (both INV-01's 25-way burst and INV-03's sequential
+  calls, since the same ~4% per-request rate applies to both). The invariant assertions
+  themselves are untouched: a genuinely wrong status still fails the test on the first
+  non-retryable throw.
+- `npm run gate:quick` green; a clean full `test:e2e` run (37/37) passed once locally.
+  Validation continues on CI per Marcin's decision, since a single local pass proves little
+  against a ~4%-per-request, multiplicative-over-25-requests flake.
+- Not committed yet.
+
+## 2026-09-22, setup: second correction, backoff before retry and stagger the burst dispatch, Sonnet
+- The zero-delay retry also failed: PR #27's next CI run again hit `read ECONNRESET` in
+  INV-01, on the third attempt of the same request. That rules out an independent per-request
+  chance (three immediate retries would almost never all fail); the likely cause is momentary
+  server-side saturation (the OS accept queue) that an immediate retry lands back into, since
+  it fires before the original burst has drained.
+- Fix: `withConnectionResetRetry` now waits 300 ms before a retry, so it runs after the burst
+  rather than inside it. `capacity-invariant.e2e-test.ts` also staggers the 25 requests' initial
+  dispatch by 4 ms each (about 100 ms total to launch all 25), which still leaves every response
+  overlapping under the row lock (responses take tens to hundreds of ms), so INV-01 keeps
+  proving genuine concurrent contention on the database; it only eases how many TCP connections
+  land in the exact same instant.
+- `npm run gate:quick` green; a clean full `test:e2e` run (37/37) passed once locally. Pushed
+  for another round of clean CI validation per Marcin's decision.
+
+## 2026-09-22, setup: the real cause of the INV-01 ECONNRESET, supertest closing the listener, Fable
+- Root cause found, and it is not network jitter. `createTestApp` only called `app.init()`, so a
+  test app never listened on a port of its own. supertest opens one for any app that is not
+  listening and closes it again when that single request finishes
+  (`supertest/lib/test.js`: `serverAddress` sets `this._server = app.listen(0)`, `end` calls
+  `server.close()`). Proved directly: `address()` was `null` after `init()` and `null` again
+  after one completed request, so every request had been opening and closing its own listener.
+- Why that produced the flake: in INV-01 the 25 requests are created in one tick, so the first
+  of them opens the listener and the other 24 connect to that same port. The moment the fastest
+  response completes, that request closes the listener. Sibling connections still in the accept
+  queue are reset before the server ever accepts them, which is exactly what the CI logs showed:
+  24 of 25 responses logged and one request with no log line at all. It is load dependent, which
+  is why it hit a slow CI runner far more often than a laptop, and why only INV-01 (the one test
+  with a parallel burst) ever failed.
+- Fix: `buildApp` in `api/test/support/test-app.ts` now calls `await app.listen(0)`, so each app
+  keeps one stable port for its whole life, supertest never takes ownership of the listener and
+  never closes it. Eight lines including the comment; no production code touched.
+- Both earlier attempts are reverted, because both were mitigations for wrong diagnoses: the
+  keep-alive change (already reverted) and the connection-reset retry with backoff plus the
+  staggered dispatch (reverted here, `retry-on-connection-reset.ts` deleted). The net change of
+  this branch against `main` is `test-app.ts` and this log.
+- `npm run gate:quick` green. The full e2e suite run six times in a row: 6 passes, 0 failures,
+  against a roughly one-in-three failure rate before the fix.
