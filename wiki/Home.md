@@ -17,7 +17,7 @@ Obsidian vault root is this folder. Working rules: `../CLAUDE.md`.
 | Gate | State |
 |---|---|
 | spec | done 2026-09-19: 28 questions answered, A-01..A-19, AC-01..AC-41, INV-01..INV-11 |
-| plan | done 2026-09-19: 7 slices S-01..S-07, 53 requirement rows, 11 ADRs; ADR-0001 to ADR-0008 accepted; S-03 revised 2026-09-22 against the shipped S-02 code |
+| plan | done 2026-09-19: 7 slices S-01..S-07, 53 requirement rows, 11 ADRs; ADR-0001 to ADR-0008 accepted; S-03 revised 2026-09-22 against the shipped S-02 code; S-04 revised 2026-09-22 against the shipped S-03 code |
 
 | Slice | State |
 |---|---|
@@ -29,8 +29,9 @@ Obsidian vault root is this folder. Working rules: `../CLAUDE.md`.
 | S-06 Reconciliation snapshots | planned |
 | S-07 Demo page and operations | planned |
 
-Next: `/plan` review of S-04 against the shipped S-03 code, then `/implement S-04` on branch
+Next: merge the plan revision on `docs/plan-S-04`, then `/implement S-04` on branch
 `slice/S-04-cross-currency-reservations`. S-04 is `risk: high` (money arithmetic) and runs on
-Fable. It adds the `rate` column, field and `Rate` value object, and replaces the interim
-`422 CURRENCY_MISMATCH` on reserve with AC-07's `400` naming `rate`. A-10 now fixes currency
-casing: codes are uppercased at every boundary through `IsCurrencyCode()`.
+Fable. [[decisions/ADR-0006-money-and-rate-representation]] is accepted and is the only ADR the
+slice needs; two spec amendments decided by Marcin on 2026-09-22 (minor unit exponents in
+conversion, canonical `rate` rendering) go into A-10 through `/spec` before `/review`, together
+with a glossary entry for the minor unit exponent.
