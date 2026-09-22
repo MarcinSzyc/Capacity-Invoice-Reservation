@@ -1375,3 +1375,54 @@ correct with a new one. Format:
   ordering and ledger foreign key; the reject use case publishing outside a transaction; the
   stale before currency pin; the e2e `CURRENCY_MISMATCH` case; the `Reservation` schemas in the
   OpenAPI integer check.
+
+## 2026-09-22, verify S-03, Sonnet
+- Ran on branch `slice/S-03-reservations-and-capacity-invariant` at c94f8d5. `npm run gate`
+  green end to end: 95 unit, 24 integration, 36 e2e across 9 suites, 3 cold start (fresh
+  `docker compose down -v` / `up --wait` / authenticated call / `down -v`, stack healthy in
+  43s). No flaky retries.
+- Coverage: 14/14 planned tests present, each tag found exactly once, none skipped or
+  `.only`. Test names diffed byte for byte against `wiki/plan/plan.md`: identical. Test
+  levels match the plan (AC e2e over real HTTP via supertest, INV-01 across two `Promise.all`
+  application instances sharing one database, INV-09 against a real Postgres CHECK
+  constraint, INV-11 a unit property test).
+- Prose check clean. No nested ternary or braced one-line `if` found in the diff since
+  ccad5c3 (lint already enforces both and passed). Layer boundaries hold: no `@nestjs`
+  import under `domain/`, no Prisma or kafkajs import outside `infrastructure/`.
+- `/implement` touched only `wiki/log/work-log.md` and this slice's status and `Log`
+  section, as required.
+- Two minor findings, neither blocking: `capacity-invariant.e2e-test.ts` calls the ledger
+  helper inline at the end of each test body instead of wiring it into `afterEach`, so a
+  test added later to that file without remembering the call would skip the check, unlike
+  the slice's own Definition of done; the README has no reserve curl example or the four
+  reservation error codes yet, which the slice's Definition of done also names. Carried to
+  `/ship`, per changelog.
+- Result: PASS.
+
+## 2026-09-22, review S-03, Fable (fresh context)
+- Reviewed the diff `ccad5c3..HEAD` plus the uncommitted wiki lines against `CLAUDE.md §2, §3,
+  §4`, the slice file, AC-01 to AC-05, AC-08, AC-09, AC-21, AC-22, INV-01, INV-03, INV-04,
+  INV-09, INV-11, ADR-0002, ADR-0006, ADR-0008 and the assumptions register.
+- Concurrency: the critical section of INV-01 is `ReserveCapacity.execute`, one interactive
+  transaction whose first statement is the raw `SELECT ... FOR UPDATE` on the program row;
+  under `READ COMMITTED` the waiting transaction receives the row as the winner committed it,
+  the duplicate read, the capacity check, the reservation insert, the ledger row and the
+  absolute `reserved` upsert all happen under that lock, and the two instance e2e test proves
+  it. The mechanism guarantees INV-01 and INV-04 by construction, as ADR-0008 states.
+- REVIEW S-03: 7 findings (1/0/6). Blocker: `source` (`client`, `reconciliation`) is in code
+  and on the API with no glossary entry (`CLAUDE.md §2`; the slice DoD had named it); the fix
+  is a `/spec` glossary entry, not code. Minors: braces around a one-line `if` in
+  `Program.reserve`; `SeededRandom.int` and `FixedClock.set` have no caller; `const describe`
+  in the ledger helper shadows Jest's global; `capacity-invariant.e2e-test.ts` calls the
+  ledger helper inline instead of `afterEach`; `Program.reserve` accepts a zero `held`, guarded
+  only by the DTO. No spec file changed in the diff, so no `## Changes` row is owed.
+
+## 2026-09-22, spec (glossary words after review round 1 of S-03), Fable
+- Revision run for the one blocker of the first S-03 review: `source` (`client`,
+  `reconciliation`) is in code and on the API with no glossary entry. No open question: the
+  meaning was fixed by A-12 and the S-03 slice file, so the entry records it rather than decides
+  anything. Added "Reservation source" under Reservation, plus "Reservation identity" for the
+  reviewer's second point: the storage id of a reservation exists for the ledger and never
+  reaches the API, the invoice id within a program is the public name (A-07).
+- No AC, INV or assumption changed, so no `## Changes` row is owed. Written on the slice
+  branch, as the S-02 glossary words were.

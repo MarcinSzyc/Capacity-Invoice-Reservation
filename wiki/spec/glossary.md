@@ -73,6 +73,19 @@ recomputed from the ledger as reserve minus the sum of releases for that invoice
 
 **Active reservation.** `held > 0`. **Closed reservation.** `held = 0`.
 
+**Reservation source (`source`).** Who brought a reservation into existence. Exactly two
+values: `client`, when a client reserved the invoice over HTTP (the reserve movement then
+carries that client's id), and `reconciliation`, when a treasury snapshot listed an invoice
+we did not know and the service created the reservation as an adjustment (A-12, S-06). Fixed
+at creation, never changes, shown on every reservation the API returns. It answers the
+question "did we learn about this invoice from the client or from the treasury", which is
+what a reader of the ledger needs when the two disagree.
+
+**Reservation identity.** On the API a reservation is named by its invoice id within a
+program, because the pair (program, invoice id) is unique (A-07): there is no separate
+public reservation number. Storage may give a reservation an internal id so the ledger can
+point at one row; that id never appears in a request, a response or a message.
+
 **Release.** Giving part or all of a reservation's `held` back to capacity because the
 invoice was repaid. Expressed by the client in invoice currency, converted with the
 reservation's own rate. A full repayment is a release of 100% of what is left. A release
