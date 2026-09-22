@@ -1,4 +1,8 @@
-import {DomainError, DomainErrorKind} from '../../../common/errors/domain-error';
+import {
+  DomainError,
+  DomainErrorKind,
+  VALIDATION_FAILED_CODE,
+} from '../../../common/errors/domain-error';
 import {Money} from './money';
 import {Reservation, ReservationDescription} from './reservation';
 
@@ -60,5 +64,24 @@ export class ReservationAlreadyExistsError extends DomainError {
   constructor(readonly existing: Reservation) {
     super(`Invoice ${existing.invoiceId} is already reserved on program ${existing.programId}`);
     this.details = {reservation: existing.describe()};
+  }
+}
+
+/**
+ * A-02, AC-07: the rate does not fit the two currencies, or the amount it converts to is
+ * nothing. The DTO cannot judge either, because neither is knowable without the program's
+ * currency, so the use case raises it and the filter renders it as the `400` a client expects.
+ */
+export class RateValidationError extends DomainError {
+  readonly code = VALIDATION_FAILED_CODE;
+  readonly kind: DomainErrorKind = 'invalid';
+  override readonly details: {readonly details: readonly string[]};
+
+  constructor(
+    readonly field: string,
+    problem: string,
+  ) {
+    super(`${field} ${problem}`);
+    this.details = {details: [`${field} ${problem}`]};
   }
 }

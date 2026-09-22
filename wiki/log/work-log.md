@@ -1735,3 +1735,44 @@ correct with a new one. Format:
   body.
 - No new open question. Branch `docs/a-10-minor-units-and-rate-format` from `main` at b8de6a6.
   Wiki only, nothing under `api/` touched.
+
+## 2026-09-22, implement S-04 (cross-currency reservations), Opus
+- Branch `slice/S-04-cross-currency-reservations` from `main` at 5ef50ac. Run on Opus, not
+  Fable: the slice is `risk: high`, so `CLAUDE.md §8` puts it on Fable, and Marcin decided to
+  run it here anyway. Recorded so the deviation is a decision and not an oversight.
+- Built test first, domain outwards. `Rate` (`domain/rate.ts`): unscaled `bigint` plus a scale
+  of at most 8, parsed from a decimal string, canonical `toString()`, numeric `isOne` and
+  `equals` (ADR-0006, A-10). `minorUnitExponent` (`domain/currency-exponents.ts`): the ISO 4217
+  exceptions with a default of 2. `Money.convert(rate, target)`: one multiplication and one
+  division in `bigint`, the half added before dividing, scaling by both currencies' exponents.
+  All five pinned examples from the slice hold, including 1 000 JPY at `0.0067` being 670 USD
+  minor units and the two KWD cases.
+- `Reservation` carries `rate` and describes it canonically. `ReserveCapacity` judges AC-07
+  after the duplicate check and before any write: a missing rate on differing currencies and a
+  rate that is not one on equal currencies are both `RateValidationError`, and so is an amount
+  that converts to nothing, which would otherwise reach `Program.reserve`'s `RangeError` and
+  become a `500`.
+- `DomainErrorKind` gains `invalid`, which the one filter maps to `400 VALIDATION_FAILED` with
+  `details`, so AC-07 and AC-08 answer in the same shape. `VALIDATION_FAILED_CODE` moved from
+  `common/filters/error-body.ts` to `common/errors/domain-error.ts`: the domain names the code
+  and must not import a file that knows HTTP, which is the import boundary lint's whole point.
+  The slice's scope section had already called for the move.
+- Migration `20260922180000_reservation_rate` adds `rate NUMERIC(20,8) NOT NULL DEFAULT 1` and
+  drops the default in the same file, so S-03's rows (all same-currency, so all at one) are
+  backfilled while a mapper that forgets the rate still fails the insert.
+- The interim `422 CURRENCY_MISMATCH` on reserve is gone from the use case, and its untagged
+  e2e test with it (slice decision 9). `CurrencyMismatchError` stays: `Money` and ADR-0007 use
+  it.
+- Tests beyond the plan, for `/ship` to add to `wiki/plan/plan.md`: `Rate` parsing,
+  canonicalisation and refusals; `minorUnitExponent`; `Reservation` carrying the rate;
+  `ReserveCapacity` for each rate outcome and for the duplicate running before the rate rule;
+  the filter rendering an `invalid` error; the Prisma round trip keeping `0.0067` exact through
+  `NUMERIC(20,8)`; and an e2e that refuses a JSON number, `abc`, `0` and nine decimals naming
+  `rate`.
+- Two test corrections worth naming: a `Rate` is compared with `equals` or its canonical
+  string, never structurally, because `1.10` is stored exactly as 110 at scale 2 and only
+  rendered canonically; and `Rate.parse`'s guard needed braces once Prettier wrapped it, the
+  same `curly: multi-line` interaction S-03 met.
+- `npm run gate` green: unit 111, integration 24, e2e 39, cold start 3. Nothing committed.
+- Still owed, by `/ship` as in S-03: the README cross-currency example with `rate` and the
+  removal of the `CURRENCY_MISMATCH` row from its reservation error table.

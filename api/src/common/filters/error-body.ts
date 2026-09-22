@@ -1,5 +1,5 @@
 import {HttpException, HttpStatus} from '@nestjs/common';
-import {DomainError, DomainErrorKind} from '../errors/domain-error';
+import {DomainError, DomainErrorKind, VALIDATION_FAILED_CODE} from '../errors/domain-error';
 import {jsonInteger} from '../json-integer';
 
 export interface ErrorBody {
@@ -13,7 +13,7 @@ export interface ErrorBody {
 
 export const SERVER_ERROR_FROM = 500;
 export const INTERNAL_ERROR_CODE = 'INTERNAL_ERROR';
-export const VALIDATION_FAILED_CODE = 'VALIDATION_FAILED';
+export {VALIDATION_FAILED_CODE};
 
 const CODE_BY_STATUS: Readonly<Record<number, string>> = {
   [HttpStatus.BAD_REQUEST]: 'BAD_REQUEST',
@@ -31,6 +31,7 @@ const STATUS_BY_KIND: Readonly<Record<DomainErrorKind, number>> = {
   not_found: HttpStatus.NOT_FOUND,
   conflict: HttpStatus.CONFLICT,
   unprocessable: HttpStatus.UNPROCESSABLE_ENTITY,
+  invalid: HttpStatus.BAD_REQUEST,
 };
 
 /**

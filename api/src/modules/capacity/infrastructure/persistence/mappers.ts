@@ -1,3 +1,4 @@
+import {Prisma as PrismaRuntime} from '../../../../generated/prisma/client';
 import type {
   CapacityMovement as CapacityMovementRow,
   Prisma,
@@ -7,6 +8,7 @@ import type {
 import {CapacityMovement, MovementAttribution} from '../../domain/capacity-movement';
 import {Money} from '../../domain/money';
 import {Program} from '../../domain/program';
+import {Rate} from '../../domain/rate';
 import {Reservation} from '../../domain/reservation';
 
 type ProgramColumns = Omit<ProgramRow, 'updatedAt'>;
@@ -77,6 +79,7 @@ export const toReservation = (row: ReservationColumns): Reservation =>
     invoiceAmount: Money.of(row.invoiceAmount, row.invoiceCurrency),
     reservedAmount: Money.of(row.reservedAmount, row.currency),
     held: Money.of(row.held, row.currency),
+    rate: Rate.parse(row.rate.toString()),
     source: row.source,
     clientId: row.clientId,
     createdAt: row.createdAt,
@@ -91,6 +94,7 @@ export const toReservationColumns = (reservation: Reservation): ReservationColum
   currency: reservation.reservedAmount.currency,
   reservedAmount: reservation.reservedAmount.amount,
   held: reservation.held.amount,
+  rate: new PrismaRuntime.Decimal(reservation.rate.toString()),
   source: reservation.source,
   clientId: reservation.clientId,
   createdAt: reservation.createdAt,

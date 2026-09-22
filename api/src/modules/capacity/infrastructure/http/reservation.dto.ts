@@ -1,5 +1,5 @@
 import {ApiProperty} from '@nestjs/swagger';
-import {IsInt, IsString, Length, Max, Min} from 'class-validator';
+import {IsInt, IsOptional, IsString, Length, Matches, Max, Min} from 'class-validator';
 import {INVOICE_ID_MAX_LENGTH} from '../../domain/identifier-limits';
 import {ReservationSource, ReservationStatus} from '../../domain/reservation';
 import {IsCurrencyCode} from '../currency-code';
@@ -29,6 +29,24 @@ export class ReserveRequestDto {
   })
   @IsCurrencyCode()
   invoiceCurrency!: string;
+
+  // A JSON number is refused by `@IsString()`, so the published contract never says float
+  // (INV-08, ADR-0006). Whether the value is legal at all needs the program's currency, which
+  // a DTO cannot see, so AC-07's rule is the use case's (slice decision 1).
+  @ApiProperty({
+    type: String,
+    required: false,
+    example: '1.10',
+    description:
+      'Invoice currency to program currency, a decimal string of at most 8 fractional digits. Required when invoiceCurrency differs from the program currency, absent or 1 otherwise. Reads back canonical, so "1.10" reads "1.1" (A-02, A-10).',
+  })
+  @IsOptional()
+  @IsString()
+  @Matches(/^\d{1,12}(\.\d{1,8})?$/, {
+    message: 'rate must be a decimal string with at most 8 fractional digits',
+  })
+  @Matches(/[1-9]/, {message: 'rate must be greater than zero'})
+  rate?: string;
 }
 
 /** A-19: a reservation as the client reads it. Amounts are integer minor units (ADR-0006). */
@@ -58,6 +76,14 @@ export class ReservationDto {
     description: 'How much of reservedAmount still occupies the limit, in program currency.',
   })
   held!: number;
+
+  @ApiProperty({
+    type: String,
+    example: '1.1',
+    description:
+      'Invoice currency to program currency, canonical decimal; 1 for a same-currency reservation (A-10).',
+  })
+  rate!: string;
 
   @ApiProperty({
     enum: ['active', 'closed'],
