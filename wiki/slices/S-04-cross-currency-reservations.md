@@ -1,7 +1,7 @@
 # S-04 Cross-currency reservations
 
 - Outcome: a client reserves an invoice denominated in another currency than the program by supplying the rate; the service converts once, half up, into the program's minor unit, stores the rate on the reservation and never mixes currencies anywhere else.
-- Status: planned
+- Status: in progress
 - AC: AC-06, AC-07
 - INV: INV-08
 - Risk: high. Money arithmetic: an integer amount times a decimal rate across two minor unit exponents, rounded half up, in `bigint` with no float anywhere. Small slice, but per `CLAUDE.md §8` money is Fable work.
@@ -240,3 +240,4 @@ Beyond `CLAUDE.md §9`:
 |---|---|---|
 | 2026-09-19 | plan | slice written |
 | 2026-09-22 | plan | revised against the shipped S-03 code; exponent table and canonical `rate` decided by Marcin; nine local decisions, no new ADR |
+| 2026-09-22 | implement | started on Opus; `risk: high` would put this on Fable per `CLAUDE.md §8`, Marcin decided to run it on Opus |

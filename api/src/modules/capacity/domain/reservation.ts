@@ -1,5 +1,6 @@
 import {randomUUID} from 'node:crypto';
 import {Money} from './money';
+import {Rate} from './rate';
 
 /** Who created the reservation: the client over HTTP, or a reconciliation snapshot (S-06). */
 export type ReservationSource = 'client' | 'reconciliation';
@@ -15,6 +16,8 @@ export interface ReservationState {
   readonly invoiceAmount: Money;
   readonly reservedAmount: Money;
   readonly held: Money;
+  /** A-02: the rate `invoiceAmount` was converted at, fixed for life; every release reuses it. */
+  readonly rate: Rate;
   readonly source: ReservationSource;
   readonly clientId: string | null;
   readonly createdAt: Date;
@@ -25,6 +28,7 @@ export interface OpenReservation {
   readonly invoiceId: string;
   readonly invoiceAmount: Money;
   readonly reservedAmount: Money;
+  readonly rate: Rate;
   readonly clientId: string;
   readonly createdAt: Date;
 }
@@ -37,6 +41,8 @@ export interface ReservationDescription {
   readonly invoiceCurrency: string;
   readonly reservedAmount: bigint;
   readonly held: bigint;
+  /** Canonical decimal, the form the API publishes (A-10). */
+  readonly rate: string;
   readonly status: ReservationStatus;
   readonly source: ReservationSource;
   readonly createdAt: Date;
@@ -45,7 +51,8 @@ export interface ReservationDescription {
 /**
  * The claim one invoice holds on a program's capacity (glossary). Three amounts: what the
  * client sent, what that took from the limit at creation, and how much of it still occupies the
- * limit. In this slice the first two are equal because the currencies are; S-04 adds the rate.
+ * limit, plus the rate the first became the second at (A-02). Same-currency reservations carry
+ * a rate of one, so there is one shape rather than two.
  */
 export class Reservation {
   private constructor(private readonly state: ReservationState) {}
@@ -58,6 +65,7 @@ export class Reservation {
       invoiceAmount: request.invoiceAmount,
       reservedAmount: request.reservedAmount,
       held: request.reservedAmount,
+      rate: request.rate,
       source: 'client',
       clientId: request.clientId,
       createdAt: request.createdAt,
@@ -93,6 +101,10 @@ export class Reservation {
     return this.state.held;
   }
 
+  get rate(): Rate {
+    return this.state.rate;
+  }
+
   get status(): ReservationStatus {
     return this.state.held.isZero() ? 'closed' : 'active';
   }
@@ -117,6 +129,7 @@ export class Reservation {
       invoiceCurrency: this.invoiceAmount.currency,
       reservedAmount: this.reservedAmount.amount,
       held: this.held.amount,
+      rate: this.rate.toString(),
       status: this.status,
       source: this.source,
       createdAt: this.createdAt,

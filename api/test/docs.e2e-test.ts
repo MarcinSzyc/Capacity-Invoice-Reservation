@@ -3,6 +3,12 @@ import request from 'supertest';
 import {createProductionApp, createTestApp, httpServer} from './support/test-app';
 
 const DOCUMENTATION_PATHS = ['/openapi.json', '/openapi.yaml', '/docs', '/redoc'];
+// A rate is a decimal string on the wire, never a JSON number (ADR-0006, INV-08).
+const STRING_FIELDS_BY_SCHEMA: Record<string, readonly string[]> = {
+  ReserveRequestDto: ['rate'],
+  ReservationDto: ['rate'],
+};
+
 const MONEY_FIELDS_BY_SCHEMA: Record<string, readonly string[]> = {
   AvailabilityDto: ['limit', 'reserved', 'available'],
   ReserveRequestDto: ['invoiceAmount'],
@@ -36,7 +42,7 @@ describe('API documentation by profile', () => {
       }
     });
 
-    it('should publish every money field as an integer, never a number (ADR-0006)', async () => {
+    it('[INV-08] should publish rate as a string and every amount as an integer (ADR-0006)', async () => {
       const response = await request(httpServer(app)).get('/openapi.json').expect(200);
       const document = response.body as OpenApiDocument;
 
@@ -45,6 +51,14 @@ describe('API documentation by profile', () => {
         for (const field of fields) {
           expect(`${schema}.${field}: ${properties[field]?.type ?? 'missing'}`).toBe(
             `${schema}.${field}: integer`,
+          );
+        }
+      }
+      for (const [schema, fields] of Object.entries(STRING_FIELDS_BY_SCHEMA)) {
+        const properties = document.components?.schemas?.[schema]?.properties ?? {};
+        for (const field of fields) {
+          expect(`${schema}.${field}: ${properties[field]?.type ?? 'missing'}`).toBe(
+            `${schema}.${field}: string`,
           );
         }
       }

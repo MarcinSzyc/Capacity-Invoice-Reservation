@@ -13,6 +13,7 @@ import {
 import {ClientId} from '../../../../common/auth/client-id.decorator';
 import {GetAvailability} from '../../application/get-availability.query';
 import {ReserveCapacity} from '../../application/reserve-capacity.use-case';
+import {Rate} from '../../domain/rate';
 import {AvailabilityDto, ProgramIdParams} from './availability.dto';
 import {toAvailabilityDto} from './availability.mapper';
 import {ReservationDto, ReserveRequestDto} from './reservation.dto';
@@ -38,14 +39,15 @@ export class ProgramsController {
   @Post(':programId/reservations')
   @HttpCode(HttpStatus.CREATED)
   @ApiCreatedResponse({type: ReservationDto, description: 'Capacity is held for the invoice.'})
-  @ApiBadRequestResponse({description: 'VALIDATION_FAILED: details name each field (AC-08).'})
+  @ApiBadRequestResponse({
+    description: 'VALIDATION_FAILED: details name each field (AC-07, AC-08).',
+  })
   @ApiNotFoundResponse({description: 'PROGRAM_NOT_FOUND: the treasury never announced it (AC-04).'})
   @ApiConflictResponse({
     description: 'RESERVATION_ALREADY_EXISTS: the existing reservation is in the body (AC-05).',
   })
   @ApiUnprocessableEntityResponse({
-    description:
-      'CAPACITY_EXCEEDED with available in minor units (AC-03, AC-09); CURRENCY_MISMATCH until S-04.',
+    description: 'CAPACITY_EXCEEDED with available in minor units (AC-03, AC-09).',
   })
   async reserve(
     @Param() {programId}: ProgramIdParams,
@@ -57,6 +59,7 @@ export class ProgramsController {
       invoiceId: body.invoiceId,
       invoiceAmount: BigInt(body.invoiceAmount),
       invoiceCurrency: body.invoiceCurrency,
+      rate: body.rate === undefined ? null : Rate.parse(body.rate),
       clientId,
     });
     return toReservationDto(reservation);

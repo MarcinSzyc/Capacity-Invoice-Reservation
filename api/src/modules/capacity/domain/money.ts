@@ -1,9 +1,15 @@
+import {minorUnitExponent} from './currency-exponents';
 import {CurrencyMismatchError} from './errors';
+import {Rate} from './rate';
+
+const TEN = 10n;
+
+const power = (exponent: number): bigint => TEN ** BigInt(exponent);
 
 /**
  * An amount of money: integer minor units (ADR-0006, `bigint`) plus an ISO 4217 code. Two
- * amounts combine only in the same currency; conversion arrives with `Rate` in S-04 and is the
- * only place a currency ever changes (INV-08).
+ * amounts combine only in the same currency; `convert` is the only place a currency ever
+ * changes, and it always needs a rate (INV-08).
  */
 export class Money {
   private constructor(
@@ -44,6 +50,18 @@ export class Money {
 
   isZero(): boolean {
     return this.amount === 0n;
+  }
+
+  /**
+   * A-10: one conversion, rounded half up to the target's minor unit. Both currencies bring
+   * their own exponent, so a JPY amount (no decimals) and a KWD one (three) convert correctly
+   * rather than as if everything had two. All of it in `bigint`: the half is added before the
+   * single division, which rounds up on a tie for the non-negative amounts `Money` allows.
+   */
+  convert(rate: Rate, targetCurrency: string): Money {
+    const numerator = this.amount * rate.unscaled * power(minorUnitExponent(targetCurrency));
+    const divisor = power(rate.scale + minorUnitExponent(this.currency));
+    return Money.of((numerator + divisor / 2n) / divisor, targetCurrency);
   }
 
   private assertSameCurrency(other: Money, operation: string): void {

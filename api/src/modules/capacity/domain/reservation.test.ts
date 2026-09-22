@@ -1,4 +1,5 @@
 import {Money} from './money';
+import {Rate} from './rate';
 import {Reservation} from './reservation';
 
 const PROGRAM_ID = 'PRG-1';
@@ -16,6 +17,7 @@ describe('Reservation', () => {
       invoiceId: INVOICE_A,
       invoiceAmount: ONE_POINT_TWO_MILLION_USD,
       reservedAmount: ONE_POINT_TWO_MILLION_USD,
+      rate: Rate.one(),
       clientId: CLIENT,
       createdAt: AT_10_00,
     });
@@ -39,6 +41,7 @@ describe('Reservation', () => {
         invoiceId: INVOICE_A,
         invoiceAmount: ONE_POINT_TWO_MILLION_USD,
         reservedAmount: ONE_POINT_TWO_MILLION_USD,
+        rate: Rate.one(),
         clientId: CLIENT,
         createdAt: AT_10_00,
       });
@@ -54,6 +57,7 @@ describe('Reservation', () => {
       invoiceAmount: ONE_POINT_TWO_MILLION_USD,
       reservedAmount: ONE_POINT_TWO_MILLION_USD,
       held: Money.zero(USD),
+      rate: Rate.one(),
       source: 'reconciliation',
       clientId: null,
       createdAt: AT_10_00,
@@ -70,6 +74,7 @@ describe('Reservation', () => {
       invoiceId: INVOICE_A,
       invoiceAmount: ONE_POINT_TWO_MILLION_USD,
       reservedAmount: ONE_POINT_TWO_MILLION_USD,
+      rate: Rate.one(),
       clientId: CLIENT,
       createdAt: AT_10_00,
     });
@@ -81,9 +86,32 @@ describe('Reservation', () => {
       invoiceCurrency: USD,
       reservedAmount: 120_000_000n,
       held: 120_000_000n,
+      rate: '1',
       status: 'active',
       source: 'client',
       createdAt: AT_10_00,
+    });
+  });
+
+  it('should carry the rate it was converted at, and describe it canonically (A-02, A-10)', () => {
+    const reservation = Reservation.open({
+      programId: PROGRAM_ID,
+      invoiceId: INVOICE_A,
+      invoiceAmount: Money.of(275_000_000n, 'EUR'),
+      reservedAmount: Money.of(302_500_000n, USD),
+      rate: Rate.parse('1.10'),
+      clientId: CLIENT,
+      createdAt: AT_10_00,
+    });
+
+    expect(reservation.rate.equals(Rate.parse('1.1'))).toBe(true);
+    expect(reservation.rate.toString()).toBe('1.1');
+    expect(reservation.describe()).toMatchObject({
+      invoiceAmount: 275_000_000n,
+      invoiceCurrency: 'EUR',
+      reservedAmount: 302_500_000n,
+      held: 302_500_000n,
+      rate: '1.1',
     });
   });
 });
