@@ -1687,3 +1687,27 @@ correct with a new one. Format:
   this branch against `main` is `test-app.ts` and this log.
 - `npm run gate:quick` green. The full e2e suite run six times in a row: 6 passes, 0 failures,
   against a roughly one-in-three failure rate before the fix.
+## 2026-09-22, plan S-04 (revision before implement), Fable
+- Targeted run for a slice that already existed: S-04 was written on 2026-09-19 before any
+  code, S-03 shipped today (tag `S-03`, 2d159f6), so the file was reconciled with what S-03
+  left behind rather than rewritten. The three requirement rows in `wiki/plan/plan.md` keep
+  their test names (AC-06, AC-07, INV-08); INV-08's level becomes `unit + e2e (docs)` because
+  its schema half is proven in the OpenAPI test, and the S-03 `extra` row for the interim
+  `CURRENCY_MISMATCH` test is marked superseded by AC-07. The slice index is untouched.
+- Two gaps neither A-10 nor ADR-0006 covered were put to Marcin and decided: conversion
+  respects the ISO 4217 minor unit exponent of both currencies through a table in the domain
+  (JPY 0, KWD 3, default 2), and `rate` reads back in canonical form (`"1.1"` for a sent
+  `"1.10"`, `"1"` for same currency). Both are A-10 amendments for `/spec`, listed in the
+  slice's definition of done together with a glossary entry for the exponent.
+- Drift found against the shipped code and fixed in the slice file: validation `details` is a
+  list of messages, not `details.fields`; AC-07's rule needs the program currency so it is
+  judged in the use case and answered through a new domain error kind `invalid` that the filter
+  maps to `400 VALIDATION_FAILED` (S-03 decision 2 left this to S-04); a conversion that rounds
+  to zero is refused before `Program.reserve` can throw its `RangeError`; the `rate` column is
+  added with `DEFAULT 1` for S-03's rows and the default dropped in the same migration.
+- Nine local decisions recorded in the slice file, none with the weight of an ADR; ADR-0006
+  stands as accepted. `Money.convert` gets its formula and five pinned examples, including a
+  JPY and two KWD cases, so `/implement` writes tests against numbers, not prose.
+- Branch `docs/plan-S-04` cut from `main` at 2d159f6. Files: the S-04 slice file,
+  `wiki/plan/plan.md`, `Home.md`, this entry. Nothing committed; the plan PR needs no ADR
+  decision.
