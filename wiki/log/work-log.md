@@ -1301,3 +1301,28 @@ correct with a new one. Format:
 - S-03 names no other ADR candidate, so its plan PR needs no further decision before
   `/implement S-03`. The four minors carried out of S-02 still want a "Carried from S-02" list
   in the S-03 slice file, which is `/plan`'s to add as a revision.
+
+## 2026-09-22, plan S-03 (revision before implement), Fable
+- Targeted run for a slice that already existed: S-03 was written on 2026-09-19 before any
+  code, S-02 has shipped since and ADR-0008 was accepted on 2026-09-21, so the file was
+  reconciled with reality rather than rewritten. Requirement rows in `wiki/plan/plan.md` and
+  the slice index are untouched: all fourteen test names stay as planned, 9 AC and 5 INV.
+- Drift found against the shipped code and fixed in the slice file: the error envelope puts
+  business fields (`available`, `reservation`) at the top level and validation `details` is a
+  list of messages, not `details.fields[]`; a DTO cannot see the program currency, so another
+  currency on reserve is `422 CURRENCY_MISMATCH` from the use case until S-04 brings AC-07;
+  Prisma cannot express a composite foreign key that mixes a required and an optional column,
+  so `reservations` gets a surrogate id and the ledger's `reservation_id` a plain foreign key,
+  while the public identity stays the `invoiceId` (A-07).
+- Eight local decisions recorded in the slice file so review can hold the code to them: no
+  `rate` in S-03 (S-04 adds column, value object and field together), the surrogate id, the
+  filter rendering `bigint` and `Date` inside error details, a `Clock` port, capacity shortage
+  thrown as a domain error, a hand-rolled seeded generator for INV-11, and a ledger helper that
+  checks every program in the test database. None has the weight of an ADR.
+- "Carried from S-02" section added with the four minors from the fourth S-02 review and a fix
+  for each, to land in the first commit of the slice test first. Hand-off notes for S-04, S-05
+  and S-06 written down where this slice shapes them.
+- One item for `/spec`: `source` (`client`, `reconciliation`) appears in code and on the API
+  in this slice and has no glossary entry; without it `/review` will raise a finding.
+- Branch `docs/plan-S-03` cut from `main` at caffd7e. Files: the S-03 slice file, `Home.md`,
+  this entry. Nothing committed; the plan PR needs no ADR decision because ADR-0008 is accepted.
