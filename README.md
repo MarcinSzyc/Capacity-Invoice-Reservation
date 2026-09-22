@@ -68,6 +68,27 @@ healthy. To play the treasury yourself, publish another:
 npm run dev:treasury -- capacity-update --program PRG-2 --currency EUR --limit 500000000
 ```
 
+Reserve capacity for an invoice. The amount is in minor units of the invoice currency, and for
+now the invoice must be in the program currency (cross-currency arrives in S-04):
+
+```bash
+curl -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -d '{"invoiceId":"INV-A","invoiceAmount":120000000,"invoiceCurrency":"USD"}' \
+  http://localhost:3000/programs/PRG-1/reservations
+```
+
+`201` with the reservation (`reservedAmount`, `held`, `status` `active`), and availability drops
+by the same amount. A currency code is uppercased on the way in, so `usd` works too (A-10).
+Refusals carry a stable `code` in the body:
+
+| Status | `code` | When |
+|---|---|---|
+| `400` | `VALIDATION_FAILED` | a field is missing or malformed; `details` names it |
+| `404` | `PROGRAM_NOT_FOUND` | the treasury never announced the program |
+| `409` | `RESERVATION_ALREADY_EXISTS` | the invoice already has a reservation; the original is in the body |
+| `422` | `CAPACITY_EXCEEDED` | the amount is more than `available`, which the body carries |
+| `422` | `CURRENCY_MISMATCH` | the invoice is in another currency than the program (until S-04) |
+
 Without a token, or with an expired or wrongly signed one, every business route answers `401`.
 The token command signs with `JWT_SECRET`, or with the development secret compose starts the
 api with when the variable is not set; that value is refused in the production profile.
