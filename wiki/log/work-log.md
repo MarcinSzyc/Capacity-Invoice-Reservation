@@ -1648,3 +1648,18 @@ correct with a new one. Format:
   Validation continues on CI per Marcin's decision, since a single local pass proves little
   against a ~4%-per-request, multiplicative-over-25-requests flake.
 - Not committed yet.
+
+## 2026-09-22, setup: second correction, backoff before retry and stagger the burst dispatch, Sonnet
+- The zero-delay retry also failed: PR #27's next CI run again hit `read ECONNRESET` in
+  INV-01, on the third attempt of the same request. That rules out an independent per-request
+  chance (three immediate retries would almost never all fail); the likely cause is momentary
+  server-side saturation (the OS accept queue) that an immediate retry lands back into, since
+  it fires before the original burst has drained.
+- Fix: `withConnectionResetRetry` now waits 300 ms before a retry, so it runs after the burst
+  rather than inside it. `capacity-invariant.e2e-test.ts` also staggers the 25 requests' initial
+  dispatch by 4 ms each (about 100 ms total to launch all 25), which still leaves every response
+  overlapping under the row lock (responses take tens to hundreds of ms), so INV-01 keeps
+  proving genuine concurrent contention on the database; it only eases how many TCP connections
+  land in the exact same instant.
+- `npm run gate:quick` green; a clean full `test:e2e` run (37/37) passed once locally. Pushed
+  for another round of clean CI validation per Marcin's decision.
