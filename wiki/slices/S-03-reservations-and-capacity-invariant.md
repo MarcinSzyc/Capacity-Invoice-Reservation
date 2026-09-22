@@ -1,7 +1,7 @@
 # S-03 Reservations and the capacity invariant
 
 - Outcome: a client reserves capacity for an invoice in program currency, is refused when capacity is short or the invoice is already reserved, and two parallel clients can never both take the same free capacity.
-- Status: planned
+- Status: in progress
 - AC: AC-01, AC-02, AC-03, AC-04, AC-05, AC-08, AC-09, AC-21, AC-22
 - INV: INV-01, INV-03, INV-04, INV-09, INV-11
 - Risk: high. Concurrency: the core invariant of the brief (never overcommit) is decided here, under two service instances against one database. Implemented on Fable per `CLAUDE.md §8`.
@@ -253,3 +253,4 @@ Beyond `CLAUDE.md §9`:
 |---|---|---|
 | 2026-09-19 | plan | slice written |
 | 2026-09-22 | plan (revision) | reconciled with shipped S-02 code and accepted ADR-0008; carried S-02 minors listed; eight local decisions fixed; test names unchanged, 9/9 AC and 5/5 INV named |
+| 2026-09-22 | implement | slice started, branch `slice/S-03-reservations-and-capacity-invariant`, from `main` at ccad5c3 |

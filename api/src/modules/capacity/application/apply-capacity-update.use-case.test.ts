@@ -109,6 +109,32 @@ describe('ApplyCapacityUpdate', () => {
     expect(capacity.repositories.treasuryMessages.byId.has('m-2')).toBe(false);
   });
 
+  it('should record an older update as stale before judging its currency, so a stale update in another currency is stale, not rejected (A-13)', async () => {
+    const capacity = inMemoryCapacity();
+    await capacity.repositories.programs.save(
+      Program.rehydrate({
+        programId: PROGRAM_ID,
+        currency: EUR,
+        limit: Money.of(900_000_000n, EUR),
+        reserved: Money.of(100n, EUR),
+        limitEventTime: AT_10_05,
+        asOf: null,
+      }),
+    );
+    const useCase = new ApplyCapacityUpdate(capacity);
+
+    const result = await useCase.execute(
+      command({messageId: 'm-2', currency: USD, creditLimit: 1_000_000_000n, eventTime: AT_10_00}),
+    );
+
+    expect(result).toEqual({outcome: 'stale'});
+    const program = capacity.repositories.programs.byId.get(PROGRAM_ID);
+    expect(program?.currency).toBe(EUR);
+    expect(program?.limit).toEqual(Money.of(900_000_000n, EUR));
+    expect(capacity.repositories.ledger.movements).toHaveLength(0);
+    expect(capacity.repositories.treasuryMessages.byId.get('m-2')?.outcome).toBe('stale');
+  });
+
   it('should re-denominate a program with nothing held when the update carries another currency (ADR-0007)', async () => {
     const capacity = inMemoryCapacity();
     const useCase = new ApplyCapacityUpdate(capacity);

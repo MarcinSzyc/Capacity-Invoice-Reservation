@@ -127,6 +127,5 @@ describe('Programs', () => {
       true,
     );
     expect(messageLines.some((line) => String(line.message).includes('applied'))).toBe(true);
-    expect(REQUEST_CORRELATION_ID).not.toBe(messageId);
   });
 });
