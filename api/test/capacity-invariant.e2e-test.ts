@@ -8,6 +8,7 @@ import {
   readAvailability,
   USD,
 } from './support/programs';
+import {withConnectionResetRetry} from './support/retry-on-connection-reset';
 import {createTestApp, httpServer} from './support/test-app';
 import {bearer, validToken} from './support/tokens';
 
@@ -55,7 +56,9 @@ describe('Capacity invariants', () => {
 
     const responses = await Promise.all(
       Array.from({length: PARALLEL_REQUESTS}, (_, index) =>
-        reserve(index % 2 === 0 ? first : second, programId, `INV-${index}`, ONE_MILLION_USD),
+        withConnectionResetRetry(() =>
+          reserve(index % 2 === 0 ? first : second, programId, `INV-${index}`, ONE_MILLION_USD),
+        ),
       ),
     );
 
@@ -76,9 +79,15 @@ describe('Capacity invariants', () => {
   it('[INV-03] should keep program reserved equal to the sum of held of active reservations after every scenario', async () => {
     const programId = await announceProgram(first, {currency: USD, creditLimit: TEN_MILLION_USD});
 
-    await reserve(first, programId, 'INV-1', 3 * ONE_MILLION_USD).expect(201);
-    await reserve(second, programId, 'INV-2', 2 * ONE_MILLION_USD).expect(201);
-    await reserve(first, programId, 'INV-3', ONE_MILLION_USD).expect(201);
+    await withConnectionResetRetry(() =>
+      reserve(first, programId, 'INV-1', 3 * ONE_MILLION_USD).expect(201),
+    );
+    await withConnectionResetRetry(() =>
+      reserve(second, programId, 'INV-2', 2 * ONE_MILLION_USD).expect(201),
+    );
+    await withConnectionResetRetry(() =>
+      reserve(first, programId, 'INV-3', ONE_MILLION_USD).expect(201),
+    );
     await publishCapacityUpdate(first, {
       programId,
       currency: USD,
@@ -86,8 +95,10 @@ describe('Capacity invariants', () => {
       eventTime: AT_10_05,
     });
     await awaitAvailability(first, programId, token, (body) => body.overcommitted);
-    await reserve(second, programId, 'INV-4', 1).expect(422);
-    await reserve(first, programId, 'INV-2', 2 * ONE_MILLION_USD).expect(409);
+    await withConnectionResetRetry(() => reserve(second, programId, 'INV-4', 1).expect(422));
+    await withConnectionResetRetry(() =>
+      reserve(first, programId, 'INV-2', 2 * ONE_MILLION_USD).expect(409),
+    );
     await publishCapacityUpdate(first, {
       programId,
       currency: USD,
@@ -95,7 +106,9 @@ describe('Capacity invariants', () => {
       eventTime: AT_10_10,
     });
     await awaitAvailability(first, programId, token, (body) => !body.overcommitted);
-    await reserve(second, programId, 'INV-5', ONE_MILLION_USD).expect(201);
+    await withConnectionResetRetry(() =>
+      reserve(second, programId, 'INV-5', ONE_MILLION_USD).expect(201),
+    );
 
     const availability = await readAvailability(first, programId, token).expect(200);
     expect(availability.body).toMatchObject({

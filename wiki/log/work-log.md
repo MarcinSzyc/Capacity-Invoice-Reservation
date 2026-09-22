@@ -1624,3 +1624,27 @@ correct with a new one. Format:
   produced and cannot make things worse. Marcin decided: commit, push, validate with repeated
   clean CI runs before merging, no further local stress-testing.
 - Branch `setup/e2e-http-agent-keepalive-race` from `main`. Nothing committed yet.
+
+## 2026-09-22, setup: correction, replace the keep-alive mitigation with a connection-reset retry, Sonnet
+- The keep-alive fix did not work. Validated on three clean CI runs of PR #27 with the fix in
+  place: run 1 and 2 passed, run 3 failed with the identical `read ECONNRESET` in INV-01. I had
+  also misreported run 2 and 3 as green by checking only one sub-job's tail instead of the
+  overall run status; both corrections are recorded here plainly.
+- Downloaded run 3's full CI log and counted the server-side responses for the failing burst:
+  10×201 and 14×422 logged, 24 of the 25 requests. Exactly one connection was reset within
+  milliseconds of the burst starting, before the server logged anything for it, which is not
+  the 5 s idle keep-alive race I diagnosed earlier; that theory is wrong and the mitigation for
+  it is removed (`api/test/support/disable-http-keepalive.ts` deleted, `jest.config.ts`
+  reverted).
+- Real fix: `api/test/support/retry-on-connection-reset.ts`, `withConnectionResetRetry`,
+  wraps a request factory with up to three attempts, retrying only on a network-level error
+  (`ECONNRESET`, `ECONNREFUSED`, `socket hang up`, `EPIPE`), never on a wrong status or a
+  thrown assertion. Wired into every HTTP call in
+  `api/test/capacity-invariant.e2e-test.ts` (both INV-01's 25-way burst and INV-03's sequential
+  calls, since the same ~4% per-request rate applies to both). The invariant assertions
+  themselves are untouched: a genuinely wrong status still fails the test on the first
+  non-retryable throw.
+- `npm run gate:quick` green; a clean full `test:e2e` run (37/37) passed once locally.
+  Validation continues on CI per Marcin's decision, since a single local pass proves little
+  against a ~4%-per-request, multiplicative-over-25-requests flake.
+- Not committed yet.
