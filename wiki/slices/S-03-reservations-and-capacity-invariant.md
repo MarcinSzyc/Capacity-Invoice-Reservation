@@ -1,7 +1,7 @@
 # S-03 Reservations and the capacity invariant
 
 - Outcome: a client reserves capacity for an invoice in program currency, is refused when capacity is short or the invoice is already reserved, and two parallel clients can never both take the same free capacity.
-- Status: in progress
+- Status: done 2026-09-22
 - AC: AC-01, AC-02, AC-03, AC-04, AC-05, AC-08, AC-09, AC-21, AC-22
 - INV: INV-01, INV-03, INV-04, INV-09, INV-11
 - Risk: high. Concurrency: the core invariant of the brief (never overcommit) is decided here, under two service instances against one database. Implemented on Fable per `CLAUDE.md §8`.
@@ -278,3 +278,4 @@ Beyond `CLAUDE.md §9`:
 | 2026-09-22 | implement (review fixes, round 2) | major closed with one `IsCurrencyCode()` decorator worn by both DTOs (red first on the Kafka unit case); AC-08's `usd` case replaced by `XYZ`, two untagged casing tests added; `findActiveByProgram` and the `withToken` parameter removed; slice file corrected (currency column, S-05 hand-off note, decorator, test rows); `npm run gate:quick` green, reservations e2e 11/11 |
 | 2026-09-22 | verify | PASS (third pass), gate green on 5545f3a, 14/14 AC and INV covered at the planned level, casing fix confirmed live on a cold started stack (`usd` announce and reserve both read `USD`, `XYZ` is `400`), 1 minor still owed to `/ship` (README reserve example) |
 | 2026-09-22 | review | REVIEW S-03: 0 findings (0/0/0), third pass; all four round 2 findings confirmed closed; INV-01 critical section confirmed sound under ADR-0008; every planned AC/INV test name matches the code and asserts its Then clause; no standards violations found. Pass |
+| 2026-09-22 | ship | changelog, requirement checklist (14 rows done, 9 extra rows), slice index, Home and README (reserve example and the five reservation error codes, run literally on a fresh stack); ADR-0008 already accepted; PR proposed |

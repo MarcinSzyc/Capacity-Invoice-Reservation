@@ -23,14 +23,14 @@ Obsidian vault root is this folder. Working rules: `../CLAUDE.md`.
 |---|---|
 | S-01 Walking skeleton | done 2026-09-19: AC-00, AC-41 |
 | S-02 Programs from the treasury | done 2026-09-21: AC-20, AC-23, AC-24, AC-25, AC-32, AC-33, AC-35, AC-36, AC-37, AC-40, INV-10 |
-| S-03 Reservations and the capacity invariant | planned, next |
-| S-04 Cross-currency reservations | planned |
+| S-03 Reservations and the capacity invariant | done 2026-09-22: AC-01, AC-02, AC-03, AC-04, AC-05, AC-08, AC-09, AC-21, AC-22, INV-01, INV-03, INV-04, INV-09, INV-11 |
+| S-04 Cross-currency reservations | planned, next |
 | S-05 Releases | planned |
 | S-06 Reconciliation snapshots | planned |
 | S-07 Demo page and operations | planned |
 
-Next: `/implement S-03` on branch `slice/S-03-reservations-and-capacity-invariant`, once the
-plan revision on `docs/plan-S-03` is merged. S-03 is `risk: high` and runs on Fable.
-[[decisions/ADR-0008-concurrency-control-per-program]] is accepted; S-03 names no other ADR.
-The slice file lists the four S-02 minors as its first commit and fixes eight local decisions.
-One word for `/spec` before `/review`: `source` (`client`, `reconciliation`) needs a glossary entry.
+Next: `/plan` review of S-04 against the shipped S-03 code, then `/implement S-04` on branch
+`slice/S-04-cross-currency-reservations`. S-04 is `risk: high` (money arithmetic) and runs on
+Fable. It adds the `rate` column, field and `Rate` value object, and replaces the interim
+`422 CURRENCY_MISMATCH` on reserve with AC-07's `400` naming `rate`. A-10 now fixes currency
+casing: codes are uppercased at every boundary through `IsCurrencyCode()`.

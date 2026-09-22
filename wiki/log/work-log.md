@@ -1585,3 +1585,17 @@ correct with a new one. Format:
   local decision (slice file, decision 3), not undocumented I/O. `source` and `Currency code`
   are in the glossary; A-10's amendment has its `## Changes` row.
 - REVIEW S-03: 0 findings (0/0/0). Pass.
+
+## 2026-09-22, ship S-03, Sonnet
+- Preconditions held: VERIFY PASS (third pass) and REVIEW 0 findings (third pass), both on
+  5545f3a; only docs commits since.
+- `wiki/plan/plan.md`: the 14 S-03 rows are `done` with their test files; nine `extra` rows for
+  the supporting tests written during the slice (domain, use case, adapters, the A-10 casing
+  tests, the interim `CURRENCY_MISMATCH` e2e). Commit column waits for the merge commit.
+- README gains the reserve example and the five reservation error codes, closing the minor
+  carried since the first verify pass. Run literally on a fresh `docker compose up --wait`:
+  `201` with the reservation, availability down by 120 000 000, then `422 CAPACITY_EXCEEDED`
+  with `available` 880 000 000.
+- ADR-0008 was accepted before the slice; no ADR to finalise. No assumption the code relies on
+  is missing from the register: the one gap, currency casing, went through `/spec` as A-10.
+- Changelog row, slice status `done`, slice index and Home updated; Home names S-04 next.
