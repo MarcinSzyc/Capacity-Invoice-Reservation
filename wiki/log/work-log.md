@@ -1599,3 +1599,28 @@ correct with a new one. Format:
 - ADR-0008 was accepted before the slice; no ADR to finalise. No assumption the code relies on
   is missing from the register: the one gap, currency casing, went through `/spec` as A-10.
 - Changelog row, slice status `done`, slice index and Home updated; Home names S-04 next.
+
+## 2026-09-22, setup: mitigate an intermittent ECONNRESET in the two-instance e2e burst, Sonnet
+- Main CI failed after the S-03 merge: `[INV-01] should never overcommit under parallel
+  reservations on one program` (`api/test/capacity-invariant.e2e-test.ts`) failed with
+  `read ECONNRESET` during its 25-parallel-request burst, a network-level connection drop, not
+  a wrong assertion. Re-running the same commit's CI job passed clean (Gate 4m57s), which rules
+  out a code regression from the merge: the same code, same test, different runner outcome.
+- Diagnosis: Node 24's global `http.Agent` defaults to `keepAlive: true` (changed from Node 19
+  onward), while a Node `http.Server`'s default `keepAliveTimeout` is 5 000 ms. Under a burst of
+  parallel requests through one shared client agent, the server can close an idle persistent
+  socket at the exact moment the agent tries to reuse it, which surfaces as `ECONNRESET`. This
+  is the documented Node 19+ keep-alive race, not specific to this repo's code.
+- Fix: `api/test/support/disable-http-keepalive.ts` replaces `http.globalAgent` with one that
+  has `keepAlive: false`, wired into the `e2e` Jest project via `setupFiles` in
+  `api/jest.config.ts`. Test-only; nothing in `src/` changed.
+- Confidence: my local stress-testing (20+ rapid Testcontainers cycles to gauge the failure
+  rate before and after the fix) left roughly 60 orphaned Postgres and Kafka containers on this
+  machine, since `timeout`-killed runs did not let Testcontainers' Ryuk reaper clean up, and I
+  was blocked from force-removing them. Later local runs, including one after the fix, are
+  contaminated by that resource pressure, one of them failing in an unrelated way (a Kafka
+  message not propagating within 30 s). I cannot claim from local numbers that the race is
+  fully eliminated; the fix is the standard, minimal mitigation for the exact symptom CI
+  produced and cannot make things worse. Marcin decided: commit, push, validate with repeated
+  clean CI runs before merging, no further local stress-testing.
+- Branch `setup/e2e-http-agent-keepalive-race` from `main`. Nothing committed yet.
