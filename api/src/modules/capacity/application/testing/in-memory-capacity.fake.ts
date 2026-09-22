@@ -41,12 +41,6 @@ export class InMemoryReservations implements ReservationRepository {
     this.all.push(reservation);
     return Promise.resolve();
   }
-
-  findActiveByProgram(programId: string): Promise<Reservation[]> {
-    return Promise.resolve(
-      this.all.filter((r) => r.programId === programId && r.status === 'active'),
-    );
-  }
 }
 
 /** A clock that answers the moment it was given, so `createdAt` can be asserted exactly. */

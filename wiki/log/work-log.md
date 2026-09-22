@@ -1448,3 +1448,94 @@ correct with a new one. Format:
   finding against the product code; the gate had never run the suites that way.
 - `npm run gate:quick` green, e2e 36/36 in band. Glossary entry for `source` landed in the
   docs commit before this one. Ready for `/verify` (second pass) and `/review` (second pass).
+
+## 2026-09-22, verify S-03 (second pass, after review round 1), Sonnet
+- Ran on branch `slice/S-03-reservations-and-capacity-invariant` at aadded9. `npm run gate`
+  green end to end: 96 unit, 24 integration, 36 e2e across 9 suites, 3 cold start (fresh
+  `docker compose down -v` / `up --wait` / authenticated call / `down -v`, stack healthy in
+  37s). No flaky retries.
+- Coverage unchanged from the first pass: 14/14 planned tests present, each tag found once,
+  none skipped or `.only`, test names identical to `wiki/plan/plan.md`.
+- Confirmed each of the six review round 1 findings against the code: `Program.reserve`
+  throws `RangeError` on a zero `held` before the capacity check; `SeededRandom.int` and
+  `FixedClock.set` are gone; the ledger helper's shadowing `describe` is `explain`;
+  `capacity-invariant.e2e-test.ts` now runs `expectLedgerInvariants` in `afterEach`, closing
+  the verify minor from the first pass too. The declined brace finding checked out: with the
+  braces removed, `eslint . --max-warnings 0` fails on `curly: multi-line` against the wrapped
+  throw, so keeping them was correct.
+- Prose check clean, no nested ternary or braced one-line `if` introduced since c94f8d5, layer
+  boundaries hold. `/implement` touched only `wiki/log/work-log.md` and this slice's `Log`
+  section in the fix commit.
+- One finding remains open from the first pass, unchanged and still owed to `/ship`: the
+  README has no reserve curl example or the four reservation error codes.
+- Result: PASS.
+
+## 2026-09-22, review S-03 (second pass, after review round 1), Fable (fresh context)
+- Reviewed the diff `ccad5c3..HEAD` (aadded9) plus the uncommitted wiki lines against
+  `CLAUDE.md §2, §3, §4`, the slice file, AC-01 to AC-05, AC-08, AC-09, AC-21, AC-22, INV-01,
+  INV-03, INV-04, INV-09, INV-11, ADR-0002, ADR-0006, ADR-0008 and the assumptions register.
+  All six round 1 findings are closed in the code as the verify pass reported.
+- Concurrency: unchanged from round 1 and still sound. `ReserveCapacity.execute` is one
+  interactive transaction (15 s timeout, READ COMMITTED) whose first statement is the raw
+  `SELECT ... FOR UPDATE`; duplicate read, capacity check, reservation insert, ledger row and the
+  absolute `reserved` upsert all run under that lock; the treasury consumer takes the same lock and
+  both test instances share one consumer group. INV-01 and INV-04 hold by construction.
+- REVIEW S-03: 4 findings (0/1/3). Major: the two edges disagree on what an ISO 4217 code is.
+  `ReserveRequestDto` refuses `usd` (AC-08) but `CapacityUpdateMessageDto` keeps
+  `@IsISO4217CurrencyCode()` alone, which uppercases before it compares, so a treasury update with
+  `currency: usd` announces a program on which every correct `USD` reservation is
+  `422 CURRENCY_MISMATCH`; the code relies on an unwritten "codes are upper case" assumption
+  (A-10 does not say it). Minors: `findActiveByProgram` has no production caller (the ledger
+  helper reads `reservation.findMany` directly); the `withToken` parameter of the e2e `reserve`
+  helper is never passed; the `reservations.currency` column is not in the slice file's migration
+  list. Findings go back to `/implement` (and `/spec` for the casing rule), then `/verify` and
+  `/review` run again.
+
+## 2026-09-22, spec: A-10 gains a currency casing rule (S-03 review round 2), Fable
+- Marcin decided the major finding of review round 2: currency codes are normalised to upper
+  case at every boundary, not refused for their case. `usd` is accepted and read as `USD` on
+  the HTTP reserve request and on a treasury capacity update alike, and the normalisation is
+  part of the published contract, so the OpenAPI description of every currency property says
+  the value is uppercased. A code that is not three letters, or not an ISO 4217 code, is still
+  refused.
+- A-10 amended: the casing rule in the statement, the reason for normalising rather than
+  refusing in the rationale (the Kafka edge has no one to answer a `400`, so refusing a casing
+  difference costs a dead letter, while leaving each edge its own rule is what produced the
+  unusable program), and an `If wrong.` paragraph for a case sensitive treasury contract.
+  Changes row added.
+- Glossary gains `Currency code`: three letters, uppercased at every boundary before
+  validation, equal strings mean the same currency. The glossary has no `## Changes` table, so
+  no row is owed there.
+- No AC or INV changed. AC-08 stays true as written: `usd` is a valid ISO 4217 code in the
+  wrong case, not a code that is not ISO 4217. Its e2e case that asserts `usd` is a `400` is
+  now wrong against the spec and is `/implement` work, not a spec change.
+- No new open question. Wiki only, nothing under `api/` touched.
+
+## 2026-09-22, implement S-03 (fix round 2, after review round 2), Opus
+- Major closed. One casing rule now lives in one place: `IsCurrencyCode()` in
+  `api/src/modules/capacity/infrastructure/currency-code.ts` uppercases the value and then
+  checks ISO 4217, and both DTOs wear it, `ReserveRequestDto.invoiceCurrency` and
+  `CapacityUpdateMessageDto.currency`. The reserve DTO's `@Matches(/^[A-Z]{3}$/)` is gone,
+  redundant against the transform, and its `ApiProperty` description says the value is
+  uppercased, because A-10 makes the normalisation part of the published contract. Red first:
+  the new unit case in `capacity-update-message.dto.test.ts` failed with `Received: "usd"`,
+  which is the bug exactly.
+- The decorator sits in the capacity module, not in `common/`: it names a business word, and
+  both of its users are that module's own edges (`CLAUDE.md §2`).
+- AC-08 changed shape, not meaning. Its `usd` case is now wrong against A-10 and was replaced
+  by `XYZ`, three letters that are not a code, so the e2e still proves a real ISO 4217
+  refusal alongside `XXXX`. Two untagged tests were added for the casing rule itself: the unit
+  case above, and an e2e that announces a program with `currency: usd` and reserves with
+  `invoiceCurrency: usd`, the pair that used to answer `CURRENCY_MISMATCH` forever. Untagged
+  because A-10 is an assumption, not an AC or INV.
+- Three minors closed. `findActiveByProgram` is out of the port, the Prisma adapter, the fake
+  and its integration test: the ledger helper reads the rows itself because it needs closed
+  ones too, so nothing in production called it. The `withToken` parameter of the e2e `reserve`
+  helper is gone. The slice file now lists the `reservations.currency` column with its reason
+  (a closed reservation keeps its currency through a re-denomination, A-12), corrects the S-05
+  hand-off note that claimed the ledger helper uses the port method, and records the new
+  decorator and the changed test rows.
+- Slice content was edited, which `/implement` normally may not do. Deliberate, under
+  `CLAUDE.md §6`: a plan correction found while implementing goes into the slice PR, and three
+  of the four findings were exactly that the slice file no longer describes the code.
+- `npm run gate:quick` green, reservations e2e green (11 tests). Nothing committed.

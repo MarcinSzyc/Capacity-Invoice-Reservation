@@ -2,7 +2,6 @@ import {plainToInstance} from 'class-transformer';
 import {
   Equals,
   IsInt,
-  IsISO4217CurrencyCode,
   IsISO8601,
   IsString,
   Length,
@@ -16,6 +15,7 @@ import {
   CapacityUpdateCommand,
 } from '../../application/apply-capacity-update.use-case';
 import {MESSAGE_ID_MAX_LENGTH, PROGRAM_ID_MAX_LENGTH} from '../../domain/identifier-limits';
+import {IsCurrencyCode} from '../currency-code';
 
 /**
  * The capacity update as the treasury sends it (A-11): amounts are integer minor units, times
@@ -35,7 +35,7 @@ export class CapacityUpdateMessageDto {
   @Length(1, PROGRAM_ID_MAX_LENGTH)
   programId!: string;
 
-  @IsISO4217CurrencyCode()
+  @IsCurrencyCode()
   currency!: string;
 
   /** JSON integer (ADR-0006); anything above 2^53 is not exact in JSON and is refused. */
