@@ -8,7 +8,6 @@ import {
   readAvailability,
   USD,
 } from './support/programs';
-import {delay, withConnectionResetRetry} from './support/retry-on-connection-reset';
 import {createTestApp, httpServer} from './support/test-app';
 import {bearer, validToken} from './support/tokens';
 
@@ -16,11 +15,6 @@ const TEN_MILLION_USD = 1_000_000_000n;
 const ONE_MILLION_USD = 100_000_000;
 const PARALLEL_REQUESTS = 25;
 const EXPECTED_CREATED = 10;
-// A few ms between dispatching each of the 25 requests: every response still takes tens to
-// hundreds of ms under the row lock, so this stays a genuine concurrent burst on the database
-// (INV-01 is about that, not about 25 TCP handshakes landing in the same instant), while easing
-// the accept-queue saturation a CI runner hits when all 25 land truly simultaneously.
-const DISPATCH_STAGGER_MS = 4;
 const AT_10_05 = new Date('2026-09-21T10:05:00.000Z');
 const AT_10_10 = new Date('2026-09-21T10:10:00.000Z');
 
@@ -30,8 +24,8 @@ describe('Capacity invariants', () => {
   let token: string;
 
   beforeAll(async () => {
-    // Two application instances, one database (INV-01, ADR-0008). Neither listens on a port:
-    // supertest binds each to its own ephemeral one.
+    // Two application instances, one database (INV-01, ADR-0008). Each listens on its own
+    // ephemeral port for its whole life, which is what keeps the burst below stable.
     [first, second] = await Promise.all([createTestApp(), createTestApp()]);
     token = await validToken();
   });
@@ -60,12 +54,9 @@ describe('Capacity invariants', () => {
     await awaitAvailability(second, programId, token, (_body, status) => status === 200);
 
     const responses = await Promise.all(
-      Array.from({length: PARALLEL_REQUESTS}, async (_, index) => {
-        await delay(index * DISPATCH_STAGGER_MS);
-        return withConnectionResetRetry(() =>
-          reserve(index % 2 === 0 ? first : second, programId, `INV-${index}`, ONE_MILLION_USD),
-        );
-      }),
+      Array.from({length: PARALLEL_REQUESTS}, (_, index) =>
+        reserve(index % 2 === 0 ? first : second, programId, `INV-${index}`, ONE_MILLION_USD),
+      ),
     );
 
     const statuses = responses.map((response) => response.status).sort();
@@ -85,15 +76,9 @@ describe('Capacity invariants', () => {
   it('[INV-03] should keep program reserved equal to the sum of held of active reservations after every scenario', async () => {
     const programId = await announceProgram(first, {currency: USD, creditLimit: TEN_MILLION_USD});
 
-    await withConnectionResetRetry(() =>
-      reserve(first, programId, 'INV-1', 3 * ONE_MILLION_USD).expect(201),
-    );
-    await withConnectionResetRetry(() =>
-      reserve(second, programId, 'INV-2', 2 * ONE_MILLION_USD).expect(201),
-    );
-    await withConnectionResetRetry(() =>
-      reserve(first, programId, 'INV-3', ONE_MILLION_USD).expect(201),
-    );
+    await reserve(first, programId, 'INV-1', 3 * ONE_MILLION_USD).expect(201);
+    await reserve(second, programId, 'INV-2', 2 * ONE_MILLION_USD).expect(201);
+    await reserve(first, programId, 'INV-3', ONE_MILLION_USD).expect(201);
     await publishCapacityUpdate(first, {
       programId,
       currency: USD,
@@ -101,10 +86,8 @@ describe('Capacity invariants', () => {
       eventTime: AT_10_05,
     });
     await awaitAvailability(first, programId, token, (body) => body.overcommitted);
-    await withConnectionResetRetry(() => reserve(second, programId, 'INV-4', 1).expect(422));
-    await withConnectionResetRetry(() =>
-      reserve(first, programId, 'INV-2', 2 * ONE_MILLION_USD).expect(409),
-    );
+    await reserve(second, programId, 'INV-4', 1).expect(422);
+    await reserve(first, programId, 'INV-2', 2 * ONE_MILLION_USD).expect(409);
     await publishCapacityUpdate(first, {
       programId,
       currency: USD,
@@ -112,9 +95,7 @@ describe('Capacity invariants', () => {
       eventTime: AT_10_10,
     });
     await awaitAvailability(first, programId, token, (body) => !body.overcommitted);
-    await withConnectionResetRetry(() =>
-      reserve(second, programId, 'INV-5', ONE_MILLION_USD).expect(201),
-    );
+    await reserve(second, programId, 'INV-5', ONE_MILLION_USD).expect(201);
 
     const availability = await readAvailability(first, programId, token).expect(200);
     expect(availability.body).toMatchObject({
