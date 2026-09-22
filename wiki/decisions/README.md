@@ -16,7 +16,7 @@ Template: [[ADR-0000-template]].
 | [[ADR-0005-authentication-bearer-jwt]] | Authentication with bearer JWT | accepted | S-02 |
 | [[ADR-0006-money-and-rate-representation]] | Money and rate representation across API, domain and storage | accepted | S-02, S-04 |
 | [[ADR-0007-program-currency-change-from-treasury]] | A treasury message with a different currency than the program | accepted | S-02, S-06 |
-| [[ADR-0008-concurrency-control-per-program]] | Concurrency control for reservations on one program | proposed | S-03 |
+| [[ADR-0008-concurrency-control-per-program]] | Concurrency control for reservations on one program | accepted | S-03 |
 | [[ADR-0009-release-conversion-exact-closing-and-release-id-scope]] | Release conversion, exact closing and the scope of releaseId | proposed | S-05 |
 | [[ADR-0010-reconciliation-created-at-versus-as-of]] | Deciding whether a local reservation is older than a snapshot | proposed | S-06 |
 | [[ADR-0011-reconciliation-created-reservations]] | Reservations created by reconciliation | proposed | S-06 |
