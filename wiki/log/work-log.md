@@ -1539,3 +1539,23 @@ correct with a new one. Format:
   `CLAUDE.md §6`: a plan correction found while implementing goes into the slice PR, and three
   of the four findings were exactly that the slice file no longer describes the code.
 - `npm run gate:quick` green, reservations e2e green (11 tests). Nothing committed.
+
+## 2026-09-22, verify S-03 (third pass, after review round 2), Sonnet
+- `npm run gate` green on 5545f3a: prose clean, unit 97/97, integration 23/23 (one fewer, the
+  `findActiveByProgram` test left with its method), e2e 37/37 (one more, the A-10 casing test),
+  cold start 3/3, web green.
+- Coverage 14/14 at the planned level, unchanged files: AC-01 to AC-05, AC-08, AC-09, AC-21,
+  AC-22 through HTTP in `reservations.e2e-test.ts`; INV-01 with 25 parallel requests over two
+  instances and INV-03 in `capacity-invariant.e2e-test.ts`; INV-04 and INV-11 unit; INV-09
+  integration. AC-08 still proves a real ISO 4217 refusal (`XYZ`, `XXXX`). No skipped or
+  focused tests, no `@nestjs` in `domain/`, no ORM or Kafka import outside `infrastructure/`,
+  no nested ternary or braced one-line `if` in `aadded9..HEAD`.
+- Cold start from `docker compose down -v`: `up --wait` healthy, `/health` and
+  `/health/ready` 200, availability of `PRG-1` 401 without a token and, with the README's
+  token command, exactly the JSON the README shows. The round 2 fix checked live on the same
+  stack: `dev:treasury --currency usd` announced `PRG-LC` as `USD`, a reservation with
+  `invoiceCurrency: usd` answered `201` reading `USD`, `XYZ` answered `400 VALIDATION_FAILED`,
+  and `/openapi.json` carries the "Uppercased on the way in" description. Stack torn down.
+- Carried minor, unchanged and still owed to `/ship`: the README has no reserve example or the
+  reservation error codes.
+- Result: PASS.
