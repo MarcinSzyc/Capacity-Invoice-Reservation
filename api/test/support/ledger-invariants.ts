@@ -1,10 +1,40 @@
 import {INestApplication} from '@nestjs/common';
+import type {Prisma} from '../../src/generated/prisma/client';
 import {Ledger} from '../../src/modules/capacity/domain/ledger';
 import {Money} from '../../src/modules/capacity/domain/money';
+import {Program} from '../../src/modules/capacity/domain/program';
+import {Reservation} from '../../src/modules/capacity/domain/reservation';
+import {TransactionScope} from '../../src/modules/capacity/infrastructure/persistence/client-access';
 import {toReservation} from '../../src/modules/capacity/infrastructure/persistence/mappers';
 import {PrismaLedgerRepository} from '../../src/modules/capacity/infrastructure/persistence/prisma-ledger.repository';
 import {PrismaProgramRepository} from '../../src/modules/capacity/infrastructure/persistence/prisma-program.repository';
 import {PrismaService} from '../../src/persistence/prisma.service';
+
+interface ProgramSnapshot {
+  readonly program: Program | null;
+  readonly movements: Awaited<ReturnType<PrismaLedgerRepository['findByProgram']>>;
+  readonly reservations: Reservation[];
+}
+
+/**
+ * The three reads happen in one repeatable-read transaction, so a writer running at the same
+ * time (another suite, another instance) cannot split the view between them.
+ */
+const snapshotOf = (prisma: PrismaService, programId: string): Promise<ProgramSnapshot> =>
+  prisma.withClient((client) =>
+    client.$transaction(
+      async (transaction: Prisma.TransactionClient) => {
+        const scope = new TransactionScope(transaction);
+        const [program, movements, rows] = await Promise.all([
+          new PrismaProgramRepository(scope).findById(programId),
+          new PrismaLedgerRepository(scope).findByProgram(programId),
+          transaction.reservation.findMany({where: {programId}, orderBy: {createdAt: 'asc'}}),
+        ]);
+        return {program, movements, reservations: rows.map(toReservation)};
+      },
+      {isolationLevel: 'RepeatableRead'},
+    ),
+  );
 
 /**
  * INV-03 and INV-04 after every e2e scenario: for every program in the test database, the ledger
@@ -22,22 +52,16 @@ export const expectLedgerInvariants = async (app: INestApplication): Promise<voi
   }
 };
 
-export const expectProgramLedgerInvariants = async (
+const expectProgramLedgerInvariants = async (
   app: INestApplication,
   programId: string,
 ): Promise<void> => {
-  const prisma = app.get(PrismaService);
-  const program = await new PrismaProgramRepository(prisma).findById(programId);
+  const {program, movements, reservations} = await snapshotOf(app.get(PrismaService), programId);
   if (program === null) throw new Error(`program ${programId} is missing`);
-  const movements = await new PrismaLedgerRepository(prisma).findByProgram(programId);
-  const rows = await prisma.withClient((client) =>
-    client.reservation.findMany({where: {programId}, orderBy: {createdAt: 'asc'}}),
-  );
-  const reservations = rows.map(toReservation);
 
   // INV-04: the chain holds and recomputes to the stored program.
   const recomputed = Ledger.recompute(movements);
-  expect(`${programId}: ${describe(recomputed)}`).toBe(`${programId}: ok`);
+  expect(`${programId}: ${explain(recomputed)}`).toBe(`${programId}: ok`);
   if (!recomputed.ok || recomputed.state === null) return;
   expect(`${programId} limit ${recomputed.state.limit.amount}`).toBe(
     `${programId} limit ${program.limit.amount}`,
@@ -68,5 +92,5 @@ export const expectProgramLedgerInvariants = async (
   );
 };
 
-const describe = (recomputed: ReturnType<typeof Ledger.recompute>): string =>
+const explain = (recomputed: ReturnType<typeof Ledger.recompute>): string =>
   recomputed.ok ? 'ok' : `broken at row ${recomputed.rowIndex}: ${recomputed.reason}`;

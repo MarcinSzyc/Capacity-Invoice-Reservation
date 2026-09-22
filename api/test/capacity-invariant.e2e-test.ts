@@ -1,6 +1,6 @@
 import {INestApplication} from '@nestjs/common';
 import request from 'supertest';
-import {expectProgramLedgerInvariants} from './support/ledger-invariants';
+import {expectLedgerInvariants} from './support/ledger-invariants';
 import {
   announceProgram,
   awaitAvailability,
@@ -28,6 +28,10 @@ describe('Capacity invariants', () => {
     // supertest binds each to its own ephemeral one.
     [first, second] = await Promise.all([createTestApp(), createTestApp()]);
     token = await validToken();
+  });
+
+  afterEach(async () => {
+    await expectLedgerInvariants(first);
   });
 
   afterAll(async () => {
@@ -67,7 +71,6 @@ describe('Capacity invariants', () => {
       available: 0,
       overcommitted: false,
     });
-    await expectProgramLedgerInvariants(first, programId);
   });
 
   it('[INV-03] should keep program reserved equal to the sum of held of active reservations after every scenario', async () => {
@@ -100,6 +103,5 @@ describe('Capacity invariants', () => {
       available: 3 * ONE_MILLION_USD,
       overcommitted: false,
     });
-    await expectProgramLedgerInvariants(second, programId);
   });
 });

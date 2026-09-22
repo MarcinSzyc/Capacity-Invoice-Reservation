@@ -51,14 +51,10 @@ export class InMemoryReservations implements ReservationRepository {
 
 /** A clock that answers the moment it was given, so `createdAt` can be asserted exactly. */
 export class FixedClock implements Clock {
-  constructor(private moment: Date) {}
+  constructor(private readonly moment: Date) {}
 
   now(): Date {
     return this.moment;
-  }
-
-  set(moment: Date): void {
-    this.moment = moment;
   }
 }
 

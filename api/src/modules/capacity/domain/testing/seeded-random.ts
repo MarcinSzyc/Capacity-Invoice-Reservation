@@ -18,11 +18,6 @@ export class SeededRandom {
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
   }
 
-  /** An integer in [0, max]. */
-  int(max: number): number {
-    return Math.floor(this.next() * (max + 1));
-  }
-
   /** A bigint in [0, max]. */
   bigint(max: bigint): bigint {
     return BigInt(Math.floor(this.next() * Number(max + 1n)));

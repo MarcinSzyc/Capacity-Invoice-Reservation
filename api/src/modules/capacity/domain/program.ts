@@ -97,6 +97,9 @@ export class Program {
     reservationId: string,
     occurredAt: Date,
   ): CapacityMovement {
+    // Validation stops a zero on HTTP; the domain refuses it too, so no path (S-06 arrives over
+    // Kafka) can open a reservation that is closed at birth with an empty reserve row.
+    if (held.isZero()) throw new RangeError(`Reservation ${reservationId} would hold nothing`);
     if (held.isGreaterThan(this.available)) {
       throw new CapacityExceededError(this.programId, this.available);
     }

@@ -257,3 +257,4 @@ Beyond `CLAUDE.md §9`:
 | 2026-09-22 | implement | built test first: 14/14 planned tests present and green (9 AC, 5 INV), INV-01 across two application instances, `npm run gate:quick` green, e2e 36/36, integration 24/24 |
 | 2026-09-22 | verify | PASS, gate green on c94f8d5, 14/14 AC and INV covered at the planned level, 2 minor findings for `/ship` (ledger helper not in afterEach of capacity-invariant.e2e-test.ts, README reserve example missing) |
 | 2026-09-22 | review | REVIEW S-03: 7 findings (1/0/6); blocker: glossary entry for `source` missing (`/spec`); 6 minors in style, dead test helpers and the invariant suite wiring; INV-01 critical section confirmed sound under ADR-0008 |
+| 2026-09-22 | implement (review fixes, round 1) | 5 of 6 minors fixed test first, braces minor declined (lint requires them on a wrapped throw), glossary `source` via `/spec`, ledger helper reads in one transaction; `npm run gate:quick` green, e2e 36/36 |
