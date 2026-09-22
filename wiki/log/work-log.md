@@ -1559,3 +1559,29 @@ correct with a new one. Format:
 - Carried minor, unchanged and still owed to `/ship`: the README has no reserve example or the
   reservation error codes.
 - Result: PASS.
+
+## 2026-09-22, review S-03 (third pass, after review round 2), Fable (fresh context)
+- Reviewed the diff `ccad5c3..HEAD` (5545f3a) against `CLAUDE.md §2, §3, §4`, the slice file,
+  AC-01 to AC-05, AC-08, AC-09, AC-21, AC-22, INV-01, INV-03, INV-04, INV-09, INV-11,
+  ADR-0002, ADR-0006, ADR-0008 and the assumptions register. All four round 2 findings are
+  closed in the code: one `IsCurrencyCode()` decorator worn by both DTOs, `findActiveByProgram`
+  and the `withToken` parameter gone, `reservations.currency` in the slice file.
+- Concurrency: unchanged from round 2 and still sound. `ReserveCapacity.execute` is one
+  interactive transaction (15 s timeout) whose first statement is the raw
+  `SELECT ... FROM programs ... FOR UPDATE`; under `READ COMMITTED` a waiting transaction
+  receives the row as the winner committed it, so the duplicate read, the capacity check, the
+  reservation insert, the ledger row and the `reserved` upsert all run under that lock and
+  judge the real state. `Program.reserve` mutates state before building its movement, so
+  `reservedAfter`/`availableAfter` on the row are exactly what the lock left behind (INV-04 by
+  construction). The 25-request, two-instance INV-01 e2e test and the `afterEach` INV-03/INV-04
+  helper in every suite that touches a program confirm it empirically.
+- Traced every planned test name against the slice file and the code: all 9 AC and 5 INV tags
+  match exactly, each asserts its Then clause (not a weaker one, e.g. AC-03 and AC-05 also
+  assert availability is unchanged, AC-22 asserts `held` survives a limit cut through a 409
+  replay). The four carried S-02 minors (C1 to C4) each have the test the slice file names.
+  No `any`, no nested ternary, no `if` nested past one level, no braced one-line `if`, no em or
+  en dash in the diff. Domain (`reservation.ts`, `program.ts`, `ledger.ts`, `errors.ts`) has no
+  `@nestjs` or ORM import; the one `node:crypto` call in `Reservation.open` is a documented
+  local decision (slice file, decision 3), not undocumented I/O. `source` and `Currency code`
+  are in the glossary; A-10's amendment has its `## Changes` row.
+- REVIEW S-03: 0 findings (0/0/0). Pass.
