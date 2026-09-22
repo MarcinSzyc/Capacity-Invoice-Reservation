@@ -2,10 +2,12 @@ import type {
   CapacityMovement as CapacityMovementRow,
   Prisma,
   Program as ProgramRow,
+  Reservation as ReservationRow,
 } from '../../../../generated/prisma/client';
 import {CapacityMovement, MovementAttribution} from '../../domain/capacity-movement';
 import {Money} from '../../domain/money';
 import {Program} from '../../domain/program';
+import {Reservation} from '../../domain/reservation';
 
 type ProgramColumns = Omit<ProgramRow, 'updatedAt'>;
 
@@ -64,3 +66,32 @@ const attributionOf = (row: CapacityMovementRow): MovementAttribution => {
   if (row.messageId !== null) return {messageId: row.messageId};
   throw new Error(`Ledger row ${row.id} names neither a client nor a message`);
 };
+
+type ReservationColumns = Omit<ReservationRow, 'updatedAt'>;
+
+export const toReservation = (row: ReservationColumns): Reservation =>
+  Reservation.rehydrate({
+    reservationId: row.id,
+    programId: row.programId,
+    invoiceId: row.invoiceId,
+    invoiceAmount: Money.of(row.invoiceAmount, row.invoiceCurrency),
+    reservedAmount: Money.of(row.reservedAmount, row.currency),
+    held: Money.of(row.held, row.currency),
+    source: row.source,
+    clientId: row.clientId,
+    createdAt: row.createdAt,
+  });
+
+export const toReservationColumns = (reservation: Reservation): ReservationColumns => ({
+  id: reservation.reservationId,
+  programId: reservation.programId,
+  invoiceId: reservation.invoiceId,
+  invoiceAmount: reservation.invoiceAmount.amount,
+  invoiceCurrency: reservation.invoiceAmount.currency,
+  currency: reservation.reservedAmount.currency,
+  reservedAmount: reservation.reservedAmount.amount,
+  held: reservation.held.amount,
+  source: reservation.source,
+  clientId: reservation.clientId,
+  createdAt: reservation.createdAt,
+});

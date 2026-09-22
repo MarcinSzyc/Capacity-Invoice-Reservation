@@ -1,5 +1,6 @@
 import {HttpException, HttpStatus} from '@nestjs/common';
 import {DomainError, DomainErrorKind} from '../errors/domain-error';
+import {jsonInteger} from '../json-integer';
 
 export interface ErrorBody {
   readonly statusCode: number;
@@ -42,7 +43,7 @@ export const toErrorBody = (exception: unknown): ErrorBody => {
       statusCode: STATUS_BY_KIND[exception.kind],
       code: exception.code,
       message: exception.message,
-      ...exception.details,
+      ...renderDetails(exception.details),
     };
   }
   if (!(exception instanceof HttpException)) return internalError();
@@ -93,4 +94,19 @@ const messageOf = (payload: unknown, exception: HttpException): string => {
   const message = asRecord(payload)?.message;
   if (typeof message === 'string') return message;
   return exception.message;
+};
+
+/**
+ * Domain errors speak in `bigint` and `Date` (INV-08); the wire speaks in JSON integers and
+ * ISO 8601 (ADR-0006). This is the one place that translation happens for error bodies.
+ */
+const renderDetails = (details: Readonly<Record<string, unknown>>): Record<string, unknown> =>
+  Object.fromEntries(Object.entries(details).map(([key, value]) => [key, renderValue(value, key)]));
+
+const renderValue = (value: unknown, field: string): unknown => {
+  if (typeof value === 'bigint') return jsonInteger(value, field);
+  if (value instanceof Date) return value.toISOString();
+  if (Array.isArray(value)) return value.map((entry) => renderValue(entry, field));
+  const record = asRecord(value);
+  return record === undefined ? value : renderDetails(record);
 };

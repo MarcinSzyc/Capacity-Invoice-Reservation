@@ -3,37 +3,14 @@ import {INestApplication} from '@nestjs/common';
 import request from 'supertest';
 import {KafkaService} from '../src/messaging/kafka.service';
 import {DevTreasuryProducer} from '../src/modules/capacity/infrastructure/messaging/dev-treasury-producer';
+import {expectLedgerInvariants} from './support/ledger-invariants';
 import {MemoryStream} from './support/memory-stream';
+import {AT_10_00, awaitAnnounced, EUR, uniqueId} from './support/programs';
 import {createAppWith, errorBodyOf, httpServer} from './support/test-app';
 import {bearer, validToken} from './support/tokens';
 
-const EUR = 'EUR';
 const FIVE_MILLION_EUR_MINOR = 500_000_000;
-const AT_10_00 = new Date('2026-09-21T10:00:00.000Z');
 const REQUEST_CORRELATION_ID = `request-${randomUUID()}`;
-const WAIT_MS = 30_000;
-
-const uniqueId = (prefix: string): string => `${prefix}-${randomUUID().slice(0, 8)}`;
-
-const availabilityOnceAnnounced = async (
-  app: INestApplication,
-  programId: string,
-  token: string,
-  correlationId?: string,
-): Promise<request.Response> => {
-  const deadline = Date.now() + WAIT_MS;
-  while (Date.now() < deadline) {
-    const call = request(httpServer(app))
-      .get(`/programs/${programId}/availability`)
-      .set('Authorization', bearer(token));
-    const response = await (correlationId === undefined
-      ? call
-      : call.set('x-correlation-id', correlationId));
-    if (response.status === 200) return response;
-    await new Promise((resolve) => setTimeout(resolve, 100));
-  }
-  throw new Error(`${programId} was not announced within ${WAIT_MS}ms`);
-};
 
 describe('Programs', () => {
   let app: INestApplication;
@@ -46,6 +23,10 @@ describe('Programs', () => {
     app = await createAppWith({logOutput: logs});
     producer = new DevTreasuryProducer(app.get(KafkaService));
     token = await validToken();
+  });
+
+  afterEach(async () => {
+    await expectLedgerInvariants(app);
   });
 
   afterAll(async () => {
@@ -63,7 +44,7 @@ describe('Programs', () => {
       eventTime: AT_10_00,
     });
 
-    const response = await availabilityOnceAnnounced(app, programId, token);
+    const response = await awaitAnnounced(app, programId, token);
     expect(response.body).toEqual({
       programId,
       currency: EUR,
@@ -108,7 +89,7 @@ describe('Programs', () => {
       creditLimit: BigInt(FIVE_MILLION_EUR_MINOR),
       eventTime: AT_10_00,
     });
-    const response = await availabilityOnceAnnounced(app, programId, token, REQUEST_CORRELATION_ID);
+    const response = await awaitAnnounced(app, programId, token, REQUEST_CORRELATION_ID);
     expect(response.headers['x-correlation-id']).toBe(REQUEST_CORRELATION_ID);
 
     // Every line is JSON, or lines() would have thrown.

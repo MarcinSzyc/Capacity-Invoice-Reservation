@@ -1,6 +1,6 @@
 import {Money} from '../../domain/money';
 import {Program} from '../../domain/program';
-import {jsonInteger} from '../json-integer';
+import {jsonInteger} from '../../../../common/json-integer';
 import {AvailabilityDto} from './availability.dto';
 
 export const toAvailabilityDto = (program: Program): AvailabilityDto => ({

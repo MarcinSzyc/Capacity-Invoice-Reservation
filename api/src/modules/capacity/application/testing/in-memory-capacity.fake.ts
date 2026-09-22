@@ -1,12 +1,15 @@
 import {CapacityMovement} from '../../domain/capacity-movement';
 import {LedgerRepository} from '../../domain/ports/ledger.repository';
+import {Clock} from '../../domain/ports/clock';
 import {ProgramRepository} from '../../domain/ports/program.repository';
+import {ReservationRepository} from '../../domain/ports/reservation.repository';
 import {
   TreasuryMessageRecord,
   TreasuryMessageStore,
 } from '../../domain/ports/treasury-message-store';
 import {CapacityRepositories, UnitOfWork} from '../../domain/ports/unit-of-work';
 import {Program} from '../../domain/program';
+import {Reservation} from '../../domain/reservation';
 
 /** Working in-memory adapters for the capacity ports: arrays and maps, no call expectations. */
 export class InMemoryPrograms implements ProgramRepository {
@@ -23,6 +26,39 @@ export class InMemoryPrograms implements ProgramRepository {
   save(program: Program): Promise<void> {
     this.byId.set(program.programId, program);
     return Promise.resolve();
+  }
+}
+
+export class InMemoryReservations implements ReservationRepository {
+  readonly all: Reservation[] = [];
+
+  findByInvoice(programId: string, invoiceId: string): Promise<Reservation | null> {
+    const found = this.all.find((r) => r.programId === programId && r.invoiceId === invoiceId);
+    return Promise.resolve(found ?? null);
+  }
+
+  add(reservation: Reservation): Promise<void> {
+    this.all.push(reservation);
+    return Promise.resolve();
+  }
+
+  findActiveByProgram(programId: string): Promise<Reservation[]> {
+    return Promise.resolve(
+      this.all.filter((r) => r.programId === programId && r.status === 'active'),
+    );
+  }
+}
+
+/** A clock that answers the moment it was given, so `createdAt` can be asserted exactly. */
+export class FixedClock implements Clock {
+  constructor(private moment: Date) {}
+
+  now(): Date {
+    return this.moment;
+  }
+
+  set(moment: Date): void {
+    this.moment = moment;
   }
 }
 
@@ -86,18 +122,20 @@ export class InMemoryUnitOfWork implements UnitOfWork {
   }
 
   private snapshot(): Snapshot {
-    const {programs, ledger, treasuryMessages} = this.repositories;
+    const {programs, reservations, ledger, treasuryMessages} = this.repositories;
     return {
       programs: new Map(programs.byId),
+      reservations: [...reservations.all],
       movements: [...ledger.movements],
       messages: new Map([...treasuryMessages.byId].map(([id, m]) => [id, {...m}])),
     };
   }
 
   private restore(snapshot: Snapshot): void {
-    const {programs, ledger, treasuryMessages} = this.repositories;
+    const {programs, reservations, ledger, treasuryMessages} = this.repositories;
     programs.byId.clear();
     snapshot.programs.forEach((program, id) => programs.byId.set(id, program));
+    reservations.all.splice(0, reservations.all.length, ...snapshot.reservations);
     ledger.movements.splice(0, ledger.movements.length, ...snapshot.movements);
     treasuryMessages.byId.clear();
     snapshot.messages.forEach((message, id) => treasuryMessages.byId.set(id, message));
@@ -106,12 +144,14 @@ export class InMemoryUnitOfWork implements UnitOfWork {
 
 interface InMemoryRepositories {
   programs: InMemoryPrograms;
+  reservations: InMemoryReservations;
   ledger: InMemoryLedger;
   treasuryMessages: InMemoryTreasuryMessages;
 }
 
 interface Snapshot {
   programs: Map<string, Program>;
+  reservations: Reservation[];
   movements: CapacityMovement[];
   messages: Map<string, StoredTreasuryMessage>;
 }
@@ -119,6 +159,7 @@ interface Snapshot {
 export const inMemoryCapacity = (): InMemoryUnitOfWork =>
   new InMemoryUnitOfWork({
     programs: new InMemoryPrograms(),
+    reservations: new InMemoryReservations(),
     ledger: new InMemoryLedger(),
     treasuryMessages: new InMemoryTreasuryMessages(),
   });

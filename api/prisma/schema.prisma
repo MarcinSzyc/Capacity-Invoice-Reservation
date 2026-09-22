@@ -1,6 +1,6 @@
 // ADR-0002: PostgreSQL through Prisma. Money columns are BIGINT minor units (ADR-0006), times are
-// timestamptz. The `reservations` table arrives with S-03; `reservation_id` on the ledger is a
-// plain column until then so that S-03 adds the foreign key rather than the column.
+// timestamptz. The `reservations` table arrived with S-03; the ledger's `reservation_id` is a
+// foreign key to it since then.
 
 generator client {
   provider = "prisma-client"
@@ -20,9 +20,43 @@ model Program {
   asOf           DateTime? @map("as_of") @db.Timestamptz(6)
   updatedAt      DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  movements CapacityMovement[]
+  movements    CapacityMovement[]
+  reservations Reservation[]
 
   @@map("programs")
+}
+
+/// Who created the reservation: the client over HTTP, or a reconciliation snapshot (S-06).
+enum ReservationSource {
+  client
+  reconciliation
+
+  @@map("reservation_source")
+}
+
+/// The claim one invoice holds on a program's capacity (glossary). The pair (program, invoice)
+/// is the public identity (A-07); `id` exists so the ledger can point at one row. `status` is
+/// derived from `held` and never stored. `rate` arrives with S-04.
+model Reservation {
+  id              String            @id @default(uuid()) @db.Uuid
+  programId       String            @map("program_id") @db.VarChar(64)
+  invoiceId       String            @map("invoice_id") @db.VarChar(128)
+  invoiceAmount   BigInt            @map("invoice_amount")
+  invoiceCurrency String            @map("invoice_currency") @db.Char(3)
+  /// The program currency `reserved_amount` and `held` are in; fixed for life (ADR-0007).
+  currency        String            @db.Char(3)
+  reservedAmount  BigInt            @map("reserved_amount")
+  held            BigInt
+  source          ReservationSource
+  clientId        String?           @map("client_id") @db.VarChar(128)
+  createdAt       DateTime          @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  program   Program            @relation(fields: [programId], references: [programId])
+  movements CapacityMovement[]
+
+  @@unique([programId, invoiceId])
+  @@map("reservations")
 }
 
 /// Exactly four kinds (glossary): the ledger has no fifth.
@@ -39,7 +73,7 @@ enum CapacityMovementKind {
 model CapacityMovement {
   id             BigInt               @id @default(autoincrement())
   programId      String               @map("program_id") @db.VarChar(64)
-  reservationId  String?              @map("reservation_id") @db.VarChar(128)
+  reservationId  String?              @map("reservation_id") @db.Uuid
   kind           CapacityMovementKind
   /// The currency of the four amounts on this row: the program's at the time (ADR-0007).
   currency       String               @db.Char(3)
@@ -53,9 +87,11 @@ model CapacityMovement {
   reason         String?              @db.VarChar(16)
   occurredAt     DateTime             @map("occurred_at") @db.Timestamptz(6)
 
-  program Program @relation(fields: [programId], references: [programId])
+  program     Program      @relation(fields: [programId], references: [programId])
+  reservation Reservation? @relation(fields: [reservationId], references: [id], onDelete: Restrict)
 
   @@index([programId, id])
+  @@index([reservationId])
   @@map("capacity_movements")
 }
 

@@ -3,7 +3,11 @@ import request from 'supertest';
 import {createProductionApp, createTestApp, httpServer} from './support/test-app';
 
 const DOCUMENTATION_PATHS = ['/openapi.json', '/openapi.yaml', '/docs', '/redoc'];
-const MONEY_FIELDS = ['limit', 'reserved', 'available'];
+const MONEY_FIELDS_BY_SCHEMA: Record<string, readonly string[]> = {
+  AvailabilityDto: ['limit', 'reserved', 'available'],
+  ReserveRequestDto: ['invoiceAmount'],
+  ReservationDto: ['invoiceAmount', 'reservedAmount', 'held'],
+};
 
 interface OpenApiDocument {
   readonly components?: {
@@ -35,10 +39,14 @@ describe('API documentation by profile', () => {
     it('should publish every money field as an integer, never a number (ADR-0006)', async () => {
       const response = await request(httpServer(app)).get('/openapi.json').expect(200);
       const document = response.body as OpenApiDocument;
-      const availability = document.components?.schemas?.AvailabilityDto?.properties ?? {};
 
-      for (const field of MONEY_FIELDS) {
-        expect(`${field}: ${availability[field]?.type ?? 'missing'}`).toBe(`${field}: integer`);
+      for (const [schema, fields] of Object.entries(MONEY_FIELDS_BY_SCHEMA)) {
+        const properties = document.components?.schemas?.[schema]?.properties ?? {};
+        for (const field of fields) {
+          expect(`${schema}.${field}: ${properties[field]?.type ?? 'missing'}`).toBe(
+            `${schema}.${field}: integer`,
+          );
+        }
       }
     });
   });
