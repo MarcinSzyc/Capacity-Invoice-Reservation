@@ -38,7 +38,6 @@ const config: Config = {
       ...withInfrastructure,
       displayName: 'e2e',
       testMatch: ['<rootDir>/test/**/*.e2e-test.ts'],
-      setupFiles: ['<rootDir>/test/support/disable-http-keepalive.ts'],
     },
     {
       ...shared,
