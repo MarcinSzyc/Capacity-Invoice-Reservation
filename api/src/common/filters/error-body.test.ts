@@ -1,4 +1,4 @@
-import {DomainError, DomainErrorKind} from '../errors/domain-error';
+import {DomainError, DomainErrorKind, VALIDATION_FAILED_CODE} from '../errors/domain-error';
 import {toErrorBody} from './error-body';
 
 const AT_10_10 = new Date('2026-09-21T10:10:00.000Z');
@@ -16,7 +16,26 @@ class ShortageError extends DomainError {
   }
 }
 
+class BadRateError extends DomainError {
+  readonly code = VALIDATION_FAILED_CODE;
+  readonly kind: DomainErrorKind = 'invalid';
+  override readonly details = {details: ['rate is required when EUR differs from USD']};
+
+  constructor() {
+    super('rate is required when EUR differs from USD');
+  }
+}
+
 describe('toErrorBody', () => {
+  it('should render an invalid domain error as the 400 a DTO failure would produce (AC-07)', () => {
+    expect(toErrorBody(new BadRateError())).toEqual({
+      statusCode: 400,
+      code: 'VALIDATION_FAILED',
+      message: 'rate is required when EUR differs from USD',
+      details: ['rate is required when EUR differs from USD'],
+    });
+  });
+
   it("should put a domain error's details next to its code, rendering bigint as a JSON integer and Date as ISO 8601", () => {
     expect(toErrorBody(new ShortageError())).toEqual({
       statusCode: 422,

@@ -8,6 +8,9 @@ import {bearer, validToken} from './tokens';
 
 export const USD = 'USD';
 export const EUR = 'EUR';
+/** Minor units that are not two decimals: JPY counts whole yen, KWD counts thousandths (A-10). */
+export const JPY = 'JPY';
+export const KWD = 'KWD';
 export const AT_10_00 = new Date('2026-09-21T10:00:00.000Z');
 const WAIT_MS = 30_000;
 const POLL_MS = 100;

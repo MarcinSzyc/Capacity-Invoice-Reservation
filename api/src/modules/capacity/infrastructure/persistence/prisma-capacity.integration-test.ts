@@ -3,6 +3,7 @@ import {JsonLogger} from '../../../../common/logging/json-logger';
 import {loadConfig} from '../../../../config/configuration';
 import {PrismaService} from '../../../../persistence/prisma.service';
 import {Money} from '../../domain/money';
+import {Rate} from '../../domain/rate';
 import {Program} from '../../domain/program';
 import {Reservation} from '../../domain/reservation';
 import {PrismaLedgerRepository} from './prisma-ledger.repository';
@@ -156,6 +157,7 @@ describe('Prisma capacity adapters', () => {
       invoiceId,
       invoiceAmount: ONE_MILLION_EUR,
       reservedAmount: ONE_MILLION_EUR,
+      rate: Rate.one(),
       clientId: CLIENT,
       createdAt,
     });
@@ -173,6 +175,52 @@ describe('Prisma capacity adapters', () => {
     await expect(
       new PrismaReservationRepository(prisma).findByInvoice(programId, 'INV-nobody'),
     ).resolves.toBeNull();
+  });
+
+  it('should keep a rate exact through NUMERIC(20,8) and read it back canonical (ADR-0006)', async () => {
+    const programId = uniqueId('PRG');
+    await announcedProgram(programId);
+    const reservation = Reservation.open({
+      programId,
+      invoiceId: 'INV-RATE',
+      invoiceAmount: ONE_MILLION_EUR,
+      reservedAmount: ONE_MILLION_EUR,
+      rate: Rate.parse('0.00670000'),
+      clientId: CLIENT,
+      createdAt: AT_10_10,
+    });
+
+    await unitOfWork.run(({reservations}) => reservations.add(reservation));
+    const read = await new PrismaReservationRepository(prisma).findByInvoice(programId, 'INV-RATE');
+
+    expect(read?.rate.toString()).toBe('0.0067');
+    expect(read?.rate.equals(Rate.parse('0.0067'))).toBe(true);
+  });
+
+  it('should read back a rate at the eight places the contract allows, not in exponential form', async () => {
+    const programId = uniqueId('PRG');
+    await announcedProgram(programId);
+    const smallest = Rate.parse('0.00000001');
+    await unitOfWork.run(({reservations}) =>
+      reservations.add(
+        Reservation.open({
+          programId,
+          invoiceId: 'INV-SMALL',
+          invoiceAmount: ONE_MILLION_EUR,
+          reservedAmount: ONE_MILLION_EUR,
+          rate: smallest,
+          clientId: CLIENT,
+          createdAt: AT_10_10,
+        }),
+      ),
+    );
+
+    const read = await new PrismaReservationRepository(prisma).findByInvoice(
+      programId,
+      'INV-SMALL',
+    );
+
+    expect(read?.rate.toString()).toBe('0.00000001');
   });
 
   it('should refuse a second reservation for the same program and invoice (A-07)', async () => {
