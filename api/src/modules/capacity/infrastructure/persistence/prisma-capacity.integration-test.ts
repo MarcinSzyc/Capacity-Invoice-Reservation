@@ -197,6 +197,32 @@ describe('Prisma capacity adapters', () => {
     expect(read?.rate.equals(Rate.parse('0.0067'))).toBe(true);
   });
 
+  it('should read back a rate at the eight places the contract allows, not in exponential form', async () => {
+    const programId = uniqueId('PRG');
+    await announcedProgram(programId);
+    const smallest = Rate.parse('0.00000001');
+    await unitOfWork.run(({reservations}) =>
+      reservations.add(
+        Reservation.open({
+          programId,
+          invoiceId: 'INV-SMALL',
+          invoiceAmount: ONE_MILLION_EUR,
+          reservedAmount: ONE_MILLION_EUR,
+          rate: smallest,
+          clientId: CLIENT,
+          createdAt: AT_10_10,
+        }),
+      ),
+    );
+
+    const read = await new PrismaReservationRepository(prisma).findByInvoice(
+      programId,
+      'INV-SMALL',
+    );
+
+    expect(read?.rate.toString()).toBe('0.00000001');
+  });
+
   it('should refuse a second reservation for the same program and invoice (A-07)', async () => {
     const programId = uniqueId('PRG');
     await announcedProgram(programId);

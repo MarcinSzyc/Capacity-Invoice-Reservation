@@ -241,3 +241,5 @@ Beyond `CLAUDE.md §9`:
 | 2026-09-19 | plan | slice written |
 | 2026-09-22 | plan | revised against the shipped S-03 code; exponent table and canonical `rate` decided by Marcin; nine local decisions, no new ADR |
 | 2026-09-22 | implement | started on Opus; `risk: high` would put this on Fable per `CLAUDE.md §8`, Marcin decided to run it on Opus |
+| 2026-09-22 | verify | PASS, gate green on 7c6a0f8, 3/3 AC and INV covered at the planned level, cold start and the AC-06 and AC-07 behaviour confirmed live; 1 minor owed to `/ship` (README still lists `CURRENCY_MISMATCH` for a reservation and has no cross-currency example) |
+| 2026-09-23 | review | 6 findings (0 blockers / 2 majors / 4 minors), not a pass; run on Opus because the Fable credits ran out, so the review model was the implementation model; majors: a rate below 1e-7 reads back from `NUMERIC(20,8)` in exponential notation and throws out of the mapper (`500`), and `"rate": null` passes `@IsOptional()` and reaches `Rate.parse` (`500` instead of AC-07's `400`) |

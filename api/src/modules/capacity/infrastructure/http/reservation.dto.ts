@@ -1,10 +1,10 @@
 import {ApiProperty} from '@nestjs/swagger';
-import {IsInt, IsOptional, IsString, Length, Matches, Max, Min} from 'class-validator';
+import {IsInt, IsString, Length, Matches, Max, Min, ValidateIf} from 'class-validator';
 import {INVOICE_ID_MAX_LENGTH} from '../../domain/identifier-limits';
 import {ReservationSource, ReservationStatus} from '../../domain/reservation';
 import {IsCurrencyCode} from '../currency-code';
 
-/** A-07, A-10: what a client sends to reserve. `rate` arrives with S-04; until then it is refused. */
+/** A-07, A-10: what a client sends to reserve. `rate` is required only across currencies (A-02). */
 export class ReserveRequestDto {
   @ApiProperty({example: 'INV-A', description: "The client's identifier of the invoice."})
   @IsString()
@@ -40,7 +40,10 @@ export class ReserveRequestDto {
     description:
       'Invoice currency to program currency, a decimal string of at most 8 fractional digits. Required when invoiceCurrency differs from the program currency, absent or 1 otherwise. Reads back canonical, so "1.10" reads "1.1" (A-02, A-10).',
   })
-  @IsOptional()
+  // ValidateIf rather than IsOptional: IsOptional skips validation for `null` as well as for
+  // `undefined`, so an explicit `"rate": null` would reach the use case unvalidated. Absent is
+  // legal (A-02), null is a wrong value and gets the 400 AC-07 promises.
+  @ValidateIf((dto: ReserveRequestDto) => dto.rate !== undefined)
   @IsString()
   @Matches(/^\d{1,12}(\.\d{1,8})?$/, {
     message: 'rate must be a decimal string with at most 8 fractional digits',

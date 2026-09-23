@@ -1776,3 +1776,125 @@ correct with a new one. Format:
 - `npm run gate` green: unit 111, integration 24, e2e 39, cold start 3. Nothing committed.
 - Still owed, by `/ship` as in S-03: the README cross-currency example with `rate` and the
   removal of the `CURRENCY_MISMATCH` row from its reservation error table.
+
+## 2026-09-22, verify S-04, Sonnet
+- `npm run gate` green on 7c6a0f8: prose clean, unit 111/111, integration 24/24, e2e 39/39,
+  cold start 3/3, web green.
+- Coverage 3/3 at the planned level: AC-06 and AC-07 through HTTP in
+  `api/test/reservations.e2e-test.ts`; INV-08 at both halves the plan names, unit in
+  `domain/money.test.ts` (cross-currency arithmetic throwing, half up at `1.005` and `1.004`,
+  the JPY and KWD exponent cases, a `@ts-expect-error` line for a `number` amount) and e2e in
+  `api/test/docs.e2e-test.ts` (`rate` is `string`, every amount `integer` in the OpenAPI
+  document). No skipped or focused tests.
+- AC-06 asserts its whole Then clause: the body's three amounts, the currency, `rate` reading
+  `1.1` for a sent `1.10`, and availability down by exactly the converted amount. AC-07 asserts
+  both refusals name `rate` in `details`, that nothing was reserved, and that `1.00` on a
+  same-currency reservation is accepted and reads `1`.
+- Layer boundaries hold: no `@nestjs` under `domain/`, no ORM or Kafka import outside
+  `infrastructure/`. The domain's only `common/` import is `errors/domain-error.ts`, which has
+  no imports at all, so moving `VALIDATION_FAILED_CODE` there kept the boundary rather than
+  bending it. No nested ternary and no braced one-line `if` in `5ef50ac..HEAD`; the four braced
+  `if`s in the diff all have multi-line bodies, which `curly: multi-line` requires.
+- Cold start from `docker compose down -v`: healthy, `/health` and `/health/ready` 200,
+  availability 401 without a token. Live on that stack: the same-currency reserve answered
+  `201` with `rate` `1`, 275 000 000 EUR at `1.10` answered `201` with `reservedAmount` and
+  `held` 302 500 000 and `rate` `1.1`, the same request without a rate answered
+  `400 VALIDATION_FAILED` naming `rate`, and availability read `reserved` 422 500 000, the sum
+  of both. Stack torn down.
+- Result: PASS, with one minor owed to `/ship`.
+
+## 2026-09-23, review S-04 (cross-currency reservations), Opus
+- Run on Opus, not Fable: the Fable credits ran out and Marcin decided to run the review on
+  Opus anyway. `CLAUDE.md §8` puts `/review` on Fable in a fresh context precisely so the
+  reviewer is not the implementer's model, and the implementation was also written on Opus
+  (see the implement entry of 2026-09-22), so the usual independence of the review model did
+  not hold for this slice. The context was fresh, the model was not. Recorded as a decision,
+  not an oversight.
+- REVIEW S-04: 6 findings (0 blockers / 2 majors / 4 minors). Not a pass: the two majors go
+  back to `/implement`, then `/verify` and `/review` run again.
+- Major 1, `infrastructure/persistence/mappers.ts:82`: `Rate.parse(row.rate.toString())` cannot
+  read back every rate the contract accepts. Prisma's `Decimal.toString()` renders a value whose
+  exponent is at or below minus seven in exponential notation, so `0.0000001` comes back as
+  `"1e-7"` and `0.00000001` as `"1e-8"`, neither of which matches `Rate`'s decimal pattern. The
+  DTO and ADR-0006 both allow eight fractional digits, so such a rate can be stored (a large
+  enough invoice amount still converts to a non-zero amount and passes decision 4's guard), and
+  every later read of that reservation then throws a `RangeError` out of the mapper, which the
+  filter renders as a `500`. The nearest victim is the duplicate check in `ReserveCapacity`,
+  which reads the reservation on every reserve, so AC-05's `409` becomes a `500`. Verified
+  against the generated client's `Prisma.Decimal`, not inferred. The integration round trip
+  pins `0.0067` only, so the gate cannot see it.
+- Major 2, `infrastructure/http/programs.controller.ts:62`: a body with `"rate": null` answers
+  `500`, not the `400` AC-07 and AC-08 promise. `@IsOptional()` skips validation for `null` as
+  well as `undefined`, so `null` passes the pipe untouched; the controller's guard tests for
+  `undefined` only, so `Rate.parse(null)` runs and throws a `RangeError`, which is not an
+  `HttpException` and becomes `INTERNAL_ERROR`. Verified by running the real `ValidationPipe`
+  and the real DTO over that body. `Rate.parse`'s own comment says the DTO refuses malformed
+  input on HTTP; for `null` it does not.
+- Minor, `common/filters/error-body.ts:16`: `export {VALIDATION_FAILED_CODE};` has no importer
+  anywhere in the repo, so it is a re-export kept for a caller that does not exist
+  (`CLAUDE.md §3`, no dead code, no compat shims).
+- Minor, `infrastructure/http/reservation.dto.ts:7`: the class comment still reads "`rate`
+  arrives with S-04; until then it is refused", directly above the `rate` property that now
+  exists.
+- Minor, `api/test/reservations.e2e-test.ts:241`: the AC-06 expectation computes availability
+  from the literal `1_000_000_000` although `TEN_MILLION_USD` is the constant for that value
+  (`CLAUDE.md §4`, fixture values in named constants).
+- Minor, `README.md:90` and `wiki/plan/plan.md:104`: both still describe the interim
+  `CURRENCY_MISMATCH` behaviour on a reservation, the README as a live error row with no
+  cross-currency example, the plan as what the S-03 use case test asserts. The README half was
+  already owed to `/ship` by `/verify`; the plan row is the same drift in the other file.
+- Judged and found sound, so no finding: the move of `VALIDATION_FAILED_CODE` into
+  `common/errors/domain-error.ts` is the right call rather than a way around the boundary. The
+  lint rule carves out `common/errors/` for the domain by name, `domain-error.ts` has no imports
+  at all, and the alternative (the domain naming the literal `'VALIDATION_FAILED'` a second
+  time) would let the filter and the domain drift apart.
+- Judged and found sound, so no finding: `Money.convert`'s arithmetic. The result is
+  `(amount × unscaled × 10^exp(target) + divisor / 2) / divisor` with
+  `divisor = 10^(rate.scale + exp(source))`, all in `bigint`. The scaling is right in both
+  directions and all five pinned examples recompute. The half is exact because `divisor` is a
+  power of ten, even for every scale above zero, and at `divisor` one the half is zero and
+  nothing rounds. A tie lands exactly on a multiple of `divisor` and rounds up, which is half up
+  toward positive infinity, and `Money` admits no negative amount, so there is no half down
+  branch to get wrong. Nothing can overflow (`bigint`) and nothing can divide by zero (`divisor`
+  is at least one). A conversion that rounds to zero is not silent on the one path that exists:
+  `ReserveCapacity` refuses it as a `400` naming `invoiceAmount` (decision 4). It is silent in
+  `Money.convert` itself, which matters for S-05's release path, and the slice file's hand-off
+  note already says so.
+- Spec axis, otherwise clean: AC-06's e2e asserts the whole Then clause including the stored
+  rate reading canonical and availability down by exactly the converted amount, and the ledger
+  invariant helper runs after every test in that file. AC-07's e2e asserts both refusals name
+  `rate` in `details`, that nothing was reserved, and that `1.00` is accepted and reads `1`.
+  INV-08 is proven at both halves the plan names. The nine local decisions are all honoured in
+  the code, including the duplicate check running before the rate rule and the migration adding
+  and dropping its default in one file. The rate rule sits inside the transaction after the row
+  lock, so INV-01's critical section is unchanged: two parallel reserves still serialise on the
+  program row and a refusal rolls back without writing.
+
+## 2026-09-23, implement S-04 (review fixes, round 1), Opus
+- Both majors from review round 1 were real, and I reproduced each before touching the code
+  rather than taking the report on trust.
+- Major 1, the rate round trip. decimal.js renders anything below `1e-7` in exponential form,
+  so a rate of `0.0000001` or `0.00000001`, both inside the eight places the DTO and ADR-0006
+  allow, came back from Prisma as `1e-7` and `1e-8`, which `Rate.parse` refuses. The throw
+  leaves the mapper on every later read of that row, so the duplicate check inside
+  `ReserveCapacity` would turn AC-05's `409` into a `500`. Red first: a new integration case
+  storing `0.00000001` failed with `RangeError: Rate 1e-8 is not a decimal of up to 8 places`.
+  Fixed by reading the column with `toFixed()`, which never switches notation.
+- Major 2, an explicit `"rate": null`. `@IsOptional()` skips validation for `null` as well as
+  `undefined` (read in `class-validator/cjs/decorator/common/IsOptional.js`), so `null` reached
+  the controller unvalidated and `Rate.parse(null)` threw a `RangeError`, a `500` where AC-07
+  promises a `400`. Replaced with `@ValidateIf((dto) => dto.rate !== undefined)`, so absent
+  stays legal and null is a wrong value. I wrote this case alongside the fix rather than before
+  it, so afterwards I put `@IsOptional()` back and watched the e2e fail, then restored the fix:
+  the test does catch the bug it claims to.
+- Minors fixed: the `VALIDATION_FAILED_CODE` re-export in `error-body.ts` had no importer and
+  is gone; `ReserveRequestDto`'s class comment no longer says `rate` arrives with S-04 while
+  sitting above `rate`; the AC-06 expectation uses `TEN_MILLION_USD` instead of repeating the
+  literal.
+- Two minors are not mine to fix and stay with `/ship`: the README's `CURRENCY_MISMATCH` row
+  and missing cross-currency example, and the S-03 `extra` row in `wiki/plan/plan.md` that
+  still describes the interim behaviour. `/implement` may not edit the requirement checklist.
+- The review ran on Opus because the Fable credits ran out, and the implementation was written
+  on Opus too, so the review model's usual independence did not hold. Worth knowing when
+  reading this round: a shared blind spot would not have been caught by the model split.
+- `npm run gate` green: unit 111, integration 25, e2e 39, cold start 3. Nothing committed.
