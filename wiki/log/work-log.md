@@ -2056,3 +2056,25 @@ correct with a new one. Format:
   ran on Opus, the first because Marcin chose it and the rest because the Fable credits were
   exhausted. The model split `CLAUDE.md §8` relies on for review independence did not happen
   for this slice.
+
+## 2026-09-23, decision: ADR-0009 accepted as recommended, Opus
+- Marcin decided ADR-0009 on the recommendation: Option 2 for how `held` follows releases, and
+  Option A for the scope of `releaseId`. Status moves from `proposed` to `accepted` and the
+  index follows, so `/implement S-05` is no longer blocked on an undecided ADR.
+- Option 2: the reservation stores `releasedInvoiceAmount` and `held` is derived from what is
+  left of the invoice (`heldAfter = round(remaining * rate)`) rather than decremented per
+  release. Written down with the reason Option 1 was declined: converting each instalment on its
+  own makes AC-12 hold only by special case, because three instalments at an awkward rate need
+  not sum back to what was reserved. Deriving from the remainder means every `held` is one
+  rounding of one product, so error cannot accumulate and a fully released invoice closes at
+  exactly zero with nothing special about it.
+- Option A: `UNIQUE (reservation_id, release_id)`. The same `R-1` on another invoice is a
+  different release, which is the plain reading of A-09. Option B would refuse a client that
+  numbers repayments per invoice, which is a normal scheme to have.
+- Consequences extended while writing the decision, all of which S-05's plan has to carry:
+  the `released_invoice_amount` column backfilled to zero for the S-03 and S-04 rows;
+  `RELEASE_EXCEEDS_HELD` reporting both `held` and `remainingInvoiceAmount`; `releasedInvoiceAmount`
+  on the reservation read (AC-19); and the observation that the stored rate is now load bearing
+  on every release rather than only at reservation time, so a wrong rate is wrong for the life
+  of the reservation.
+- Branch `docs/adr-0009-decision` from `main` at 60d7f42. Wiki only, no code.
