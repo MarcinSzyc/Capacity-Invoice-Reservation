@@ -238,7 +238,7 @@ describe('Reservations', () => {
     const availability = await readAvailability(app, programId, token).expect(200);
     expect(availability.body).toMatchObject({
       reserved: THREE_POINT_ZERO_TWO_FIVE_MILLION_USD,
-      available: 1_000_000_000 - THREE_POINT_ZERO_TWO_FIVE_MILLION_USD,
+      available: Number(TEN_MILLION_USD) - THREE_POINT_ZERO_TWO_FIVE_MILLION_USD,
     });
   });
 
@@ -280,7 +280,7 @@ describe('Reservations', () => {
       invoiceCurrency: EUR,
     };
 
-    for (const rate of [1.1, 'abc', '0', '0.000', '1.123456789', '']) {
+    for (const rate of [1.1, 'abc', '0', '0.000', '1.123456789', '', null]) {
       const response = await reserve(programId, {...base, rate}).expect(400);
       const error = errorBodyOf(response);
       expect(error.code).toBe('VALIDATION_FAILED');

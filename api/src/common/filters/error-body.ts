@@ -13,7 +13,6 @@ export interface ErrorBody {
 
 export const SERVER_ERROR_FROM = 500;
 export const INTERNAL_ERROR_CODE = 'INTERNAL_ERROR';
-export {VALIDATION_FAILED_CODE};
 
 const CODE_BY_STATUS: Readonly<Record<number, string>> = {
   [HttpStatus.BAD_REQUEST]: 'BAD_REQUEST',
