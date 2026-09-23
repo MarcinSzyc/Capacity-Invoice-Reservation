@@ -1,7 +1,7 @@
 # S-04 Cross-currency reservations
 
 - Outcome: a client reserves an invoice denominated in another currency than the program by supplying the rate; the service converts once, half up, into the program's minor unit, stores the rate on the reservation and never mixes currencies anywhere else.
-- Status: in progress
+- Status: done 2026-09-23
 - AC: AC-06, AC-07
 - INV: INV-08
 - Risk: high. Money arithmetic: an integer amount times a decimal rate across two minor unit exponents, rounded half up, in `bigint` with no float anywhere. Small slice, but per `CLAUDE.md §8` money is Fable work.
@@ -245,3 +245,5 @@ Beyond `CLAUDE.md §9`:
 | 2026-09-23 | review | 6 findings (0 blockers / 2 majors / 4 minors), not a pass; run on Opus because the Fable credits ran out, so the review model was the implementation model; majors: a rate below 1e-7 reads back from `NUMERIC(20,8)` in exponential notation and throws out of the mapper (`500`), and `"rate": null` passes `@IsOptional()` and reaches `Rate.parse` (`500` instead of AC-07's `400`) |
 | 2026-09-23 | verify | PASS (second pass), gate green on 5dfc519, 3/3 AC and INV covered at the planned level, both round 1 majors confirmed fixed live on a cold started stack (a rate of `0.00000001` reads back whole and a repeat is `409`, `"rate": null` is `400`); 2 documentation findings owed to `/ship` (README row and example, `plan.md:104`) |
 | 2026-09-23 | review | PASS (round 2), 5 findings (0 blockers / 0 majors / 5 minors); run on Opus again because the Fable credits are exhausted, so the review model was still the implementation model; both round 1 majors confirmed closed at the mechanism, not just at the test, and neither fix introduced a problem; minors: AC-06 proves storage only in an untagged integration test, no `CHECK ("rate" > 0)` on the new column, the planned JPY and KWD e2e constants never landed, two inline `EUR` literals, and the glossary still teaches a `RateProvider` that A-02 declined |
+| 2026-09-23 | verify | PASS (third pass), gate green on 443c5d0, 3/3 AC and INV covered at the planned level, the stored rate and the exponent rule both confirmed live over HTTP (1 000 JPY at `0.0067` is 670, and the repeat `409` carries the stored rate); 4 findings owed to `/ship` (migration CHECK, glossary `RateProvider` examples, README, `plan.md:104`) |
+| 2026-09-23 | ship | changelog, requirement checklist (3 rows done, 8 extra rows), slice index, Home and README (cross-currency example with `rate`, the `CURRENCY_MISMATCH` row dropped, both run literally on a fresh stack); ADR-0006 already accepted; 2 findings carried to S-05 |

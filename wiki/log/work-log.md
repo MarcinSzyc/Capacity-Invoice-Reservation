@@ -2005,3 +2005,54 @@ correct with a new one. Format:
   `RateProvider` and a config rate table that A-02 decided against; `README.md:90`; and
   `wiki/plan/plan.md:104`.
 - `npm run gate` green: unit 111, integration 25, e2e 40, cold start 3. Nothing committed.
+
+## 2026-09-23, verify S-04 (third pass, after review round 2), Sonnet
+- `npm run gate` green on 443c5d0: prose clean, unit 111/111, integration 25/25, e2e 40/40 (one
+  more than the second pass, the exponent case through HTTP), cold start 3/3, web green.
+- Coverage 3/3 at the planned level, unchanged files. No skipped or focused tests, no `@nestjs`
+  under `domain/`, no ORM or Kafka import outside `infrastructure/`.
+- The three minors Marcin chose to close are closed, and the two that mattered were checked
+  against behaviour rather than against the diff. `[AC-06]` now asserts the rate inside the
+  `409` body, which is the row read back out of the database, so the criterion's "the rate is
+  stored" has a tagged test of its own instead of leaning on an untagged integration case.
+- Live on a cold started stack: a 1 000 JPY invoice (no decimals) at `0.0067` on a USD program
+  reserved 670 minor units, and asking for the same invoice again answered `409` carrying the
+  stored rate `0.0067` and `reservedAmount` 670. The exponent rule and the stored rate are both
+  true over HTTP, not only in unit tests.
+- `JPY` and `KWD` are in `test/support/programs.ts` and both are used, so the slice file's
+  promise is kept and neither constant is dead. Inline `'EUR'` is gone from
+  `reservation.test.ts`.
+- Four findings stay open, all for `/ship` and all already recorded: no `CHECK ("rate" > 0)` on
+  the migration; the glossary's `Adapter`, `Seam` and `Fake` entries illustrated with a
+  `RateProvider` and a config rate table that A-02 decided against; `README.md:90`; and
+  `wiki/plan/plan.md:104`.
+- Result: PASS.
+
+## 2026-09-23, ship S-04, Opus
+- Precondition with one caveat, stated rather than glossed: the last `VERIFY` is PASS on
+  443c5d0, but the last `REVIEW` (round 2, zero blockers, zero majors) read 5dfc519, so it is
+  one commit stale. That commit touched only test files, test support constants and the wiki,
+  no production code, and Marcin decided to carry the minors rather than run a third review.
+- `wiki/plan/plan.md`: AC-06, AC-07 and INV-08 are `done` with their test files, and eight
+  `extra` rows cover the supporting tests. The S-03 `extra` row that still said its use case
+  test asserts `CURRENCY_MISMATCH` is corrected, since S-04 removed that case with the interim
+  rule. Commit column waits for the merge commit.
+- README gains the cross-currency example with `rate` and loses the `CURRENCY_MISMATCH` row,
+  which a reservation can no longer produce. Both run literally on a fresh
+  `docker compose up --wait`: 275 000 000 EUR at `1.10` answered `201` with 302 500 000 and
+  `rate` `1.1`, and the same request without a rate answered `400`. The JPY claim in the new
+  text was already confirmed live in the third verify pass (670 minor units).
+- ADR-0006 was accepted before the slice and is unchanged; no ADR to finalise. No assumption is
+  missing from the register: A-02 was already there and A-10 took both amendments through
+  `/spec` in #28 before implementation started.
+- Changelog row, slice status `done`, slice index and Home updated; Home names S-05 next and
+  records that ADR-0009 is still `proposed` and must be decided in the S-05 plan PR.
+- Two findings carried to S-05, both named in the changelog's limitations so they are visible
+  to a reader who never opens the work-log: no `CHECK (rate > 0)` on `reservations.rate`
+  (unreachable through the service today, but the table's other constraint sets the pattern),
+  and the glossary illustrating `Adapter`, `Seam` and `Fake` with a `RateProvider` and a config
+  rate table that A-02 decided against. The second is `/spec` work, not `/ship`'s.
+- Worth recording once more where it will be read: the implementation and both review rounds
+  ran on Opus, the first because Marcin chose it and the rest because the Fable credits were
+  exhausted. The model split `CLAUDE.md §8` relies on for review independence did not happen
+  for this slice.
