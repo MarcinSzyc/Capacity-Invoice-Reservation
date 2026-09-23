@@ -1898,3 +1898,110 @@ correct with a new one. Format:
   on Opus too, so the review model's usual independence did not hold. Worth knowing when
   reading this round: a shared blind spot would not have been caught by the model split.
 - `npm run gate` green: unit 111, integration 25, e2e 39, cold start 3. Nothing committed.
+
+## 2026-09-23, verify S-04 (second pass, after review round 1), Sonnet
+- `npm run gate` green on 5dfc519: prose clean, unit 111/111, integration 25/25 (one more than
+  the first pass, the eight place rate round trip), e2e 39/39, cold start 3/3, web green.
+- Coverage 3/3 at the planned level, unchanged files: AC-06 and AC-07 through HTTP, INV-08 unit
+  in `domain/money.test.ts` and e2e in `api/test/docs.e2e-test.ts`. No skipped or focused tests,
+  no `@nestjs` under `domain/`, no ORM or Kafka import outside `infrastructure/`.
+- All four code findings from review round 1 are closed and each was checked against the
+  behaviour it broke, not just against the diff. On a cold started stack: a reservation at rate
+  `0.00000001` answered `201` and read the rate back as `0.00000001`, and asking for the same
+  invoice again answered `409 RESERVATION_ALREADY_EXISTS` rather than the `500` the exponential
+  form used to cause through the duplicate check; `"rate": null` answered
+  `400 VALIDATION_FAILED` naming `rate`. The `VALIDATION_FAILED_CODE` re-export is gone, the
+  stale DTO comment is gone, and the AC-06 expectation uses `TEN_MILLION_USD`.
+- Cold start from `docker compose down -v`: healthy, `/health` and `/health/ready` 200,
+  availability 401 without a token. Stack torn down.
+- Two findings stay open for `/ship`, both documentation and both already named by review round
+  1: `README.md:90` still lists `422 CURRENCY_MISMATCH` as a reservation error and has no
+  cross-currency example, and `wiki/plan/plan.md:104` still says the S-03 use case test asserts
+  `CURRENCY_MISMATCH`, which it no longer does. Line 109 of the same file was already marked
+  superseded during the plan revision.
+- Result: PASS.
+
+## 2026-09-23, review S-04 round 2 (cross-currency reservations), Opus
+- Run on Opus again, not Fable: the Fable credits are exhausted. The implementation, review
+  round 1 and this round were all written by the same model, so the independence `CLAUDE.md §8`
+  buys by putting `/review` on another model still does not hold. A blind spot shared with the
+  implementation would have survived both rounds, and this entry is the only record of that.
+- REVIEW S-04: 5 findings (0 blockers / 0 majors / 5 minors). A pass by the skill's rule, so the
+  slice may go to `/ship`; the five minors are listed below and none of them blocks it.
+- Both round 1 majors are genuinely closed, checked against the mechanism and not only against
+  the test. `mappers.ts:85` now reads the column with `row.rate.toFixed()`, which decimal.js
+  documents as normal notation for any magnitude, and `NUMERIC(20,8)` can never hand back more
+  than 12 integer or 8 fractional digits, so the read is total for every value the column can
+  hold rather than merely correct at `0.00000001`. `reservation.dto.ts:46` skips validation only
+  for `undefined`, so `null` reaches `@IsString()` and answers `400`; the property keeps its
+  validation metadata, so `whitelist` does not strip it, and `required: false` in the OpenAPI
+  document is unchanged. Neither fix introduced a problem of its own. The three round 1 minors
+  that were taken are also gone; the two documentation ones are still open for `/ship`.
+- The boundary question was worked through end to end rather than sampled. The DTO's
+  `^\d{1,12}(\.\d{1,8})?$` plus `/[1-9]/` accepts exactly the set `Rate.parse` accepts: for a
+  string of digits and at most one dot, the positivity regex matches if and only if the unscaled
+  `bigint` is non zero, so `Rate.parse` in `programs.controller.ts:62` cannot throw for a body
+  the pipe let through. `Rate.toString()` is always at most 12 integer and 8 fractional digits,
+  which is exactly what `NUMERIC(20,8)` stores, so no insert can be refused or silently rounded.
+  The conversion cannot overflow `BIGINT` or `jsonInteger`: `creditLimit` is capped at
+  `Number.MAX_SAFE_INTEGER` (`capacity-update-message.dto.ts:44`), `Program.reserve`
+  (`program.ts:103`) refuses a held above available before any write, and a conversion to nothing
+  is caught at `reserve-capacity.use-case.ts:83`. Half up holds: `(n + d/2) / d` truncating
+  toward zero is round half up for a non negative `n`, and `d` is either one or an even power of
+  ten, so `d/2` is exact. INV-08 needs no new critical section: the row lock from ADR-0008 is
+  unchanged and `Money.convert` is pure.
+- Minor, spec, `api/test/reservations.e2e-test.ts:219`: AC-06 says the rate is stored on the
+  reservation, and the tagged e2e asserts it only on the `201` body, which is rendered from the
+  aggregate still in memory. The one proof that the rate survives storage is the untagged
+  integration test at `prisma-capacity.integration-test.ts:180`, and `CLAUDE.md §4` says a
+  supporting test that is a requirement's only proof is not supporting. A second reserve of the
+  same invoice would return the stored reservation in the `409` body and close it over HTTP.
+- Minor, standards,
+  `api/prisma/migrations/20260922180000_reservation_rate/migration.sql:5`: the column accepts any
+  `NUMERIC(20,8)`, including zero and negatives, which `Rate.parse` refuses; such a row would
+  turn every later read of it into a `500` out of `mappers.ts:85`, which is the failure class
+  round 1's first major was. The table already carries `reservations_held_within_reserved` and
+  the ledger `capacity_movements_attributable`, so `CHECK ("rate" > 0)` is the house pattern and
+  is the one missing. Not reachable through the service today, since the mapper is the only
+  writer.
+- Minor, standards, `wiki/slices/S-04-cross-currency-reservations.md:119`: the slice file
+  promises `JPY` and `KWD` in `api/test/support/programs.ts` for the exponent case. Neither the
+  constants nor any e2e with a currency outside two decimals exists, so the exponent table is
+  proven in `domain/money.test.ts` and `domain/currency-exponents.test.ts` and never through HTTP
+  against a real program. Either the case lands or the slice file records that it was dropped.
+- Minor, standards, `api/src/modules/capacity/domain/reservation.test.ts:99` and `:106`: `'EUR'`
+  written inline twice in a file whose convention is UPPERCASE fixture constants (`USD`,
+  `PROGRAM_ID`, `INVOICE_A`). `CLAUDE.md §4` asks for fixture values in UPPERCASE constants.
+- Minor, spec, `wiki/spec/glossary.md:242`, `:247` and `:251`: `Adapter`, `Seam` and `Fake`
+  illustrate themselves with a config file rate table, with "`RateProvider` is a port;
+  `ConfigRateProvider` is the adapter used in this brief" and with a rate provider holding one
+  fixed rate, while A-02 decided there is no `RateProvider`, no rate table and no
+  `RATE_UNAVAILABLE`. S-04 is the slice that made the rate real, so the examples now teach a
+  newcomer something the service does not contain. Documentation, for `/ship`.
+- Still open from round 1 and still owed to `/ship`, both documentation and neither counted
+  again here: `README.md:90` lists `422 CURRENCY_MISMATCH` as a reservation error and the README
+  has no cross-currency example with `rate`, and `wiki/plan/plan.md:104` still says the S-03 use
+  case test asserts `CURRENCY_MISMATCH`.
+- Nothing was fixed, committed or pushed.
+
+## 2026-09-23, implement S-04 (review fixes, round 2), Opus
+- Review round 2 passed with five minors. Marcin chose to close the three that belong to this
+  slice and carry the rest to `/ship`.
+- `[AC-06]` now proves what the criterion actually says. It said the rate is stored, and the
+  tagged test asserted it only on the `201` body, which is rendered from the aggregate still in
+  memory. It now reserves the same invoice again and asserts `rate` `1.1` and the converted
+  amount inside the `409` body, which is read back out of the database through the duplicate
+  check. The integration round trip stays as the narrower proof it always was.
+- The exponent rule is proven through HTTP, in both directions, which the slice file promised
+  and the first pass had not delivered: a KWD program (three decimals) taking a 1.00 USD invoice
+  at `0.30712` reserves 307 minor units rather than 30, and a USD program taking a 1 000 JPY
+  invoice (no decimals) at `0.0067` reserves 670. Untagged, like the casing tests in S-03: the
+  rule belongs to A-10, not to an AC or an INV. `JPY` and `KWD` join `test/support/programs.ts`
+  as the slice said, and both are used, so neither constant is dead.
+- Inline `'EUR'` in `reservation.test.ts` replaced by the file's UPPERCASE constant.
+- Left for `/ship`, all recorded by review round 2: no `CHECK ("rate" > 0)` on the migration
+  (unreachable through the service, the mapper is the only writer, but the table already carries
+  a CHECK as the house pattern); the glossary illustrating `Adapter`, `Seam` and `Fake` with a
+  `RateProvider` and a config rate table that A-02 decided against; `README.md:90`; and
+  `wiki/plan/plan.md:104`.
+- `npm run gate` green: unit 111, integration 25, e2e 40, cold start 3. Nothing committed.
