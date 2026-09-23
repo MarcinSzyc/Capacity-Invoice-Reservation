@@ -2078,3 +2078,39 @@ correct with a new one. Format:
   on every release rather than only at reservation time, so a wrong rate is wrong for the life
   of the reservation.
 - Branch `docs/adr-0009-decision` from `main` at 60d7f42. Wiki only, no code.
+
+## 2026-09-23, plan S-05 (revision before implement), Opus
+- Targeted run for a slice that already existed: S-05 was written on 2026-09-19, before any code
+  and before ADR-0009 was decided. S-04 shipped today and the ADR was accepted the same day, so
+  the file was reconciled with both rather than rewritten. The twelve requirement rows in
+  `wiki/plan/plan.md` are untouched: all twelve test names still match the slice file exactly,
+  checked name by name, and the levels are unchanged (eleven e2e, INV-02 unit). The slice index
+  is unchanged too.
+- Drift found and fixed in the slice file. The error envelope was the big one: a domain error's
+  `details` are spread at the top level of the body next to `code`, and `details` as a JSON
+  field is a list of message strings used only by validation failures. The first version wrote
+  `details.appliedAt`, `details.heldAfter`, `details.held` and `details.remainingInvoiceAmount`;
+  all four are top level. This is the same drift the S-03 revision found, so it was worth
+  looking for.
+- ADR-0009 is no longer a pointer: the formula is written out. `held` derives from what is left
+  of the invoice, the reservation stores `releasedInvoiceAmount`, over-release is judged in
+  invoice currency, and `releaseId` is unique per reservation through a partial unique index.
+- Checked against the shipped code rather than assumed: `capacity_movements` already carries
+  `reservation_id`, `release_id` and `reason`, so the migration adds one column, one index and
+  the carried CHECK; `Ledger.recompute` chains on `deltaHeld` and special cases only `limit_set`,
+  so a release row recomputes with no change; `ReservationRepository` has only `findByInvoice`
+  and `add` since S-03 removed the listing method, so `save` and a movement read are new.
+- AC-12's numbers were verified by hand and they discriminate, which is the point of that test:
+  1 000 000 EUR at `1.13` released as 33 333 333, 33 333 333 and 33 333 334 minor units closes
+  at exactly 0 under the accepted Option 2, while rounding each release on its own (the declined
+  Option 1) gives 112 999 999 and leaves `held` at 1. A test that both options pass would prove
+  nothing.
+- Ten local decisions recorded so review can hold the code to them, including that the release
+  amount carries no currency (the reservation knows it), that `deltaHeld` travels as a `bigint`
+  difference rather than loosening `Money` to admit negatives, and that idempotency is read from
+  the ledger rather than from a second table, since a release always produces a movement.
+- The two findings carried from S-04 are the slice's first commit, with the glossary half marked
+  as `/spec` work. A third `/spec` item joins them: `releasedInvoiceAmount` is a new domain word
+  and needs a glossary entry before `/review`.
+- Branch `docs/plan-S-05` cut from `main` at 6af3675. Files: the S-05 slice file, `Home.md`,
+  this entry. `wiki/plan/plan.md` and the slice index needed no change. Nothing committed.

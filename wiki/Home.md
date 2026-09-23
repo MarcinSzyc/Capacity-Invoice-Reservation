@@ -17,7 +17,7 @@ Obsidian vault root is this folder. Working rules: `../CLAUDE.md`.
 | Gate | State |
 |---|---|
 | spec | done 2026-09-19: 28 questions answered, A-01..A-19, AC-01..AC-41, INV-01..INV-11 |
-| plan | done 2026-09-19: 7 slices S-01..S-07, 53 requirement rows, 11 ADRs; ADR-0001 to ADR-0008 accepted; S-03 revised 2026-09-22 against the shipped S-02 code; S-04 revised 2026-09-22 against the shipped S-03 code; A-10 amended twice for S-04 |
+| plan | done 2026-09-19: 7 slices S-01..S-07, 53 requirement rows, 11 ADRs; ADR-0001 to ADR-0008 accepted; S-03 revised 2026-09-22 against the shipped S-02 code; S-04 revised 2026-09-22 against the shipped S-03 code; A-10 amended twice for S-04; S-05 revised 2026-09-23 against the shipped S-04 code and ADR-0009 |
 
 | Slice | State |
 |---|---|
@@ -29,10 +29,13 @@ Obsidian vault root is this folder. Working rules: `../CLAUDE.md`.
 | S-06 Reconciliation snapshots | planned |
 | S-07 Demo page and operations | planned |
 
-Next: `/plan` review of S-05 against the shipped S-04 code, then `/implement S-05` on branch
-`slice/S-05-releases`. S-05 is `risk: high` (proportional conversion of instalments with the
-stored rate, exact closing of the last one) and wants Fable per `CLAUDE.md §8`.
-[[decisions/ADR-0009-release-conversion-exact-closing-and-release-id-scope]] is still `proposed`
-and has to be decided in the S-05 plan PR before `/implement` may start. Two findings carried
-from S-04: no `CHECK (rate > 0)` on `reservations.rate`, and the glossary's `Adapter`, `Seam`
-and `Fake` entries still illustrate a `RateProvider` that A-02 decided against.
+Next: merge the plan revision on `docs/plan-S-05`, then `/implement S-05` on branch
+`slice/S-05-releases`. S-05 is `risk: high` (a release converts with the stored rate, three
+instalments must close at exactly zero, and a repeated `releaseId` must answer the original
+outcome without touching state) and wants Fable per `CLAUDE.md §8`.
+[[decisions/ADR-0009-release-conversion-exact-closing-and-release-id-scope]] is accepted, Option
+2 and Option A, and is the only ADR the slice needs. The two findings carried from S-04 are its
+first commit: the `CHECK (rate > 0)` on `reservations.rate`, and the glossary's `Adapter`,
+`Seam` and `Fake` entries that still illustrate a `RateProvider` A-02 decided against. The
+glossary half is `/spec` work and also owes an entry for `releasedInvoiceAmount`, a new domain
+word this slice puts in code.
