@@ -4,6 +4,8 @@ import {
   announceProgram,
   awaitAvailability,
   EUR,
+  JPY,
+  KWD,
   publishCapacityUpdate,
   readAvailability,
   USD,
@@ -19,6 +21,9 @@ const THREE_MILLION_USD = 300_000_000n;
 const TWO_MILLION_USD = 200_000_000;
 const ONE_POINT_TWO_MILLION_USD = 120_000_000;
 const TWO_POINT_SEVEN_FIVE_MILLION_EUR = 275_000_000;
+const ONE_USD = 100;
+const ONE_THOUSAND_KWD = 1_000_000n;
+const ONE_THOUSAND_JPY = 1_000;
 const THREE_POINT_ZERO_TWO_FIVE_MILLION_USD = 302_500_000;
 const HALF_A_MILLION_USD = 50_000_000;
 const USD_IN_LOWER_CASE = 'usd';
@@ -240,6 +245,50 @@ describe('Reservations', () => {
       reserved: THREE_POINT_ZERO_TWO_FIVE_MILLION_USD,
       available: Number(TEN_MILLION_USD) - THREE_POINT_ZERO_TWO_FIVE_MILLION_USD,
     });
+
+    // The rate is stored, not only echoed: this reads the row back through the duplicate check.
+    const repeated = await reserve(programId, {
+      invoiceId: INVOICE_B,
+      invoiceAmount: TWO_POINT_SEVEN_FIVE_MILLION_EUR,
+      invoiceCurrency: EUR,
+      rate: '1.10',
+    }).expect(409);
+    expect(errorBodyOf(repeated).reservation).toMatchObject({
+      reservedAmount: THREE_POINT_ZERO_TWO_FIVE_MILLION_USD,
+      rate: '1.1',
+    });
+  });
+
+  it('should convert between currencies whose minor units differ, not as if both had two decimals (A-10)', async () => {
+    const programId = await announceProgram(app, {currency: KWD, creditLimit: ONE_THOUSAND_KWD});
+
+    const response = await reserve(programId, {
+      invoiceId: INVOICE_A,
+      invoiceAmount: ONE_USD,
+      invoiceCurrency: USD,
+      rate: '0.30712',
+    }).expect(201);
+
+    // 1.00 USD (2 decimals) at 0.30712 is 0.307 KWD (3 decimals), so 307 minor units, not 30.
+    expect(response.body).toMatchObject({
+      invoiceAmount: ONE_USD,
+      invoiceCurrency: USD,
+      reservedAmount: 307,
+      held: 307,
+      rate: '0.30712',
+    });
+    const availability = await readAvailability(app, programId, token).expect(200);
+    expect(availability.body).toMatchObject({currency: KWD, reserved: 307});
+
+    // And the other direction: JPY counts whole yen, so 1 000 JPY at 0.0067 is 6.70 USD.
+    const usdProgram = await announceProgram(app, {currency: USD, creditLimit: TEN_MILLION_USD});
+    const fromYen = await reserve(usdProgram, {
+      invoiceId: INVOICE_B,
+      invoiceAmount: ONE_THOUSAND_JPY,
+      invoiceCurrency: JPY,
+      rate: '0.0067',
+    }).expect(201);
+    expect(fromYen.body).toMatchObject({reservedAmount: 670, held: 670});
   });
 
   it('[AC-07] should answer 400 naming rate when it is missing for a cross-currency reservation or not 1 for a same-currency one', async () => {

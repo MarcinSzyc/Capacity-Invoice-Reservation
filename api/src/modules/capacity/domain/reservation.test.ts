@@ -5,6 +5,7 @@ import {Reservation} from './reservation';
 const PROGRAM_ID = 'PRG-1';
 const INVOICE_A = 'INV-A';
 const USD = 'USD';
+const EUR = 'EUR';
 const CLIENT = 'client-e2e';
 const AT_10_00 = new Date('2026-09-21T10:00:00.000Z');
 const ONE_POINT_TWO_MILLION_USD = Money.of(120_000_000n, USD);
@@ -97,7 +98,7 @@ describe('Reservation', () => {
     const reservation = Reservation.open({
       programId: PROGRAM_ID,
       invoiceId: INVOICE_A,
-      invoiceAmount: Money.of(275_000_000n, 'EUR'),
+      invoiceAmount: Money.of(275_000_000n, EUR),
       reservedAmount: Money.of(302_500_000n, USD),
       rate: Rate.parse('1.10'),
       clientId: CLIENT,
@@ -108,7 +109,7 @@ describe('Reservation', () => {
     expect(reservation.rate.toString()).toBe('1.1');
     expect(reservation.describe()).toMatchObject({
       invoiceAmount: 275_000_000n,
-      invoiceCurrency: 'EUR',
+      invoiceCurrency: EUR,
       reservedAmount: 302_500_000n,
       held: 302_500_000n,
       rate: '1.1',
