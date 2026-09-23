@@ -79,15 +79,30 @@ curl -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
 
 `201` with the reservation (`reservedAmount`, `held`, `status` `active`), and availability drops
 by the same amount. A currency code is uppercased on the way in, so `usd` works too (A-10).
+
+An invoice in another currency needs the rate, as a decimal string of at most eight places. The
+service converts once, rounds half up to the program's minor unit and stores the rate, so every
+later release converts the same way:
+
+```bash
+curl -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -d '{"invoiceId":"INV-B","invoiceAmount":275000000,"invoiceCurrency":"EUR","rate":"1.10"}' \
+  http://localhost:3000/programs/PRG-1/reservations
+```
+
+2 750 000.00 EUR at 1.10 reserves 3 025 000.00 USD. Each currency keeps its own minor unit, so
+1 000 JPY (no decimals) at `0.0067` reserves 6.70 USD, not 0.07. The rate reads back canonical,
+`"1.1"` for a sent `"1.10"` and `"1"` for a same-currency reservation (A-10). Send no rate
+within one currency; send one across two, or the answer is `400` naming `rate`.
+
 Refusals carry a stable `code` in the body:
 
 | Status | `code` | When |
 |---|---|---|
-| `400` | `VALIDATION_FAILED` | a field is missing or malformed; `details` names it |
+| `400` | `VALIDATION_FAILED` | a field is missing or malformed, or `rate` does not fit the two currencies; `details` names it |
 | `404` | `PROGRAM_NOT_FOUND` | the treasury never announced the program |
 | `409` | `RESERVATION_ALREADY_EXISTS` | the invoice already has a reservation; the original is in the body |
 | `422` | `CAPACITY_EXCEEDED` | the amount is more than `available`, which the body carries |
-| `422` | `CURRENCY_MISMATCH` | the invoice is in another currency than the program (until S-04) |
 
 Without a token, or with an expired or wrongly signed one, every business route answers `401`.
 The token command signs with `JWT_SECRET`, or with the development secret compose starts the

@@ -11,6 +11,7 @@ export const toReservationDto = (reservation: Reservation): ReservationDto => {
     invoiceCurrency: described.invoiceCurrency,
     reservedAmount: jsonInteger(described.reservedAmount, 'reservedAmount'),
     held: jsonInteger(described.held, 'held'),
+    rate: described.rate,
     status: described.status,
     source: described.source,
     createdAt: described.createdAt.toISOString(),
