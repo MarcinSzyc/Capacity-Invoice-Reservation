@@ -140,8 +140,15 @@ export class Reservation {
     return this.state.invoiceAmount.subtract(this.state.releasedInvoiceAmount);
   }
 
+  /**
+   * AC-15, amended 2026-09-24: closed means the whole invoice has been released, not that
+   * `held` reached zero. `held` is the remainder converted at the stored rate, so a remainder
+   * worth less than half a minor unit of the program currency rounds to zero while the invoice
+   * still owes. Such a reservation is active with `held` zero: it occupies none of the limit,
+   * and it can still be released to the end.
+   */
   get status(): ReservationStatus {
-    return this.state.held.isZero() ? 'closed' : 'active';
+    return this.remainingInvoiceAmount.isZero() ? 'closed' : 'active';
   }
 
   get source(): ReservationSource {
@@ -161,13 +168,14 @@ export class Reservation {
    * the last instalment closes at exactly zero without a special case. Every `held` is one
    * rounding of one product, so error cannot accumulate across instalments.
    *
-   * A reservation that holds nothing is refused before the amount is judged: it is already
-   * released, which is a different answer from asking for more than is left (AC-15 against
-   * AC-13).
+   * A reservation with nothing left to release is refused before the amount is judged: it is
+   * already released, which is a different answer from asking for more than is left (AC-15
+   * against AC-13). The test is the remaining invoice amount, not `held`, so a remainder that
+   * rounded away can still be closed.
    */
   release(request: ReleaseRequest): ReleaseOutcome {
-    if (this.held.isZero()) throw new ReservationAlreadyReleasedError(this.invoiceId);
     const remaining = this.remainingInvoiceAmount;
+    if (remaining.isZero()) throw new ReservationAlreadyReleasedError(this.invoiceId);
     const amount = request.amount ?? remaining;
     if (amount.isGreaterThan(remaining)) {
       throw new ReleaseExceedsHeldError(this.invoiceId, this.held, remaining);

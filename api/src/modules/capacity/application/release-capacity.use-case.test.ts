@@ -112,6 +112,9 @@ describe('ReleaseCapacity', () => {
     const {capacity} = await withReservation();
     const useCase = new ReleaseCapacity(capacity, new FixedClock(AT_10_10));
     await useCase.execute(command({amount: 100_000_000n, releaseId: 'R-1'}));
+    // A later release moves held on, so `heldAfter` below is R-1's outcome and not the state
+    // now: without it the assertion would pass whichever of the two the code reported.
+    await useCase.execute(command({amount: 50_000_000n, releaseId: 'R-2'}));
     const movementsBefore = capacity.repositories.ledger.movements.length;
 
     const repeated = useCase.execute(command({amount: 50_000_000n, releaseId: 'R-1'}));
@@ -122,7 +125,7 @@ describe('ReleaseCapacity', () => {
     });
     expect(capacity.repositories.ledger.movements).toHaveLength(movementsBefore);
     expect(capacity.repositories.programs.byId.get(PROGRAM_ID)?.reserved).toEqual(
-      Money.of(192_500_000n, USD),
+      Money.of(137_500_000n, USD),
     );
   });
 

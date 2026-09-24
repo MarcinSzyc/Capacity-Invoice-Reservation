@@ -10,6 +10,10 @@ ALTER TABLE "reservations" ADD CONSTRAINT "reservations_rate_positive" CHECK ("r
 -- silently booking a reservation as untouched.
 ALTER TABLE "reservations" ADD COLUMN "released_invoice_amount" BIGINT NOT NULL DEFAULT 0;
 ALTER TABLE "reservations" ALTER COLUMN "released_invoice_amount" DROP DEFAULT;
+-- The domain never releases more than the invoice has left, and `Money` refuses a negative, so
+-- no writer of ours can break this. The constraint is what protects the table from any other.
+ALTER TABLE "reservations" ADD CONSTRAINT "reservations_released_within_invoice"
+  CHECK ("released_invoice_amount" >= 0 AND "released_invoice_amount" <= "invoice_amount");
 
 -- CreateIndex
 -- ADR-0009 Option A: a release id identifies one repayment of one invoice, so the same id on

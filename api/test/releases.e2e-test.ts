@@ -168,6 +168,27 @@ describe('Releases', () => {
     expect(availability.body).toMatchObject({reserved: FIVE_HUNDRED_THOUSAND_USD});
   });
 
+  it('should answer 400 naming the field for a malformed release body, never 500', async () => {
+    const programId = await programHoldingInvoiceB();
+    const refused: Record<string, unknown>[] = [
+      // An explicit null is a wrong value, not an absent field: `@IsOptional` would skip both
+      // and the controller would then convert null, which is a 500 (the S-04 trap, again).
+      {releaseId: 'R-1', amount: null},
+      {releaseId: 'R-1', reason: null},
+      {releaseId: 'R-1', amount: 0},
+      {releaseId: 'R-1', amount: 12.5},
+      {releaseId: 'R-1', reason: 'refunded'},
+      {amount: ONE_MILLION_EUR},
+    ];
+
+    for (const body of refused) {
+      const response = await release(programId, INVOICE_B, body).expect(400);
+      expect(errorBodyOf(response).code).toBe('VALIDATION_FAILED');
+    }
+    const availability = await readAvailability(app, programId, token).expect(200);
+    expect(availability.body).toMatchObject({reserved: THREE_POINT_ZERO_TWO_FIVE_MILLION_USD});
+  });
+
   it('[AC-14] should answer 404 RESERVATION_NOT_FOUND for a release on an unknown invoice', async () => {
     const programId = await announceProgram(app, {currency: USD, creditLimit: TEN_MILLION_USD});
 
@@ -194,6 +215,9 @@ describe('Releases', () => {
     await release(programId, INVOICE_B, {releaseId: 'R-1', amount: ONE_MILLION_EUR}).expect(200);
     const afterFirst = await readReservation(programId, INVOICE_B).expect(200);
     const appliedAt = (afterFirst.body as {movements: MovementBody[]}).movements[1]?.occurredAt;
+    // A second, different release moves `held` on, so the outcome R-1 had is no longer the
+    // state now. Without this the assertion below could not tell the two apart.
+    await release(programId, INVOICE_B, {releaseId: 'R-2', amount: 50_000_000}).expect(200);
 
     // The same id with the same amount, and with a different one: both are the same repayment.
     for (const amount of [ONE_MILLION_EUR, 50_000_000]) {
@@ -203,10 +227,11 @@ describe('Releases', () => {
       expect(error.heldAfter).toBe(ONE_POINT_NINE_TWO_FIVE_MILLION_USD);
       expect(error.appliedAt).toBe(appliedAt);
     }
+    // R-1's outcome is 192 500 000, while the reservation now holds less because R-2 followed.
     const availability = await readAvailability(app, programId, token).expect(200);
-    expect(availability.body).toMatchObject({reserved: ONE_POINT_NINE_TWO_FIVE_MILLION_USD});
+    expect(availability.body).toMatchObject({reserved: 137_500_000});
     const reservation = await readReservation(programId, INVOICE_B).expect(200);
-    expect((reservation.body as {movements: MovementBody[]}).movements).toHaveLength(2);
+    expect((reservation.body as {movements: MovementBody[]}).movements).toHaveLength(3);
   });
 
   it('[AC-17] should record the release reason on the movement, defaulting to repaid, without changing the effect', async () => {

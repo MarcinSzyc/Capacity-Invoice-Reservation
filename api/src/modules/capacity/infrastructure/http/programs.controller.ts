@@ -80,7 +80,8 @@ export class ProgramsController {
   @ApiOkResponse({type: ReservationDto, description: 'Capacity is given back (AC-10, AC-11).'})
   @ApiBadRequestResponse({description: 'VALIDATION_FAILED: details name each field.'})
   @ApiNotFoundResponse({
-    description: 'RESERVATION_NOT_FOUND: no reservation for that invoice, or no such program.',
+    description:
+      'RESERVATION_NOT_FOUND when the program holds no reservation for that invoice (AC-14); PROGRAM_NOT_FOUND when the treasury never announced the program, as on reserve (AC-04).',
   })
   @ApiConflictResponse({
     description:

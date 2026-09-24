@@ -81,10 +81,10 @@ export const toReservation = (row: ReservationColumns): Reservation =>
     invoiceAmount: Money.of(row.invoiceAmount, row.invoiceCurrency),
     reservedAmount: Money.of(row.reservedAmount, row.currency),
     held: Money.of(row.held, row.currency),
+    releasedInvoiceAmount: Money.of(row.releasedInvoiceAmount, row.invoiceCurrency),
     // toFixed, not toString: decimal.js renders anything below 1e-7 in exponential form, and
     // the contract allows eight places, so `0.00000001` would come back as `1e-8` and be
     // unreadable by `Rate` on every later read of the row.
-    releasedInvoiceAmount: Money.of(row.releasedInvoiceAmount, row.invoiceCurrency),
     rate: Rate.parse(row.rate.toFixed()),
     source: row.source,
     clientId: row.clientId,
