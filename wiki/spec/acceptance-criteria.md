@@ -86,8 +86,9 @@ amount. Then `held` is 0, not one minor unit above or below. [A-08, A-10]
 **AC-14 Release on an unknown reservation.** When the client releases against an invoice
 id that has no reservation on that program. Then `404` `RESERVATION_NOT_FOUND`. [A-09]
 
-**AC-15 Release on a closed reservation.** Given `INV-A` has `held` 0. When the client
-releases with a new `releaseId`. Then `409` `RESERVATION_ALREADY_RELEASED`. [A-09]
+**AC-15 Release on a closed reservation.** Given `INV-A` has nothing left to release, so
+the whole invoice amount has been released. When the client releases with a new
+`releaseId`. Then `409` `RESERVATION_ALREADY_RELEASED`. [A-09]
 
 **AC-16 Repeated release id.** Given `releaseId` `R-1` was applied to `INV-B`. When the
 client sends `R-1` again, with any amount. Then `409` `RELEASE_ALREADY_PROCESSED` with
@@ -214,3 +215,4 @@ Every addition, amendment or supersession of an AC, newest last. Ids never chang
 | 2026-09-19 | AC-35 | amended: API documentation is Swagger UI and Redoc over one OpenAPI document | PR #10 |
 | 2026-09-19 | AC-38 | amended: the demo page is the `web` container, `api` keeps only dev-only endpoints (ADR-0001) | docs/adr-renumber-and-deployment |
 | 2026-09-19 | AC-00 | amended: four containers, `web` is a React UI in its own folder (ADR-0001) | docs/adr-renumber-and-deployment |
+| 2026-09-24 | AC-15 | amended: a reservation is closed when the whole invoice has been released, not when `held` reaches zero; `held` can round to zero while the invoice still owes, and the old wording stranded that remainder. Found by review round 1 of S-05 | docs/closed-reservation-and-glossary |
