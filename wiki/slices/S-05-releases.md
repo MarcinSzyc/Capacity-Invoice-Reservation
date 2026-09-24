@@ -214,3 +214,5 @@ Beyond `CLAUDE.md §9`:
 | 2026-09-19 | plan | slice written |
 | 2026-09-23 | plan | revised against the shipped S-04 code and ADR-0009 as accepted; ten local decisions, no new ADR |
 | 2026-09-23 | implement | started on Opus; `risk: high` would put this on Fable per `CLAUDE.md §8`, the Fable credits are exhausted and Marcin decided to run it here |
+| 2026-09-24 | verify | PASS, gate green on 1aeeda8, 12/12 AC and INV covered at the planned level, AC-12 confirmed live on a cold started stack (75 333 334, 37 666 667, exactly 0 at `1.13`); 1 finding owed to `/ship` (README documents no release route) |
+| 2026-09-24 | review | FAIL, 15 findings (0 blockers / 7 majors / 8 minors): a null `amount` answers 500, AC-14 answers PROGRAM_NOT_FOUND against its own Then clause, `held` can round to zero while the invoice still owes, AC-16 and the partial unique index have no test that can fail, and the glossary owes `releasedInvoiceAmount` and C2. Ran on Opus, not Fable: the model independence `CLAUDE.md §8` asks for did not hold |
