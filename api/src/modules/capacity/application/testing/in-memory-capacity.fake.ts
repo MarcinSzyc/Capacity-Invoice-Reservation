@@ -41,6 +41,12 @@ export class InMemoryReservations implements ReservationRepository {
     this.all.push(reservation);
     return Promise.resolve();
   }
+
+  /** The aggregate is held by reference here, so a release has already changed it in place. */
+  save(reservation: Reservation): Promise<void> {
+    if (!this.all.includes(reservation)) this.all.push(reservation);
+    return Promise.resolve();
+  }
 }
 
 /** A clock that answers the moment it was given, so `createdAt` can be asserted exactly. */
@@ -58,6 +64,10 @@ export class InMemoryLedger implements LedgerRepository {
   append(movement: CapacityMovement): Promise<void> {
     this.movements.push(movement);
     return Promise.resolve();
+  }
+
+  findByReservation(reservationId: string): Promise<CapacityMovement[]> {
+    return Promise.resolve(this.movements.filter((m) => m.reservationId === reservationId));
   }
 }
 

@@ -1,36 +1,60 @@
 import {INestApplication} from '@nestjs/common';
 import type {Prisma} from '../../src/generated/prisma/client';
+import {CapacityMovement} from '../../src/modules/capacity/domain/capacity-movement';
 import {Ledger} from '../../src/modules/capacity/domain/ledger';
 import {Money} from '../../src/modules/capacity/domain/money';
 import {Program} from '../../src/modules/capacity/domain/program';
 import {Reservation} from '../../src/modules/capacity/domain/reservation';
-import {TransactionScope} from '../../src/modules/capacity/infrastructure/persistence/client-access';
-import {toReservation} from '../../src/modules/capacity/infrastructure/persistence/mappers';
-import {PrismaLedgerRepository} from '../../src/modules/capacity/infrastructure/persistence/prisma-ledger.repository';
-import {PrismaProgramRepository} from '../../src/modules/capacity/infrastructure/persistence/prisma-program.repository';
+import {
+  toMovement,
+  toProgram,
+  toReservation,
+} from '../../src/modules/capacity/infrastructure/persistence/mappers';
 import {PrismaService} from '../../src/persistence/prisma.service';
 
 interface ProgramSnapshot {
-  readonly program: Program | null;
-  readonly movements: Awaited<ReturnType<PrismaLedgerRepository['findByProgram']>>;
+  readonly program: Program;
+  readonly movements: CapacityMovement[];
   readonly reservations: Reservation[];
 }
 
+const byProgram = <T>(rows: readonly T[], programId: (row: T) => string): Map<string, T[]> => {
+  const grouped = new Map<string, T[]>();
+  for (const row of rows) {
+    const key = programId(row);
+    const existing = grouped.get(key);
+    if (existing === undefined) grouped.set(key, [row]);
+    else existing.push(row);
+  }
+  return grouped;
+};
+
 /**
- * The three reads happen in one repeatable-read transaction, so a writer running at the same
- * time (another suite, another instance) cannot split the view between them.
+ * Every program in the test database, read in one repeatable-read transaction so a writer
+ * running at the same time cannot split the view between the three reads.
+ *
+ * Three queries for the whole database rather than three per program: S-03 chose to check every
+ * program rather than track ids per test, which is simpler and stronger, but a transaction per
+ * program made the hook grow with the size of the database and it eventually ran past the
+ * 180 s hook timeout in a full e2e run (found while implementing S-05). The guarantee is
+ * unchanged; only the number of round trips is.
  */
-const snapshotOf = (prisma: PrismaService, programId: string): Promise<ProgramSnapshot> =>
+const snapshotAll = (prisma: PrismaService): Promise<ProgramSnapshot[]> =>
   prisma.withClient((client) =>
     client.$transaction(
       async (transaction: Prisma.TransactionClient) => {
-        const scope = new TransactionScope(transaction);
-        const [program, movements, rows] = await Promise.all([
-          new PrismaProgramRepository(scope).findById(programId),
-          new PrismaLedgerRepository(scope).findByProgram(programId),
-          transaction.reservation.findMany({where: {programId}, orderBy: {createdAt: 'asc'}}),
+        const [programs, movements, reservations] = await Promise.all([
+          transaction.program.findMany(),
+          transaction.capacityMovement.findMany({orderBy: {id: 'asc'}}),
+          transaction.reservation.findMany({orderBy: {createdAt: 'asc'}}),
         ]);
-        return {program, movements, reservations: rows.map(toReservation)};
+        const movementsBy = byProgram(movements, (row) => row.programId);
+        const reservationsBy = byProgram(reservations, (row) => row.programId);
+        return programs.map((row) => ({
+          program: toProgram(row),
+          movements: (movementsBy.get(row.programId) ?? []).map(toMovement),
+          reservations: (reservationsBy.get(row.programId) ?? []).map(toReservation),
+        }));
       },
       {isolationLevel: 'RepeatableRead'},
     ),
@@ -39,25 +63,20 @@ const snapshotOf = (prisma: PrismaService, programId: string): Promise<ProgramSn
 /**
  * INV-03 and INV-04 after every e2e scenario: for every program in the test database, the ledger
  * recomputes to the stored program balances, `reserved` equals the sum of `held` of the active
- * reservations, and every reservation holds what its movements say. One database, run in band,
- * so checking every program is simpler and stronger than tracking ids per test.
+ * reservations, and every reservation holds what its movements say.
  */
 export const expectLedgerInvariants = async (app: INestApplication): Promise<void> => {
-  const prisma = app.get(PrismaService);
-  const programIds = await prisma.withClient((client) =>
-    client.program.findMany({select: {programId: true}}),
-  );
-  for (const {programId} of programIds) {
-    await expectProgramLedgerInvariants(app, programId);
+  for (const snapshot of await snapshotAll(app.get(PrismaService))) {
+    expectProgramLedgerInvariants(snapshot);
   }
 };
 
-const expectProgramLedgerInvariants = async (
-  app: INestApplication,
-  programId: string,
-): Promise<void> => {
-  const {program, movements, reservations} = await snapshotOf(app.get(PrismaService), programId);
-  if (program === null) throw new Error(`program ${programId} is missing`);
+const expectProgramLedgerInvariants = ({
+  program,
+  movements,
+  reservations,
+}: ProgramSnapshot): void => {
+  const programId = program.programId;
 
   // INV-04: the chain holds and recomputes to the stored program.
   const recomputed = Ledger.recompute(movements);

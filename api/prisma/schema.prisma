@@ -49,6 +49,9 @@ model Reservation {
   held            BigInt
   /// A-02: the rate invoice_amount was converted at, exact and fixed for life (ADR-0006).
   rate            Decimal           @db.Decimal(20, 8)
+  /// ADR-0009: how much of the invoice has been released, in invoice currency. `held` is
+  /// derived from what is left, so the last instalment closes at exactly zero.
+  releasedInvoiceAmount BigInt      @map("released_invoice_amount")
   source          ReservationSource
   clientId        String?           @map("client_id") @db.VarChar(128)
   createdAt       DateTime          @map("created_at") @db.Timestamptz(6)

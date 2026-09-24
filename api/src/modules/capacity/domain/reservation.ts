@@ -1,4 +1,5 @@
 import {randomUUID} from 'node:crypto';
+import {ReleaseExceedsHeldError, ReservationAlreadyReleasedError} from './errors';
 import {Money} from './money';
 import {Rate} from './rate';
 
@@ -8,6 +9,26 @@ export type ReservationSource = 'client' | 'reconciliation';
 /** Derived from `held`, never stored (glossary: active and closed reservation). */
 export type ReservationStatus = 'active' | 'closed';
 
+/** Why a release happened (A-08, glossary). Changes no rule, only what the ledger records. */
+export type ReleaseReason = 'repaid' | 'cancelled';
+
+/** A-08: the amount is in invoice currency, and absent means everything left. */
+export interface ReleaseRequest {
+  readonly amount: Money | null;
+  readonly releaseId: string;
+  readonly reason: ReleaseReason;
+  readonly clientId: string;
+}
+
+/**
+ * What the caller needs to build the movement. `deltaHeld` is signed minor units of the program
+ * currency, negative for a release, because `Money` admits no negative amount (ADR-0009).
+ */
+export interface ReleaseOutcome {
+  readonly heldAfter: Money;
+  readonly deltaHeld: bigint;
+}
+
 export interface ReservationState {
   /** Storage identity, never shown on the API; the public identity is `invoiceId` (A-07). */
   readonly reservationId: string;
@@ -16,6 +37,8 @@ export interface ReservationState {
   readonly invoiceAmount: Money;
   readonly reservedAmount: Money;
   readonly held: Money;
+  /** ADR-0009: how much of the invoice has been released, in invoice currency. */
+  readonly releasedInvoiceAmount: Money;
   /** A-02: the rate `invoiceAmount` was converted at, fixed for life; every release reuses it. */
   readonly rate: Rate;
   readonly source: ReservationSource;
@@ -41,6 +64,8 @@ export interface ReservationDescription {
   readonly invoiceCurrency: string;
   readonly reservedAmount: bigint;
   readonly held: bigint;
+  /** In invoice currency, so a client can see what is left to release (ADR-0009). */
+  readonly releasedInvoiceAmount: bigint;
   /** Canonical decimal, the form the API publishes (A-10). */
   readonly rate: string;
   readonly status: ReservationStatus;
@@ -55,7 +80,7 @@ export interface ReservationDescription {
  * a rate of one, so there is one shape rather than two.
  */
 export class Reservation {
-  private constructor(private readonly state: ReservationState) {}
+  private constructor(private state: ReservationState) {}
 
   static open(request: OpenReservation): Reservation {
     return new Reservation({
@@ -65,6 +90,7 @@ export class Reservation {
       invoiceAmount: request.invoiceAmount,
       reservedAmount: request.reservedAmount,
       held: request.reservedAmount,
+      releasedInvoiceAmount: Money.zero(request.invoiceAmount.currency),
       rate: request.rate,
       source: 'client',
       clientId: request.clientId,
@@ -105,6 +131,15 @@ export class Reservation {
     return this.state.rate;
   }
 
+  get releasedInvoiceAmount(): Money {
+    return this.state.releasedInvoiceAmount;
+  }
+
+  /** What the invoice still has to give back, in invoice currency. Derived, never stored. */
+  get remainingInvoiceAmount(): Money {
+    return this.state.invoiceAmount.subtract(this.state.releasedInvoiceAmount);
+  }
+
   get status(): ReservationStatus {
     return this.state.held.isZero() ? 'closed' : 'active';
   }
@@ -121,6 +156,33 @@ export class Reservation {
     return this.state.createdAt;
   }
 
+  /**
+   * ADR-0009: `held` is derived from what the invoice has left, not decremented per release, so
+   * the last instalment closes at exactly zero without a special case. Every `held` is one
+   * rounding of one product, so error cannot accumulate across instalments.
+   *
+   * A reservation that holds nothing is refused before the amount is judged: it is already
+   * released, which is a different answer from asking for more than is left (AC-15 against
+   * AC-13).
+   */
+  release(request: ReleaseRequest): ReleaseOutcome {
+    if (this.held.isZero()) throw new ReservationAlreadyReleasedError(this.invoiceId);
+    const remaining = this.remainingInvoiceAmount;
+    const amount = request.amount ?? remaining;
+    if (amount.isGreaterThan(remaining)) {
+      throw new ReleaseExceedsHeldError(this.invoiceId, this.held, remaining);
+    }
+
+    const heldBefore = this.held;
+    const heldAfter = remaining.subtract(amount).convert(this.rate, heldBefore.currency);
+    this.state = {
+      ...this.state,
+      held: heldAfter,
+      releasedInvoiceAmount: this.releasedInvoiceAmount.add(amount),
+    };
+    return {heldAfter, deltaHeld: heldAfter.amount - heldBefore.amount};
+  }
+
   describe(): ReservationDescription {
     return {
       programId: this.programId,
@@ -129,6 +191,7 @@ export class Reservation {
       invoiceCurrency: this.invoiceAmount.currency,
       reservedAmount: this.reservedAmount.amount,
       held: this.held.amount,
+      releasedInvoiceAmount: this.releasedInvoiceAmount.amount,
       rate: this.rate.toString(),
       status: this.status,
       source: this.source,

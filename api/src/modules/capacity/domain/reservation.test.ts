@@ -1,3 +1,4 @@
+import {ReleaseExceedsHeldError, ReservationAlreadyReleasedError} from './errors';
 import {Money} from './money';
 import {Rate} from './rate';
 import {Reservation} from './reservation';
@@ -58,6 +59,7 @@ describe('Reservation', () => {
       invoiceAmount: ONE_POINT_TWO_MILLION_USD,
       reservedAmount: ONE_POINT_TWO_MILLION_USD,
       held: Money.zero(USD),
+      releasedInvoiceAmount: ONE_POINT_TWO_MILLION_USD,
       rate: Rate.one(),
       source: 'reconciliation',
       clientId: null,
@@ -87,6 +89,7 @@ describe('Reservation', () => {
       invoiceCurrency: USD,
       reservedAmount: 120_000_000n,
       held: 120_000_000n,
+      releasedInvoiceAmount: 0n,
       rate: '1',
       status: 'active',
       source: 'client',
@@ -113,6 +116,101 @@ describe('Reservation', () => {
       reservedAmount: 302_500_000n,
       held: 302_500_000n,
       rate: '1.1',
+    });
+  });
+
+  describe('release', () => {
+    const EUR_INVOICE = Money.of(275_000_000n, EUR);
+    const USD_RESERVED = Money.of(302_500_000n, USD);
+    const RELEASE = {releaseId: 'R-1', reason: 'repaid' as const, clientId: CLIENT};
+
+    const crossCurrency = (): Reservation =>
+      Reservation.open({
+        programId: PROGRAM_ID,
+        invoiceId: INVOICE_A,
+        invoiceAmount: EUR_INVOICE,
+        reservedAmount: USD_RESERVED,
+        rate: Rate.parse('1.10'),
+        clientId: CLIENT,
+        createdAt: AT_10_00,
+      });
+
+    it('should start with nothing released and the whole invoice remaining', () => {
+      const reservation = crossCurrency();
+
+      expect(reservation.releasedInvoiceAmount).toEqual(Money.zero(EUR));
+      expect(reservation.remainingInvoiceAmount).toEqual(EUR_INVOICE);
+      expect(reservation.describe().releasedInvoiceAmount).toBe(0n);
+    });
+
+    it('should convert a partial release with the stored rate and derive held from what is left (ADR-0009)', () => {
+      const reservation = crossCurrency();
+
+      const outcome = reservation.release({...RELEASE, amount: Money.of(100_000_000n, EUR)});
+
+      // 175 000 000 EUR left at 1.10 is 192 500 000 USD, so held falls by 110 000 000.
+      expect(outcome.heldAfter).toEqual(Money.of(192_500_000n, USD));
+      expect(outcome.deltaHeld).toBe(-110_000_000n);
+      expect(reservation.held).toEqual(Money.of(192_500_000n, USD));
+      expect(reservation.releasedInvoiceAmount).toEqual(Money.of(100_000_000n, EUR));
+      expect(reservation.remainingInvoiceAmount).toEqual(Money.of(175_000_000n, EUR));
+      expect(reservation.status).toBe('active');
+    });
+
+    it('should treat an absent amount as everything left and close the reservation', () => {
+      const reservation = crossCurrency();
+      reservation.release({...RELEASE, amount: Money.of(100_000_000n, EUR)});
+
+      const outcome = reservation.release({...RELEASE, releaseId: 'R-2', amount: null});
+
+      expect(outcome.heldAfter).toEqual(Money.zero(USD));
+      expect(outcome.deltaHeld).toBe(-192_500_000n);
+      expect(reservation.status).toBe('closed');
+      expect(reservation.remainingInvoiceAmount).toEqual(Money.zero(EUR));
+    });
+
+    it('should close at exactly zero when the instalments do not divide evenly by the rate (AC-12)', () => {
+      const reservation = Reservation.open({
+        programId: PROGRAM_ID,
+        invoiceId: INVOICE_A,
+        invoiceAmount: Money.of(100_000_000n, EUR),
+        reservedAmount: Money.of(113_000_000n, USD),
+        rate: Rate.parse('1.13'),
+        clientId: CLIENT,
+        createdAt: AT_10_00,
+      });
+
+      // Rounding each instalment on its own (the declined Option 1) would leave held at 1.
+      reservation.release({...RELEASE, amount: Money.of(33_333_333n, EUR)});
+      reservation.release({...RELEASE, releaseId: 'R-2', amount: Money.of(33_333_333n, EUR)});
+      const last = reservation.release({
+        ...RELEASE,
+        releaseId: 'R-3',
+        amount: Money.of(33_333_334n, EUR),
+      });
+
+      expect(last.heldAfter).toEqual(Money.zero(USD));
+      expect(reservation.held).toEqual(Money.zero(USD));
+      expect(reservation.status).toBe('closed');
+    });
+
+    it('should refuse a release beyond what the invoice has left, in invoice currency (AC-13)', () => {
+      const reservation = crossCurrency();
+
+      expect(() => reservation.release({...RELEASE, amount: Money.of(275_000_001n, EUR)})).toThrow(
+        ReleaseExceedsHeldError,
+      );
+      expect(reservation.held).toEqual(USD_RESERVED);
+      expect(reservation.releasedInvoiceAmount).toEqual(Money.zero(EUR));
+    });
+
+    it('should refuse any release once nothing is held, before judging the amount (AC-15)', () => {
+      const reservation = crossCurrency();
+      reservation.release({...RELEASE, amount: null});
+
+      expect(() =>
+        reservation.release({...RELEASE, releaseId: 'R-2', amount: Money.of(1n, EUR)}),
+      ).toThrow(ReservationAlreadyReleasedError);
     });
   });
 });

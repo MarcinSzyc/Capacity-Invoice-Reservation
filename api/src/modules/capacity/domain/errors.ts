@@ -4,7 +4,7 @@ import {
   VALIDATION_FAILED_CODE,
 } from '../../../common/errors/domain-error';
 import {Money} from './money';
-import {Reservation, ReservationDescription} from './reservation';
+import type {Reservation, ReservationDescription} from './reservation';
 
 export const PROGRAM_NOT_FOUND = 'PROGRAM_NOT_FOUND';
 export const CURRENCY_MISMATCH = 'CURRENCY_MISMATCH';
@@ -83,5 +83,75 @@ export class RateValidationError extends DomainError {
   ) {
     super(`${field} ${problem}`);
     this.details = {details: [`${field} ${problem}`]};
+  }
+}
+
+export const RESERVATION_NOT_FOUND = 'RESERVATION_NOT_FOUND';
+export const RESERVATION_ALREADY_RELEASED = 'RESERVATION_ALREADY_RELEASED';
+export const RELEASE_ALREADY_PROCESSED = 'RELEASE_ALREADY_PROCESSED';
+export const RELEASE_EXCEEDS_HELD = 'RELEASE_EXCEEDS_HELD';
+
+/** AC-14: the program may not exist, or it may hold no reservation for that invoice. */
+export class ReservationNotFoundError extends DomainError {
+  readonly code = RESERVATION_NOT_FOUND;
+  readonly kind: DomainErrorKind = 'not_found';
+
+  constructor(
+    readonly programId: string,
+    readonly invoiceId: string,
+  ) {
+    super(`Program ${programId} holds no reservation for invoice ${invoiceId}`);
+  }
+}
+
+/** AC-15: nothing is held any more, so there is nothing left to give back. */
+export class ReservationAlreadyReleasedError extends DomainError {
+  readonly code = RESERVATION_ALREADY_RELEASED;
+  readonly kind: DomainErrorKind = 'conflict';
+
+  constructor(readonly invoiceId: string) {
+    super(`Reservation ${invoiceId} holds nothing: it has already been released`);
+  }
+}
+
+/**
+ * AC-16, A-09: the same `releaseId` twice is the same repayment sent twice. The body carries
+ * the outcome the first one had, so a client that retried can see what its release did.
+ */
+export class ReleaseAlreadyProcessedError extends DomainError {
+  readonly code = RELEASE_ALREADY_PROCESSED;
+  readonly kind: DomainErrorKind = 'conflict';
+  override readonly details: {readonly appliedAt: Date; readonly heldAfter: bigint};
+
+  constructor(
+    readonly releaseId: string,
+    appliedAt: Date,
+    heldAfter: Money,
+  ) {
+    super(`Release ${releaseId} has already been applied`);
+    this.details = {appliedAt, heldAfter: heldAfter.amount};
+  }
+}
+
+/**
+ * AC-13, ADR-0009: judged in invoice currency, against what the invoice has left rather than
+ * against `held`, so a release that is legal in invoice terms cannot fail on a rounding
+ * boundary. The body says both, because a client thinks in the invoice and the limit moves in
+ * the program's currency.
+ */
+export class ReleaseExceedsHeldError extends DomainError {
+  readonly code = RELEASE_EXCEEDS_HELD;
+  readonly kind: DomainErrorKind = 'unprocessable';
+  override readonly details: {readonly held: bigint; readonly remainingInvoiceAmount: bigint};
+
+  constructor(
+    readonly invoiceId: string,
+    held: Money,
+    remainingInvoiceAmount: Money,
+  ) {
+    super(
+      `Reservation ${invoiceId} has ${remainingInvoiceAmount.amount} ${remainingInvoiceAmount.currency} left to release in minor units`,
+    );
+    this.details = {held: held.amount, remainingInvoiceAmount: remainingInvoiceAmount.amount};
   }
 }
