@@ -233,11 +233,14 @@ outcomes mapped to codes in one place.
 - Source: Q06, Q07, Q09
 
 **Statement.** A release reduces a reservation's `held`. Several releases may follow
-until `held` is zero. A full repayment is a release of 100% of what is left. The amount
-is optional: absent means "release everything left". The amount is expressed in invoice
-currency and converted with the rate stored on the reservation; the final release closes
-the reservation exactly, so rounding never strands a minor unit. A release larger than
-the remaining `held` is `422 RELEASE_EXCEEDS_HELD`. A release carries an optional
+until the whole invoice has been released. A full repayment is a release of 100% of what
+is left. The amount is optional: absent means "release everything left". The amount is
+expressed in invoice currency and converted with the rate stored on the reservation;
+`held` is derived from what the invoice still has to give back rather than decremented per
+release (ADR-0009), so the final release closes the reservation exactly and rounding never
+strands a minor unit. A release larger than what the invoice has left is
+`422 RELEASE_EXCEEDS_HELD`, judged in invoice currency: judging it against `held` would let
+a release that is legal in invoice terms fail on a rounding boundary. A release carries an optional
 `reason`, `repaid` (default) or `cancelled`; the reason is recorded on the ledger
 movement and changes no rule.
 
@@ -257,7 +260,10 @@ last-instalment closing need dedicated tests.
 
 **Statement.** Every release carries the client's identifier of the repayment
 (`releaseId`). Outcomes: unknown reservation `404 RESERVATION_NOT_FOUND`; a new
-`releaseId` on a reservation with `held = 0` is `409 RESERVATION_ALREADY_RELEASED`; a
+`releaseId` on a reservation with nothing left to release is `409
+RESERVATION_ALREADY_RELEASED`, which is not the same as `held` reaching zero, because a
+remainder worth less than half a minor unit of the program currency rounds `held` away
+while the invoice still owes (AC-15, amended 2026-09-24); a
 `releaseId` already processed is `409 RELEASE_ALREADY_PROCESSED` with the original
 outcome (when applied, `held` after) in the body and no state change.
 
@@ -491,3 +497,5 @@ program is not an acceptance criterion.
 | 2026-09-21 | A-13 | amended: clause (5), the checks run in order, duplicate before rejected and stale before rejected; found by review rounds 3 and 4 of S-02 | slice/S-02-programs-from-the-treasury |
 | 2026-09-22 | A-10 | amended: currency codes are normalised to upper case at both boundaries, not refused for their case; the two edges disagreed, found by review round 2 of S-03 | slice/S-03-reservations-and-capacity-invariant |
 | 2026-09-22 | A-10 | amended: conversion respects each currency's ISO 4217 minor unit exponent (JPY 0, KWD 3, default 2) and `rate` reads back canonical; gaps found while revising the S-04 plan | docs/a-10-minor-units-and-rate-format |
+| 2026-09-24 | A-08 | amended: `held` is derived from what the invoice has left rather than decremented per release, and over-release is judged in invoice currency (ADR-0009); found by review round 3 of S-05 | docs/release-assumptions |
+| 2026-09-24 | A-09 | amended: a release is refused once nothing is left to release, which is not the same as `held` reaching zero (AC-15, amended); found by review round 3 of S-05 | docs/release-assumptions |
