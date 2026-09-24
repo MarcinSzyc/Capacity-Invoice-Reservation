@@ -2459,3 +2459,17 @@ Findings, most severe first:
   `0.000065`, releases all but the remainder, sees `held` 0 with status `active`, closes it, and
   asserts the three movements read `reserve 65`, `release -65`, `release 0`.
 - `npm run gate` green: unit 132, integration 29, e2e 53, cold start 3. Nothing committed.
+
+## 2026-09-24, verify S-05 (third pass, after review fixes round 2), Sonnet
+- `npm run gate` green on 2026dc3: prose clean, unit 132/132, integration 29/29, e2e 53/53,
+  cold start 3/3. Coverage 12/12 at the planned level, no skipped or focused tests, layer
+  boundaries hold.
+- The regression the second pass found is gone, and I checked the whole path live rather than
+  only the one call that failed: an IDR invoice at `0.000065` releases all but its remainder
+  (`held` 0, status `active`), then closes (`held` 0, `releasedInvoiceAmount` 1 000 000, status
+  `closed`, where the previous pass answered `500`), and a further release then answers
+  `RESERVATION_ALREADY_RELEASED`, which is the amended AC-15 doing exactly what it should at
+  both ends. An explicit `"amount": null` still answers `400`.
+- Cold start again used the `API_PORT` override: port 3000 is still held by a process from
+  Marcin's other project, now pid 78243. Left alone.
+- Result: PASS.
