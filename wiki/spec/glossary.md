@@ -94,8 +94,10 @@ point at one row; that id never appears in a request, a response or a message.
 
 **Release.** Giving part or all of a reservation's `held` back to capacity because the
 invoice was repaid. Expressed by the client in invoice currency, converted with the
-reservation's own rate. A full repayment is a release of 100% of what is left. A release
-larger than `held` is rejected.
+reservation's own rate. A full repayment is a release of 100% of what is left. A release larger
+than what the invoice still has to give back is rejected, judged in invoice currency rather
+than against `held`, so a release that is legal in invoice terms cannot fail on a rounding
+boundary (ADR-0009).
 
 **Release reason.** Why a release happened: `repaid` (the buyer paid, money came back)
 or `cancelled` (the approval was withdrawn, money never went out). Recorded on the
