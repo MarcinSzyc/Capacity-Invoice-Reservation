@@ -130,13 +130,14 @@ export class Program {
    * overcommitted here, with no special case: `available` is the same formula either way.
    */
   release(request: ReleaseMovementRequest): CapacityMovement {
-    // A release only ever gives capacity back, and never more than the program holds. Both are
-    // the caller's to get right, so both are refused here rather than reaching `Money.of` as a
-    // bare range error: that would leave the client a 500 for a broken caller.
-    if (request.deltaHeld >= 0n) {
-      throw new RangeError(
-        `Release ${request.releaseId} does not lower held: ${request.deltaHeld}`,
-      );
+    // A release gives capacity back or leaves it where it is, and never takes more than the
+    // program holds. A delta of zero is legitimate and not rare: once a remainder has rounded
+    // `held` to zero, closing the invoice gives nothing back but is still a repayment the
+    // ledger must record (AC-15, amended). Only a delta that raises `held` is a broken caller,
+    // and it is refused here rather than reaching `Money.of` as a bare range error, which
+    // would leave the client a 500.
+    if (request.deltaHeld > 0n) {
+      throw new RangeError(`Release ${request.releaseId} would raise held by ${request.deltaHeld}`);
     }
     if (this.reserved.amount + request.deltaHeld < 0n) {
       throw new RangeError(
