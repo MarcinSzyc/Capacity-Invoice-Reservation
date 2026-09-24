@@ -51,6 +51,7 @@ describe('ReserveCapacity', () => {
       invoiceCurrency: USD,
       reservedAmount: 120_000_000n,
       held: 120_000_000n,
+      releasedInvoiceAmount: 0n,
       rate: '1',
       status: 'active',
       source: 'client',
@@ -65,7 +66,7 @@ describe('ReserveCapacity', () => {
       expect.objectContaining({
         kind: 'reserve',
         reservationId: reservation.reservationId,
-        deltaHeld: Money.of(120_000_000n, USD),
+        deltaHeld: 120_000_000n,
         reservedAfter: Money.of(120_000_000n, USD),
         availableAfter: Money.of(880_000_000n, USD),
         attribution: {clientId: CLIENT},

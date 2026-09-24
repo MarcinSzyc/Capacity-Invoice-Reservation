@@ -7,3 +7,6 @@ export const MESSAGE_ID_MAX_LENGTH = 128;
 export const PROGRAM_ID_MAX_LENGTH = 64;
 export const MESSAGE_TYPE_MAX_LENGTH = 32;
 export const INVOICE_ID_MAX_LENGTH = 128;
+
+/** The width `capacity_movements.release_id` has, the same as the other client ids. */
+export const RELEASE_ID_MAX_LENGTH = 128;

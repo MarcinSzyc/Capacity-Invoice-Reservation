@@ -267,4 +267,24 @@ describe('Prisma capacity adapters', () => {
       ),
     ).rejects.toThrow(/capacity_movements_attributable/);
   });
+
+  it('should refuse a rate that is not positive, so no row can be written that cannot be read back', async () => {
+    const programId = uniqueId('PRG');
+    await announcedProgram(programId);
+
+    // The mapper cannot produce such a row (`Rate.parse` refuses it), so the constraint is hit
+    // directly: `Rate.parse` would throw on the way out, making every later read a 500, which
+    // is the failure review round 1 of S-04 found for a rate it could not parse.
+    await expect(
+      prisma.withClient(
+        (client) => client.$executeRaw`
+          INSERT INTO reservations
+            (id, program_id, invoice_id, invoice_amount, invoice_currency, currency,
+             reserved_amount, held, released_invoice_amount, rate, source, client_id,
+             created_at, updated_at)
+          VALUES (gen_random_uuid(), ${programId}, 'INV-ZERO', 1, ${EUR}, ${EUR}, 1, 1, 0, 0,
+                  'client'::reservation_source, ${CLIENT}, ${AT_10_10}, ${AT_10_10})`,
+      ),
+    ).rejects.toThrow(/reservations_rate_positive/);
+  });
 });

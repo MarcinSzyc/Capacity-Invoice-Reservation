@@ -1,7 +1,7 @@
 # S-05 Releases
 
 - Outcome: a client releases a reservation in full or in instalments, in invoice currency, idempotently by `releaseId`, and reads a reservation with its movements.
-- Status: planned
+- Status: in progress
 - AC: AC-10, AC-11, AC-12, AC-13, AC-14, AC-15, AC-16, AC-17, AC-18, AC-19, AC-34
 - INV: INV-02
 - Risk: high. Money again, and harder than S-04: a release converts with the stored rate, three instalments must close at exactly zero, and a repeated `releaseId` must answer the original outcome without touching state. Per `CLAUDE.md §8` this is Fable work.
@@ -213,3 +213,4 @@ Beyond `CLAUDE.md §9`:
 |---|---|---|
 | 2026-09-19 | plan | slice written |
 | 2026-09-23 | plan | revised against the shipped S-04 code and ADR-0009 as accepted; ten local decisions, no new ADR |
+| 2026-09-23 | implement | started on Opus; `risk: high` would put this on Fable per `CLAUDE.md §8`, the Fable credits are exhausted and Marcin decided to run it here |

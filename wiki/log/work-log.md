@@ -2192,3 +2192,40 @@ correct with a new one. Format:
 - No other AC or INV is affected: AC-26 and AC-28 to AC-31 speak of `held`, adjustments and
   `asOf`, none of them of status.
 - Branch `docs/ac-27-adjustment-closes` from `main`. Wiki only, no code.
+## 2026-09-23, implement S-05 (releases), Opus
+- Branch `slice/S-05-releases` from `main` at 4bd138b. Run on Opus although the slice is
+  `risk: high`: the Fable credits are exhausted and Marcin decided to run it here. Third slice
+  in a row without the model split `CLAUDE.md §8` asks for.
+- C1 from S-04 closed first, test first: the raw insert of a zero rate now fails on
+  `reservations_rate_positive`. C2, the glossary's `RateProvider` examples, is `/spec` work and
+  is still owed before `/review`, together with an entry for `releasedInvoiceAmount`.
+- One thing the slice file did not spell out, and it mattered. `CapacityMovement.deltaHeld` was
+  a `Money`, and `Money` admits no negative amount, so a release row could not be represented at
+  all: `toMovement` would have thrown `Money.of` on the way out of a `delta_held` that the column
+  already stores as a signed BIGINT. Decision 3 of the slice had declined a second money type and
+  said a release's delta is a `bigint` difference; the consistent conclusion is that the movement
+  carries a signed `bigint` too, with the row's currency where it already lives
+  (`limitAfter.currency`). Changed across the module: the type, `Ledger.recompute`, `Program`,
+  the mappers and three test files. `Ledger` now reports a chain that would take a reservation
+  below zero as broken at that row rather than throwing, which is INV-02 at the recomputation.
+- The movement also gained `releaseId` and `reason`, which AC-19 needs and the columns have
+  carried since S-02; `toMovementColumns` was writing null into both.
+- `jsonInteger` now guards magnitude rather than only the upper bound, because a ledger delta is
+  signed and a number too large to be exact is just as wrong with a minus in front of it.
+- Domain, application and infrastructure otherwise as the slice file planned: `Reservation.release`
+  deriving `held` from what the invoice has left, `Program.release`, the four errors, the
+  `ReleaseCapacity` use case checking the repeat before the amount, `GetReservation`, the two
+  routes, and the migration with the column, the partial unique index and C1's CHECK.
+- A second thing worth naming: the `afterEach` ledger helper opened one repeatable-read
+  transaction per program, and S-03 chose to check every program in the database rather than
+  track ids. That is O(programs) per test, so it grew with the suite and finally ran past the
+  180 s hook timeout in a full e2e run once S-05 added a suite. Rewritten to three queries for
+  the whole database in one transaction, grouped in memory: the same guarantee, the releases
+  suite back to 34 s. Found because the full gate failed while the file alone passed, which is
+  exactly the kind of thing running only the fast loop would have hidden.
+- Tests beyond the plan, for `/ship` to add to `wiki/plan/plan.md`: `Reservation.release` for the
+  partial, absent-amount, exact-closing, over-release and already-closed cases;
+  `Program.release` lowering `reserved` and letting an overcommitted program recover;
+  `ReleaseCapacity` for each error and for the repeat running before the amount; and the
+  integration case for the zero rate CHECK.
+- `npm run gate` green: unit 129, integration 26, e2e 51, cold start 3. Nothing committed.
