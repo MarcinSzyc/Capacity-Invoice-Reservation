@@ -1,15 +1,5 @@
 import {ApiProperty} from '@nestjs/swagger';
-import {
-  IsIn,
-  IsInt,
-  IsOptional,
-  IsString,
-  Length,
-  Matches,
-  Max,
-  Min,
-  ValidateIf,
-} from 'class-validator';
+import {IsIn, IsInt, IsString, Length, Matches, Max, Min, ValidateIf} from 'class-validator';
 import {
   INVOICE_ID_MAX_LENGTH,
   PROGRAM_ID_MAX_LENGTH,
@@ -155,7 +145,10 @@ export class ReleaseRequestDto {
     description:
       'Minor units of invoiceCurrency. Absent releases everything the invoice has left (A-08).',
   })
-  @IsOptional()
+  // ValidateIf rather than IsOptional, for the reason spelled out on `rate` above: IsOptional
+  // skips validation for `null` as well as `undefined`, and the controller would then convert
+  // an explicit null, which is a 500 where the client deserves a 400.
+  @ValidateIf((dto: ReleaseRequestDto) => dto.amount !== undefined)
   @IsInt()
   @Min(1)
   @Max(Number.MAX_SAFE_INTEGER)
@@ -167,7 +160,7 @@ export class ReleaseRequestDto {
     example: 'repaid',
     description: 'Why the release happened; defaults to repaid and changes no rule (A-08).',
   })
-  @IsOptional()
+  @ValidateIf((dto: ReleaseRequestDto) => dto.reason !== undefined)
   @IsIn(['repaid', 'cancelled'])
   reason?: ReleaseReason;
 }

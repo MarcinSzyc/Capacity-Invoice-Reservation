@@ -12,7 +12,14 @@ const INVOICE_AMOUNT = 100_000_000n;
 const AT_10_00 = new Date('2026-09-21T10:00:00.000Z');
 const CLIENT = 'client-property';
 // Rates that do not divide evenly, which is where a per-release rounding would drift (ADR-0009).
-const RATES: readonly [string, ...string[]] = ['1.13', '0.0067', '3.2560', '1', '0.30712'];
+const RATES: readonly [string, ...string[]] = [
+  '1.13',
+  '0.0067',
+  '3.2560',
+  '1',
+  '0.30712',
+  '0.000065',
+];
 
 const reservationAt = (rate: Rate): Reservation => {
   const invoiceAmount = Money.of(INVOICE_AMOUNT, EUR);
@@ -60,7 +67,9 @@ describe('Reservation invariants', () => {
       }
 
       // Whatever the sequence left, releasing the rest closes at exactly zero (AC-12, ADR-0009).
-      if (!reservation.held.isZero()) {
+      // Guarded on what the invoice has left, not on `held`: a remainder can round `held` to
+      // zero while the invoice still owes, and that is exactly the case worth closing (AC-15).
+      if (!reservation.remainingInvoiceAmount.isZero()) {
         reservation.release({
           amount: null,
           releaseId: 'R-last',

@@ -2378,3 +2378,46 @@ Findings, most severe first:
   release, a full one, a repeated `releaseId` nor the reservation read. Already raised by
   `/verify` and named in the slice's definition of done; repeated here so it is not lost at
   `/ship`.
+
+## 2026-09-24, implement S-05 (review fixes, round 1), Opus
+- Seven majors and eight minors came back. The two that mattered most I reproduced before
+  touching anything, rather than taking the report on trust.
+- Major, an explicit `null` answered `500`. `{"releaseId":"R-1","amount":null}` passed the pipe
+  untouched because `@IsOptional()` skips `null` as well as `undefined`, and the controller then
+  evaluated `BigInt(null)`. This is the same trap I fixed on `rate` in S-04, documented ten
+  lines above in the same file, and did not apply to the new fields. Both `amount` and `reason`
+  now use `@ValidateIf` on `undefined`, red first: the new e2e case failed with
+  `expected 400, got 500`.
+- Major, a remainder that rounds away. Reproduced against the domain: a 1 000 000 IDR minor
+  invoice at rate `0.000065` leaves `held` 0 with 1 000 IDR still owed, and the reservation was
+  then unreleasable forever. The code was faithful to AC-15 and the glossary, so this went
+  through `/spec` (merged as #32) and the code now follows the amended rule: status is derived
+  from the remaining invoice amount, and `RESERVATION_ALREADY_RELEASED` is answered on that. Two
+  domain tests cover the state, and INV-02's property test now guards its closing release on
+  what the invoice has left rather than on `held`, so it walks through the case instead of
+  around it. A rate of `0.000065` joined its rate list to make sure it does.
+- Major, the AC-16 tests could not fail: both repeated the only release the reservation had, so
+  "the original outcome" and "the state now" were the same number. A second, different release
+  now runs before the repeat, in the unit test and the e2e, so R-1's `heldAfter` of 192 500 000
+  is asserted while the reservation holds 137 500 000.
+- Major, three promised tests were missing and are now there: `save` writing and reading back
+  `released_invoice_amount`, the partial unique index refusing a repeated
+  `(reservation_id, release_id)` while allowing the same id on another invoice, and
+  `findByReservation` returning rows in append order with their `releaseId` and `reason`.
+- Major, AC-14's contract text. Marcin decided the code is right: an unknown program answers
+  `PROGRAM_NOT_FOUND`, as it does on reserve (AC-04), and only an unknown invoice on a known
+  program answers `RESERVATION_NOT_FOUND`. The OpenAPI description said otherwise and now says
+  what the code does, naming both criteria.
+- Majors for the two glossary entries closed in #32: `releasedInvoiceAmount` has its entry, and
+  C2 carried from S-04 is gone.
+- Minors taken: the stranded `Program` class comment and the detached `toFixed` comment are back
+  above what they describe; `Program.release` refuses a delta that does not lower `held` and one
+  that would take `reserved` below zero, rather than letting a broken caller reach `Money.of`
+  and become a `500`; the migration gained `CHECK (released_invoice_amount >= 0 AND <=
+  invoice_amount)`, which the sibling column already had.
+- Minors left, and why: the in-memory `save` fake cannot fail, which is true of every fake we
+  have and is a testing-strategy question rather than this slice's; a legitimate very small
+  release can still append a `deltaHeld` of zero, which is a real wrinkle in decision 8 but
+  changes no balance and no invariant; the glossary's "larger than `held`" line predates
+  ADR-0009 and is `/spec` work; the README is `/ship`'s.
+- `npm run gate` green: unit 131, integration 29, e2e 52, cold start 3. Nothing committed.

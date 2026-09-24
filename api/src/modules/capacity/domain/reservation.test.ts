@@ -213,4 +213,59 @@ describe('Reservation', () => {
       ).toThrow(ReservationAlreadyReleasedError);
     });
   });
+
+  describe('a remainder that rounds away', () => {
+    // AC-15 amended 2026-09-24: closed means the invoice is released, not that held reached
+    // zero. `held` is the remainder converted at the stored rate, so a remainder worth less
+    // than half a minor unit rounds to zero while the invoice still owes.
+    const tinyRate = (): Reservation => {
+      const invoiceAmount = Money.of(1_000_000n, 'IDR');
+      return Reservation.open({
+        programId: PROGRAM_ID,
+        invoiceId: INVOICE_A,
+        invoiceAmount,
+        reservedAmount: invoiceAmount.convert(Rate.parse('0.000065'), USD),
+        rate: Rate.parse('0.000065'),
+        clientId: CLIENT,
+        createdAt: AT_10_00,
+      });
+    };
+
+    it('should stay active while the invoice still owes, even once held has rounded to zero', () => {
+      const reservation = tinyRate();
+
+      reservation.release({
+        amount: Money.of(999_000n, 'IDR'),
+        releaseId: 'R-1',
+        reason: 'repaid',
+        clientId: CLIENT,
+      });
+
+      expect(reservation.held).toEqual(Money.zero(USD));
+      expect(reservation.remainingInvoiceAmount).toEqual(Money.of(1_000n, 'IDR'));
+      expect(reservation.status).toBe('active');
+    });
+
+    it('should let the remainder be released to the end and only then be closed', () => {
+      const reservation = tinyRate();
+      reservation.release({
+        amount: Money.of(999_000n, 'IDR'),
+        releaseId: 'R-1',
+        reason: 'repaid',
+        clientId: CLIENT,
+      });
+
+      const last = reservation.release({
+        amount: null,
+        releaseId: 'R-2',
+        reason: 'repaid',
+        clientId: CLIENT,
+      });
+
+      expect(last.heldAfter).toEqual(Money.zero(USD));
+      expect(reservation.remainingInvoiceAmount).toEqual(Money.zero('IDR'));
+      expect(reservation.releasedInvoiceAmount).toEqual(Money.of(1_000_000n, 'IDR'));
+      expect(reservation.status).toBe('closed');
+    });
+  });
 });

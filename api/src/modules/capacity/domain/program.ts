@@ -16,10 +16,6 @@ export type SetLimitOutcome =
   | {readonly kind: 'applied'; readonly movement: CapacityMovement}
   | {readonly kind: 'stale'; readonly appliedEventTime: Date};
 
-/**
- * A pot of money the treasury sets aside (glossary). The treasury owns its limit and currency
- * (A-05); clients only draw from it. `available = max(0, limit - reserved)` (A-06).
- */
 /** What a release needs from the caller to become a ledger row (ADR-0009). */
 export interface ReleaseMovementRequest {
   /** Negative minor units of the program currency: a release lowers `reserved`. */
@@ -31,6 +27,10 @@ export interface ReleaseMovementRequest {
   readonly occurredAt: Date;
 }
 
+/**
+ * A pot of money the treasury sets aside (glossary). The treasury owns its limit and currency
+ * (A-05); clients only draw from it. `available = max(0, limit - reserved)` (A-06).
+ */
 export class Program {
   private constructor(
     readonly programId: string,
@@ -130,6 +130,19 @@ export class Program {
    * overcommitted here, with no special case: `available` is the same formula either way.
    */
   release(request: ReleaseMovementRequest): CapacityMovement {
+    // A release only ever gives capacity back, and never more than the program holds. Both are
+    // the caller's to get right, so both are refused here rather than reaching `Money.of` as a
+    // bare range error: that would leave the client a 500 for a broken caller.
+    if (request.deltaHeld >= 0n) {
+      throw new RangeError(
+        `Release ${request.releaseId} does not lower held: ${request.deltaHeld}`,
+      );
+    }
+    if (this.reserved.amount + request.deltaHeld < 0n) {
+      throw new RangeError(
+        `Release ${request.releaseId} would take reserved of ${this.programId} below zero`,
+      );
+    }
     this.state = {
       ...this.state,
       reserved: Money.of(this.reserved.amount + request.deltaHeld, this.currency),
