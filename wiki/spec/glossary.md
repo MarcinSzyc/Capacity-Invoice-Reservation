@@ -71,7 +71,13 @@ Example. Invoice of 1 100 000 EUR in a USD program at rate 1.10:
 in program currency. Starts equal to `reservedAmount`, ends at zero. Can always be
 recomputed from the ledger as reserve minus the sum of releases for that invoice.
 
-**Active reservation.** `held > 0`. **Closed reservation.** `held = 0`.
+**Active reservation, closed reservation.** A reservation is closed when the whole invoice
+amount has been released, so nothing is left to release; until then it is active. Usually that
+is the same moment `held` reaches zero, but not always: `held` is the remaining invoice amount
+converted at the stored rate, so a remainder worth less than half a minor unit of the program
+currency rounds to zero while the invoice still owes. Such a reservation is active with `held`
+zero: it occupies none of the limit, and it can still be released to the end (AC-15, amended
+2026-09-24).
 
 **Reservation source (`source`).** Who brought a reservation into existence. Exactly two
 values: `client`, when a client reserved the invoice over HTTP (the reserve movement then
@@ -113,6 +119,11 @@ is the unit itself, so 1 000 JPY is 1 000 minor units), KWD has three (a fils is
 Every amount in this service is an integer count of minor units, so the exponent is what
 says where the decimal point goes when a number is shown to a person, and converting
 between two currencies has to account for both currencies' exponents (A-10).
+
+**Released invoice amount (`releasedInvoiceAmount`).** How much of the invoice has been
+released so far, in invoice currency and minor units. The number `held` is derived from: what is
+left of the invoice, converted at the stored rate (ADR-0009). A reservation of 2 750 000.00 EUR
+with 1 000 000.00 EUR released has `releasedInvoiceAmount` 100 000 000 and 175 000 000 left.
 
 **Conversion rate.** The rate used once, at reservation time, to express the invoice
 amount in program currency. Supplied by the client in the reservation request (the
@@ -238,15 +249,16 @@ it needs a human. The rule and its history live in A-13.
 it cannot do itself: load a program, find a conversion rate, publish a message. The
 domain knows only the interface.
 
-**Adapter.** A class in `infrastructure/` that implements a port with real technology:
-a Prisma repository, a config-file rate table, a Kafka producer.
+**Adapter.** A class in `infrastructure/` that implements a port with real technology: a Prisma
+repository, a Kafka consumer, a clock reading the system time.
 
 **Seam.** The place where an adapter can be swapped for another without touching the
 domain: the port plus the one line in the Nest module that binds an implementation to
-it. "Behind a seam" means "replaceable by changing that one binding". Example:
-`RateProvider` is a port; `ConfigRateProvider` is the adapter used in this brief;
-a treasury- or market-fed provider would be another adapter behind the same seam.
+it. "Behind a seam" means "replaceable by changing that one binding". Example: `Clock` is a
+port; the adapter reads the system time, and a test binds one that answers a fixed moment, with
+nothing in the domain aware of the difference.
 
-**Fake.** A hand-written, working implementation of a port used in tests, such as a
-repository backed by an array or a rate provider with one fixed rate. Preferred over
-mocks because it behaves like the real thing and does not encode call expectations.
+**Fake.** A hand-written, working implementation of a port used in tests, such as a reservation
+repository backed by an array or a unit of work that runs the work and can roll it back in
+memory. Preferred over mocks because it behaves like the real thing and does not encode call
+expectations.
