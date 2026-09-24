@@ -2612,3 +2612,17 @@ Findings, most severe first:
   this branch, which `/implement` may not do, and took it back out. It goes through its own docs
   PR like #32 did.
 - `npm run gate` green: unit 132, integration 29, e2e 53, cold start 3.
+
+## 2026-09-24, verify S-05 (fourth pass, after review fixes round 3), Sonnet
+- `npm run gate` green on the rebased branch: prose clean, unit 132/132, integration 29/29,
+  e2e 53/53, cold start 3/3. Coverage 12/12 at the planned level, no skipped or focused tests,
+  layer boundaries hold.
+- Both round 2 majors confirmed fixed against behaviour on a cold started stack, not only in the
+  diff. The AC-19 read now answers a body whose movements sum to the `held` printed beside them
+  (`reserve` 302 500 000 and `release` -110 000 000 against `held` 192 500 000), which is the
+  one-transaction read doing its job. The published status description now reads "active until
+  the whole invoice has been released; `held` may already be 0 (AC-15)", the amended rule rather
+  than the one it replaced.
+- The new `reason` constraint works end to end: an unknown reason answers `400`.
+- Cold start again on the `API_PORT` override, port 3000 still held by Marcin's other project.
+- Result: PASS.
