@@ -2421,3 +2421,41 @@ Findings, most severe first:
   changes no balance and no invariant; the glossary's "larger than `held`" line predates
   ADR-0009 and is `/spec` work; the README is `/ship`'s.
 - `npm run gate` green: unit 131, integration 29, e2e 52, cold start 3. Nothing committed.
+
+## 2026-09-24, verify S-05 (second pass, after review round 1), Sonnet
+- `npm run gate` green on 079107a: prose clean, unit 131/131, integration 29/29, e2e 52/52,
+  cold start 3/3. Coverage 12/12 at the planned level, no skipped or focused tests, layer
+  boundaries hold.
+- The gate being green is not the whole story. **FAIL**, on a regression the fix round
+  introduced and no test covers.
+- The cold start could not run on the default port: port 3000 is held by a process from
+  Marcin's other project (`agentic-emr`, started 14:45 today), which I left alone. Ran with the
+  `API_PORT` override the README documents, so the check itself still happened.
+- Two of the three round 1 fixes are confirmed live: an explicit `"amount": null` now answers
+  `400` where it answered `500`, and an IDR invoice at rate `0.000065` released down to a
+  remainder now reads `held` 0 with status **active**, which is the amended AC-15 working.
+- The third is broken by the second. Releasing that remainder answers
+  `500 INTERNAL_ERROR`. `Reservation.release` returns `deltaHeld` 0 for it, because `held` had
+  already rounded to zero and stays there, and the guard I added to `Program.release` in the
+  same round refuses any delta that is not negative. So the minor fix blocks the path the major
+  fix exists to open. The guard should refuse a delta that raises `held`, not one that leaves it
+  where it is.
+- Why no test caught it: the two new domain tests call `Reservation.release` directly, and no
+  test walks a rounded-away remainder through `ReleaseCapacity` and `Program`. A use case level
+  test and an e2e for that path are owed with the fix.
+- Result: FAIL. Back to `/implement`.
+
+## 2026-09-24, implement S-05 (review fixes, round 2), Opus
+- Fixes the regression the previous round introduced and verify caught live. The guard I added
+  to `Program.release` refused any delta that was not negative, but closing a remainder whose
+  `held` has already rounded to zero produces a delta of exactly zero, so the minor fix blocked
+  the path the major fix exists to open. The guard now refuses only a delta that raises `held`,
+  which is the broken caller it was meant to catch; zero is legitimate and the ledger records
+  the repayment with no capacity moving.
+- Two tests close the hole that let this through. The round 1 tests called `Reservation.release`
+  directly, so nothing walked a rounded-away remainder through `ReleaseCapacity` and `Program`.
+  There is now a use case test for that path, red first with
+  `RangeError: Release R-2 does not lower held: 0`, and an e2e that reserves an IDR invoice at
+  `0.000065`, releases all but the remainder, sees `held` 0 with status `active`, closes it, and
+  asserts the three movements read `reserve 65`, `release -65`, `release 0`.
+- `npm run gate` green: unit 132, integration 29, e2e 53, cold start 3. Nothing committed.

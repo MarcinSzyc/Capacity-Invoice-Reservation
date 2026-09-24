@@ -172,4 +172,42 @@ describe('ReleaseCapacity', () => {
     const movements = capacity.repositories.ledger.movements;
     expect(movements[movements.length - 1]).toMatchObject({reason: 'cancelled'});
   });
+
+  it('should close a remainder whose held has already rounded to zero, all the way through', async () => {
+    // AC-15 amended: `held` rounds to zero while the invoice still owes, so the last release
+    // gives nothing back and its delta is zero. It must still be recorded and still close.
+    const capacity = inMemoryCapacity();
+    const program = Program.announce(PROGRAM_ID, USD);
+    program.setLimit(TEN_MILLION_USD, AT_10_00, 'm-1');
+    const rate = Rate.parse('0.000065');
+    const invoiceAmount = Money.of(1_000_000n, 'IDR');
+    const reservation = Reservation.open({
+      programId: PROGRAM_ID,
+      invoiceId: INVOICE_B,
+      invoiceAmount,
+      reservedAmount: invoiceAmount.convert(rate, USD),
+      rate,
+      clientId: CLIENT,
+      createdAt: AT_10_00,
+    });
+    await capacity.repositories.programs.save(program);
+    await capacity.repositories.reservations.add(reservation);
+    await capacity.repositories.ledger.append(
+      program.reserve(reservation.held, CLIENT, reservation.reservationId, AT_10_00),
+    );
+    const useCase = new ReleaseCapacity(capacity, new FixedClock(AT_10_10));
+
+    const afterMost = await useCase.execute(command({amount: 999_000n, releaseId: 'R-1'}));
+    expect(afterMost.describe()).toMatchObject({held: 0n, status: 'active'});
+
+    const closed = await useCase.execute(command({amount: null, releaseId: 'R-2'}));
+
+    expect(closed.describe()).toMatchObject({
+      held: 0n,
+      releasedInvoiceAmount: 1_000_000n,
+      status: 'closed',
+    });
+    const last = capacity.repositories.ledger.movements.at(-1);
+    expect(last).toMatchObject({kind: 'release', releaseId: 'R-2', deltaHeld: 0n});
+  });
 });

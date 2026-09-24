@@ -14,6 +14,8 @@ const FIVE_HUNDRED_THOUSAND_USD = 50_000_000;
 const ONE_MILLION_USD = 100_000_000;
 const INVOICE_A = 'INV-A';
 const INVOICE_B = 'INV-B';
+const ONE_MILLION_IDR = 1_000_000;
+const IDR = 'IDR';
 const OTHER_CLIENT = 'client-other';
 
 interface MovementBody {
@@ -208,6 +210,40 @@ describe('Releases', () => {
     expect(errorBodyOf(response).code).toBe('RESERVATION_ALREADY_RELEASED');
     const availability = await readAvailability(app, programId, token).expect(200);
     expect(availability.body).toMatchObject({reserved: 0});
+  });
+
+  it('should release a remainder whose held has rounded to zero, and only then close it (AC-15)', async () => {
+    // AC-15 amended 2026-09-24: a remainder worth less than half a minor unit of the program
+    // currency rounds `held` to zero while the invoice still owes. The reservation stays
+    // active and can be released to the end; before the amendment it was stuck forever.
+    const programId = await announceProgram(app, {currency: USD, creditLimit: TEN_MILLION_USD});
+    await reserve(programId, {
+      invoiceId: INVOICE_A,
+      invoiceAmount: ONE_MILLION_IDR,
+      invoiceCurrency: IDR,
+      rate: '0.000065',
+    }).expect(201);
+
+    const almost = await release(programId, INVOICE_A, {
+      releaseId: 'R-1',
+      amount: ONE_MILLION_IDR - 1_000,
+    }).expect(200);
+    expect(almost.body).toMatchObject({held: 0, status: 'active'});
+
+    const closed = await release(programId, INVOICE_A, {releaseId: 'R-2'}).expect(200);
+
+    expect(closed.body).toMatchObject({
+      held: 0,
+      releasedInvoiceAmount: ONE_MILLION_IDR,
+      status: 'closed',
+    });
+    const reservation = await readReservation(programId, INVOICE_A).expect(200);
+    const movements = (reservation.body as {movements: MovementBody[]}).movements;
+    expect(movements.map((movement) => [movement.kind, movement.amount])).toEqual([
+      ['reserve', 65],
+      ['release', -65],
+      ['release', 0],
+    ]);
   });
 
   it('[AC-16] should answer 409 RELEASE_ALREADY_PROCESSED with the original outcome for a repeated releaseId', async () => {
