@@ -21,3 +21,9 @@ ALTER TABLE "reservations" ADD CONSTRAINT "reservations_released_within_invoice"
 CREATE UNIQUE INDEX "capacity_movements_reservation_id_release_id_key"
   ON "capacity_movements" ("reservation_id", "release_id")
   WHERE "release_id" IS NOT NULL;
+
+-- AlterTable
+-- A-08: `kind` and `source` are Postgres enums; `reason` was a free VARCHAR(16), so the mapper
+-- had to cast whatever it found. Constrained here instead, which is what lets it refuse.
+ALTER TABLE "capacity_movements" ADD CONSTRAINT "capacity_movements_reason_known"
+  CHECK ("reason" IS NULL OR "reason" IN ('repaid', 'cancelled'));

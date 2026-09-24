@@ -6,18 +6,20 @@ import {Rate} from './rate';
 /** Who created the reservation: the client over HTTP, or a reconciliation snapshot (S-06). */
 export type ReservationSource = 'client' | 'reconciliation';
 
-/** Derived from `held`, never stored (glossary: active and closed reservation). */
+/** Derived from what the invoice has left, never stored (glossary, AC-15 amended). */
 export type ReservationStatus = 'active' | 'closed';
 
 /** Why a release happened (A-08, glossary). Changes no rule, only what the ledger records. */
 export type ReleaseReason = 'repaid' | 'cancelled';
 
-/** A-08: the amount is in invoice currency, and absent means everything left. */
+/**
+ * A-08: the amount is in invoice currency, and absent means everything left. The release id,
+ * the reason and the client belong to the movement, not to the reservation, so they are the
+ * use case's to carry: duplicating them here would be two copies with nothing keeping them
+ * equal.
+ */
 export interface ReleaseRequest {
   readonly amount: Money | null;
-  readonly releaseId: string;
-  readonly reason: ReleaseReason;
-  readonly clientId: string;
 }
 
 /**

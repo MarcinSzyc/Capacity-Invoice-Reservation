@@ -104,13 +104,13 @@ export class ReservationNotFoundError extends DomainError {
   }
 }
 
-/** AC-15: nothing is held any more, so there is nothing left to give back. */
+/** AC-15: the whole invoice has been released, so there is nothing left to give back. */
 export class ReservationAlreadyReleasedError extends DomainError {
   readonly code = RESERVATION_ALREADY_RELEASED;
   readonly kind: DomainErrorKind = 'conflict';
 
   constructor(readonly invoiceId: string) {
-    super(`Reservation ${invoiceId} holds nothing: it has already been released`);
+    super(`Reservation ${invoiceId} has nothing left to release: the whole invoice is released`);
   }
 }
 

@@ -35,10 +35,10 @@ const reservationAt = (rate: Rate): Reservation => {
 };
 
 /** One random step: a release of a random slice of the invoice, sometimes more than is left. */
-const step = (reservation: Reservation, random: SeededRandom, index: number): string => {
+const step = (reservation: Reservation, random: SeededRandom): string => {
   const amount = Money.of(random.bigint(INVOICE_AMOUNT / 3n) + 1n, EUR);
   try {
-    reservation.release({amount, releaseId: `R-${index}`, reason: 'repaid', clientId: CLIENT});
+    reservation.release({amount});
     return `release ${amount.amount} ok`;
   } catch (error: unknown) {
     if (error instanceof ReleaseExceedsHeldError) return `release ${amount.amount} exceeded`;
@@ -57,7 +57,7 @@ describe('Reservation invariants', () => {
       const history: string[] = [`rate ${rate.toString()}`];
 
       for (let index = 0; index < STEPS; index += 1) {
-        history.push(step(reservation, random, index));
+        history.push(step(reservation, random));
         const held = reservation.held.amount;
         const inBounds = held >= 0n && held <= reservedAmount.amount;
         const where = `seed ${seed} (${history.join(', ')})`;
@@ -72,9 +72,6 @@ describe('Reservation invariants', () => {
       if (!reservation.remainingInvoiceAmount.isZero()) {
         reservation.release({
           amount: null,
-          releaseId: 'R-last',
-          reason: 'repaid',
-          clientId: CLIENT,
         });
         expect(`seed ${seed}: held ${reservation.held.amount}`).toBe(`seed ${seed}: held 0`);
       }

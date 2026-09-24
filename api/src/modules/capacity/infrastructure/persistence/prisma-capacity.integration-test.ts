@@ -297,9 +297,6 @@ describe('Prisma capacity adapters', () => {
 
     reservation.release({
       amount: Money.of(400_000n, EUR),
-      releaseId: 'R-1',
-      reason: 'repaid',
-      clientId: CLIENT,
     });
     await unitOfWork.run(({reservations}) => reservations.save(reservation));
 
@@ -361,17 +358,19 @@ describe('Prisma capacity adapters', () => {
       occurredAt: AT_10_10,
     });
 
+    // Appended newest first, so a query without an order would hand them back that way and the
+    // assertion below would catch it. AC-16's prefix sum over these rows depends on the order.
     await unitOfWork.run(async ({ledger}) => {
-      await ledger.append(reserveMovement);
       await ledger.append(releaseMovement);
+      await ledger.append(reserveMovement);
     });
 
     const rows = await new PrismaLedgerRepository(prisma).findByReservation(
       reservation.reservationId,
     );
     expect(rows.map((row) => [row.kind, row.releaseId, row.reason])).toEqual([
-      ['reserve', null, null],
       ['release', 'R-9', 'cancelled'],
+      ['reserve', null, null],
     ]);
   });
 });

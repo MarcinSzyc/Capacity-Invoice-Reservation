@@ -1,7 +1,5 @@
 import {CapacityMovement} from '../capacity-movement';
 
-export const LEDGER_REPOSITORY = Symbol('LedgerRepository');
-
 /** The ledger is append-only (glossary): rows are never updated or deleted. */
 export interface LedgerRepository {
   append(movement: CapacityMovement): Promise<void>;
