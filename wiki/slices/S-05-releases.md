@@ -53,8 +53,9 @@ Module `src/modules/capacity/`, as in S-03 and S-04. Nothing in `web` changes in
 Domain (`domain/`):
 - `Reservation.release({amount, releaseId, reason, clientId, occurredAt})` per ADR-0009:
   `remaining = invoiceAmount - releasedInvoiceAmount`; an absent amount means `amount = remaining`;
-  `amount > remaining` throws `ReleaseExceedsHeld`; `held.isZero()` before the call throws
-  `ReservationAlreadyReleased`. Otherwise
+  `amount > remaining` throws `ReleaseExceedsHeld`; nothing left to release before the call throws
+  `ReservationAlreadyReleased` (AC-15, amended 2026-09-24: `held` can round to zero while the
+  invoice still owes, and such a reservation is still active). Otherwise
   `heldAfter = (remaining - amount).convert(rate, programCurrency)` and the reservation moves to
   `releasedInvoiceAmount + amount` and `heldAfter`. Returns what the caller needs to build the
   movement: the new `held` and `deltaHeld = heldAfter - heldBefore`, a negative `Money`
@@ -222,3 +223,4 @@ Beyond `CLAUDE.md §9`:
 | 2026-09-24 | verify | PASS (third pass), gate green on 2026dc3, 12/12 AC and INV covered; the round 2 regression confirmed gone live, with the rounded-away remainder now releasing to the end and only then answering RESERVATION_ALREADY_RELEASED |
 | 2026-09-24 | review | FAIL (round 2), 10 findings (0 blockers / 2 majors / 8 minors): all seven round 1 majors are genuinely closed and the round 2 regression is fixed at the root, but the reservation read is two unsynchronised queries so AC-19 can answer a body whose movements contradict its `held`, and the amended AC-15 rule is contradicted by four stale statements, two of them published (the OpenAPI `status` description and the `RESERVATION_ALREADY_RELEASED` message). Ran on Opus again: no pass of this slice has had the model independence `CLAUDE.md §8` asks for |
 | 2026-09-24 | verify | PASS (fourth pass), gate green after the rebase, 12/12 AC and INV covered; both round 2 majors confirmed live (AC-19's movements sum to the held beside them, the published status description states the amended rule) |
+| 2026-09-24 | review | FAIL (round 3), 8 findings (0 blockers / 3 majors / 5 minors): round 2's AC-15 major is genuinely closed, but its read major is not, because `PrismaUnitOfWork` opens the transaction at read committed, where one transaction is not one snapshot; and the assumptions register, which no round has read, still states the superseded AC-15 rule in A-09 and the superseded AC-13 rule in A-08. Ran on Opus a third time: no pass of this slice, implementation or review, has had the model independence `CLAUDE.md §8` asks for |

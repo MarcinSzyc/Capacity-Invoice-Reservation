@@ -1,3 +1,4 @@
+import type {Prisma} from '../../../../generated/prisma/client';
 import {Injectable} from '@nestjs/common';
 import {PrismaService} from '../../../../persistence/prisma.service';
 import {CapacityRepositories, UnitOfWork} from '../../domain/ports/unit-of-work';
@@ -16,19 +17,33 @@ export class PrismaUnitOfWork implements UnitOfWork {
   constructor(private readonly prisma: PrismaService) {}
 
   run<T>(work: (repositories: CapacityRepositories) => Promise<T>): Promise<T> {
+    // Read committed on purpose: the write path takes `SELECT ... FOR UPDATE` on the program
+    // row (ADR-0008) and must block on it. Under repeatable read that lock would fail to
+    // serialise instead of waiting, and INV-01's parallel reservations would answer errors.
+    return this.transaction(work, {timeout: TRANSACTION_TIMEOUT_MS});
+  }
+
+  readSnapshot<T>(work: (repositories: CapacityRepositories) => Promise<T>): Promise<T> {
+    return this.transaction(work, {
+      timeout: TRANSACTION_TIMEOUT_MS,
+      isolationLevel: 'RepeatableRead',
+    });
+  }
+
+  private transaction<T>(
+    work: (repositories: CapacityRepositories) => Promise<T>,
+    options: {timeout: number; isolationLevel?: Prisma.TransactionIsolationLevel},
+  ): Promise<T> {
     return this.prisma.withClient((client) =>
-      client.$transaction(
-        (transaction) => {
-          const scope = new TransactionScope(transaction);
-          return work({
-            programs: new PrismaProgramRepository(scope),
-            reservations: new PrismaReservationRepository(scope),
-            ledger: new PrismaLedgerRepository(scope),
-            treasuryMessages: new PrismaTreasuryMessageStore(scope),
-          });
-        },
-        {timeout: TRANSACTION_TIMEOUT_MS},
-      ),
+      client.$transaction((transaction) => {
+        const scope = new TransactionScope(transaction);
+        return work({
+          programs: new PrismaProgramRepository(scope),
+          reservations: new PrismaReservationRepository(scope),
+          ledger: new PrismaLedgerRepository(scope),
+          treasuryMessages: new PrismaTreasuryMessageStore(scope),
+        });
+      }, options),
     );
   }
 }

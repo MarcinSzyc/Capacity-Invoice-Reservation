@@ -51,7 +51,7 @@ describe('Reservation', () => {
     expect(open().reservationId).not.toBe(open().reservationId);
   });
 
-  it('should read as closed once nothing is held, when rehydrated from storage (glossary)', () => {
+  it('should read as closed once the whole invoice is released, when rehydrated from storage', () => {
     const reservation = Reservation.rehydrate({
       reservationId: '4d2f0c1e-0000-4000-8000-000000000001',
       programId: PROGRAM_ID,
@@ -198,7 +198,7 @@ describe('Reservation', () => {
       expect(reservation.releasedInvoiceAmount).toEqual(Money.zero(EUR));
     });
 
-    it('should refuse any release once nothing is held, before judging the amount (AC-15)', () => {
+    it('should refuse any release once the whole invoice is released, before judging the amount (AC-15)', () => {
       const reservation = crossCurrency();
       reservation.release({amount: null});
 

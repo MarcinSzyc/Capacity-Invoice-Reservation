@@ -153,7 +153,7 @@ describe('ReleaseCapacity', () => {
     expect(capacity.repositories.programs.byId.get(PROGRAM_ID)?.reserved).toEqual(RESERVED_USD);
   });
 
-  it('should refuse a release on a reservation that holds nothing (AC-15)', async () => {
+  it('should refuse a release once the whole invoice has been released (AC-15)', async () => {
     const {capacity} = await withReservation();
     const useCase = new ReleaseCapacity(capacity, new FixedClock(AT_10_10));
     await useCase.execute(command({amount: null, releaseId: 'R-1'}));

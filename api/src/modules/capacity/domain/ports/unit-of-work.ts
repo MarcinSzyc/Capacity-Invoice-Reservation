@@ -18,4 +18,12 @@ export interface CapacityRepositories {
  */
 export interface UnitOfWork {
   run<T>(work: (repositories: CapacityRepositories) => Promise<T>): Promise<T>;
+  /**
+   * Several reads that must agree with each other. One transaction is not enough: at the
+   * default isolation every statement takes its own snapshot, so a writer committing between
+   * two reads is invisible to the first and visible to the second. This one reads them all at
+   * the same instant. It is a separate door from `run` because the write path takes a row lock
+   * and must keep blocking on it rather than failing to serialise.
+   */
+  readSnapshot<T>(work: (repositories: CapacityRepositories) => Promise<T>): Promise<T>;
 }

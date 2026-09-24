@@ -108,6 +108,11 @@ export class InMemoryUnitOfWork implements UnitOfWork {
     return this.depth > 0;
   }
 
+  /** In memory there is nothing to isolate from: the reads are already one instant. */
+  readSnapshot<T>(work: (repositories: CapacityRepositories) => Promise<T>): Promise<T> {
+    return work(this.repositories);
+  }
+
   async run<T>(work: (repositories: CapacityRepositories) => Promise<T>): Promise<T> {
     const snapshot = this.snapshot();
     this.depth += 1;

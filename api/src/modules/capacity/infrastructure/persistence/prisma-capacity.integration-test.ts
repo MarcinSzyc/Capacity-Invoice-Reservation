@@ -373,4 +373,68 @@ describe('Prisma capacity adapters', () => {
       ['reserve', null, null],
     ]);
   });
+
+  it('should hold one instant across several reads, so a writer between them cannot split the view', async () => {
+    // AC-19 reads the reservation and then its movements. One transaction is not enough: at
+    // read committed each statement takes its own snapshot, so a release committing in between
+    // would be invisible to the first read and visible to the second, and the body would
+    // contradict itself. This proves the property rather than the setting: a committed write
+    // from another connection, made between two reads inside the snapshot, is not seen.
+    const programId = uniqueId('PRG');
+    await announcedProgram(programId);
+    const reservation = openReservation(programId, 'INV-SNAP');
+    await unitOfWork.run(({reservations}) => reservations.add(reservation));
+
+    const seen = await unitOfWork.readSnapshot(async ({reservations}) => {
+      const before = await reservations.findByInvoice(programId, 'INV-SNAP');
+      await prisma.withClient((client) =>
+        client.reservation.update({
+          where: {id: reservation.reservationId},
+          data: {held: 1n},
+        }),
+      );
+      const after = await reservations.findByInvoice(programId, 'INV-SNAP');
+      return {before: before?.held.amount, after: after?.held.amount};
+    });
+
+    expect(seen.after).toBe(seen.before);
+    // and the write really did land, so the test is not passing because nothing happened
+    const now = await new PrismaReservationRepository(prisma).findByInvoice(programId, 'INV-SNAP');
+    expect(now?.held.amount).toBe(1n);
+  });
+
+  it('should refuse a release recorded with an unknown reason', async () => {
+    const programId = uniqueId('PRG');
+    await announcedProgram(programId);
+
+    // The mapper refuses an unknown reason on the way out; this is what makes that claim true,
+    // because nothing else stops another writer putting one in.
+    await expect(
+      prisma.withClient(
+        (client) => client.$executeRaw`
+          INSERT INTO capacity_movements
+            (program_id, kind, currency, delta_held, limit_after, reserved_after,
+             available_after, client_id, reason, occurred_at)
+          VALUES (${programId}, 'release'::capacity_movement_kind, ${EUR}, 0, 0, 0, 0,
+                  ${CLIENT}, 'refunded', ${AT_10_10})`,
+      ),
+    ).rejects.toThrow(/capacity_movements_reason_known/);
+  });
+
+  it('should refuse a reservation that has released more than its invoice', async () => {
+    const programId = uniqueId('PRG');
+    await announcedProgram(programId);
+
+    await expect(
+      prisma.withClient(
+        (client) => client.$executeRaw`
+          INSERT INTO reservations
+            (id, program_id, invoice_id, invoice_amount, invoice_currency, currency,
+             reserved_amount, held, released_invoice_amount, rate, source, client_id,
+             created_at, updated_at)
+          VALUES (gen_random_uuid(), ${programId}, 'INV-OVER', 100, ${EUR}, ${EUR}, 100, 0, 101,
+                  1, 'client'::reservation_source, ${CLIENT}, ${AT_10_10}, ${AT_10_10})`,
+      ),
+    ).rejects.toThrow(/reservations_released_within_invoice/);
+  });
 });
