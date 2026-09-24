@@ -168,6 +168,11 @@ describe('Releases', () => {
     expect(error.remainingInvoiceAmount).toBe(FIVE_HUNDRED_THOUSAND_USD);
     const availability = await readAvailability(app, programId, token).expect(200);
     expect(availability.body).toMatchObject({reserved: FIVE_HUNDRED_THOUSAND_USD});
+    // "and no state change" includes the ledger: a refused release appends nothing at all.
+    const reservation = await readReservation(programId, INVOICE_A).expect(200);
+    expect((reservation.body as {movements: MovementBody[]}).movements).toEqual([
+      expect.objectContaining({kind: 'reserve'}) as unknown,
+    ]);
   });
 
   it('should answer 400 naming the field for a malformed release body, never 500', async () => {
@@ -198,7 +203,13 @@ describe('Releases', () => {
     const unknownProgram = await release('PRG-NOBODY', INVOICE_A, {releaseId: 'R-1'}).expect(404);
 
     expect(errorBodyOf(unknownInvoice).code).toBe('RESERVATION_NOT_FOUND');
+    // AC-14 is silent on an unannounced program, so it answers what reserve answers (AC-04).
     expect(errorBodyOf(unknownProgram).code).toBe('PROGRAM_NOT_FOUND');
+    // And the read route says the same thing, rather than a different one for the same state.
+    const readUnknownProgram = await readReservation('PRG-NOBODY', INVOICE_A).expect(404);
+    const readUnknownInvoice = await readReservation(programId, 'INV-NOBODY').expect(404);
+    expect(errorBodyOf(readUnknownProgram).code).toBe('PROGRAM_NOT_FOUND');
+    expect(errorBodyOf(readUnknownInvoice).code).toBe('RESERVATION_NOT_FOUND');
   });
 
   it('[AC-15] should answer 409 RESERVATION_ALREADY_RELEASED for a new releaseId on a closed reservation', async () => {

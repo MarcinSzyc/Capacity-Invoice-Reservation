@@ -2626,3 +2626,115 @@ Findings, most severe first:
 - The new `reason` constraint works end to end: an unknown reason answers `400`.
 - Cold start again on the `API_PORT` override, port 3000 still held by Marcin's other project.
 - Result: PASS.
+
+## 2026-09-24, review S-05 (round 3), Opus
+- REVIEW S-05: 8 findings (0 blockers / 3 majors / 5 minors). Ran on Opus again, for the same
+  reason as every other pass of this slice: the Fable credits are exhausted. Implementation and
+  all three reviews have now run on one model, so the model independence `CLAUDE.md §8` asks for
+  has not held at any point of S-05, and a shared blind spot would have survived every pass.
+- Round 2's second major is genuinely closed. The amended AC-15 rule is stated consistently in
+  the OpenAPI `status` description, the `RESERVATION_ALREADY_RELEASED` message, the domain type
+  comment and the schema comment, and the glossary entry landed in PR #33.
+- Round 2's first major is not closed. `GetReservation` now runs both reads inside
+  `UnitOfWork.run`, but `PrismaUnitOfWork` opens the transaction with `{timeout}` alone, so it
+  runs at PostgreSQL's default read committed, where every statement takes its own snapshot. One
+  transaction is not one snapshot: a release committing between the two statements is still
+  invisible to the first and visible to the second. The precedent the fix cites in its own
+  comment, the ledger invariant helper, passes `{isolationLevel: 'RepeatableRead'}` for exactly
+  this reason.
+- Two majors nobody has looked at in three rounds: the assumptions register. AC-15 was amended
+  and given its Changes row, but A-09 still says a new `releaseId` on a reservation with
+  `held = 0` is a `409`, which is now false, and A-08 still says a release is judged against the
+  remaining `held` rather than against what the invoice has left. Both are assumptions AC-15 and
+  AC-13 reference by id, both contradict shipped behaviour, and neither has a Changes row.
+- Checked and clean: trimming `ReleaseRequest` to the amount alone strands nothing (the type has
+  two references, both in `reservation.ts`) and removes no behaviour, since the three dropped
+  fields were only ever read by `Program.release` from the command; no orphan repository token
+  survives (`PROGRAM_REPOSITORY` is the only one left and predates this slice); the new
+  `capacity_movements_reason_known` CHECK agrees exactly with what the domain can produce
+  (`ReleaseReason` is `repaid | cancelled`, null on every other kind); and moving `GetReservation`
+  into a transaction changed nothing it can throw, since Prisma rolls back and rethrows the
+  domain error unchanged.
+- INV-02 under two parallel requests: the critical section is the program row lock taken by
+  `lockById` (`FOR UPDATE`) before the reservation is read, so two releases on one reservation
+  serialise and the second reads the first's committed `released_invoice_amount`. The partial
+  unique index on `(reservation_id, release_id)` and the `reservations_released_within_invoice`
+  CHECK are the backstop under the lock. The invariant holds.
+- Full list of findings, most severe first:
+- [major] [spec] `api/src/modules/capacity/infrastructure/persistence/prisma-unit-of-work.ts:26`
+  and `api/src/modules/capacity/application/get-reservation.query.ts:18`: the transaction is
+  opened with no `isolationLevel`, so it is read committed and each statement re-snapshots. The
+  two reads of `GetReservation` can still disagree, so AC-19 can answer a body whose movements do
+  not sum to the `held` printed beside them. The comment claims parity with
+  `api/test/support/ledger-invariants.ts:59`, which is repeatable read. Round 2's major is not
+  closed; the write paths are unaffected because they lock the program row first.
+- [major] [spec] `wiki/spec/assumptions.md:260` (A-09): "a new `releaseId` on a reservation with
+  `held = 0` is `409 RESERVATION_ALREADY_RELEASED`". The service answers `200` for exactly that
+  case when the invoice still owes (`reservation.ts:153`, `releases.e2e-test.ts:217`). AC-15's
+  amendment was never carried to the assumption AC-15 and AC-16 both reference, and the
+  assumptions `## Changes` table has no row for it. `/spec` work, as C2 was.
+- [major] [spec] `wiki/spec/assumptions.md:236` and `:240` (A-08): "Several releases may follow
+  until `held` is zero" and "A release larger than the remaining `held` is
+  `422 RELEASE_EXCEEDS_HELD`". The code judges against the remaining invoice amount
+  (`reservation.ts:179`), which is ADR-0009 and what the glossary was corrected to say in PR #33.
+  The register still states the superseded rule and has no Changes row.
+- [minor] [standards] `api/src/modules/capacity/domain/reservation.test.ts:54` and `:201`,
+  `api/src/modules/capacity/application/release-capacity.use-case.test.ts:156`, and
+  `wiki/slices/S-05-releases.md:56`: four more statements of the rule the AC-15 amendment
+  removed, in test names and in the slice's own Scope ("once nothing is held", "holds nothing",
+  "`held.isZero()` before the call throws `ReservationAlreadyReleased`"). Round 2 found four and
+  fixed four; these are the ones it did not reach, and `reservation.test.ts:201` sits directly
+  above the sibling at `:240` that proves the opposite.
+- [minor] [standards] `api/prisma/migrations/20260923120000_releases/migration.sql`: the
+  migration was edited in 78240f2 after being created and applied in 2e6eabc. `prisma migrate
+  deploy` (`api/package.json:22`) refuses a migration whose checksum changed after it was
+  applied, so any database that ran this branch before the fix round now fails to migrate.
+  Testcontainers and the cold start always start empty, so no gate can see it.
+- [minor] [standards] `api/prisma/migrations/20260923120000_releases/migration.sql:27`: the new
+  `capacity_movements_reason_known` CHECK has no test, and neither has
+  `reservations_released_within_invoice`, while their sibling `reservations_rate_positive` does
+  (`prisma-capacity.integration-test.ts:272`). A constraint that wrongly excluded `cancelled`
+  would fail the AC-17 e2e, but one that is too permissive, or a `toReleaseReason`
+  (`mappers.ts:54`) that stops refusing, would not.
+- [minor] [spec] `api/src/modules/capacity/application/get-reservation.query.ts:25`: a `GET` of a
+  reservation on a program the treasury never announced answers `RESERVATION_NOT_FOUND`, while a
+  `POST` of a release on the same unknown program answers `PROGRAM_NOT_FOUND`, which
+  `programs.controller.ts:85` publishes as the rule. The query never loads the program, so
+  Marcin's AC-14 decision of 2026-09-24 was not carried to the read. Both are `404` and AC-19 is
+  silent, so nothing on the wire is wrong.
+- [minor] [standards] `api/test/releases.e2e-test.ts:166`: the `[AC-13]` test asserts that
+  availability did not move but not the "no movement appended" its row in the slice file names
+  (`wiki/slices/S-05-releases.md:159`). A `release` row with `deltaHeld` 0 would pass both the
+  assertion and the `afterEach` ledger invariants, so the criterion is proved one notch weaker
+  than it is written. AC-16's test already does the stronger thing at `:292`.
+
+## 2026-09-24, implement S-05 (review fixes, round 4), Opus
+- Review round 3 found that my round 2 fix did not actually fix anything. I had moved AC-19's
+  two reads into one transaction, but `PrismaUnitOfWork.run` passes only a timeout, so the
+  transaction runs at read committed, where every statement takes its own snapshot. One
+  transaction is not one instant. The review quoted my own comment, which cited the ledger
+  invariant helper as precedent, and that helper sets `RepeatableRead` for exactly this reason.
+- Fixed without disturbing the write path, which is the part that needed care: the port gains
+  `readSnapshot`, a second door that runs at `RepeatableRead`, while `run` stays at read
+  committed on purpose. Raising the write path to repeatable read would make
+  `SELECT ... FOR UPDATE` fail to serialise instead of blocking, and INV-01's parallel
+  reservations would start answering errors rather than queueing.
+- The test proves the property rather than the setting: inside a `readSnapshot`, a committed
+  write from another connection lands between two reads and is not seen, while the row really
+  did change. Checked that it can fail by running the same body through `run`, where it reports
+  `1n` against the expected `100000000n`.
+- Two majors were in the assumptions register, which three rounds of review and four of mine
+  never opened. A-08 still said releases run "until `held` is zero" and that over-release is
+  judged against the remaining `held`; A-09 still said a new `releaseId` on a reservation with
+  `held = 0` is `409`. Both are `/spec` work and go in their own PR; the code already does what
+  ADR-0009 and the amended AC-15 say.
+- Minors taken. The two constraints I had added by editing an already-applied migration are now
+  a migration of their own: editing one changes its checksum, and `prisma migrate deploy` then
+  refuses the whole database, which no gate can see because every test database starts empty.
+  The `releases` migration is back to the byte it was applied as, checked against its creating
+  commit. Both constraints now have tests. `GetReservation` answers `PROGRAM_NOT_FOUND` for an
+  unannounced program, as the release route does and as the controller publishes, instead of
+  telling a client two different things about one state. AC-13 asserts that a refused release
+  appends no movement, which its slice row always claimed. Four more statements of the removed
+  AC-15 rule, in test names and the slice's Scope, now say the rule that holds.
+- `npm run gate` green: unit 132, integration 32, e2e 53, cold start 3.
