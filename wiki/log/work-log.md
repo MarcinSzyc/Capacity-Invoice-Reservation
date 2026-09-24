@@ -2114,3 +2114,36 @@ correct with a new one. Format:
   and needs a glossary entry before `/review`.
 - Branch `docs/plan-S-05` cut from `main` at 6af3675. Files: the S-05 slice file, `Home.md`,
   this entry. `wiki/plan/plan.md` and the slice index needed no change. Nothing committed.
+
+## 2026-09-24, spec: a reservation is closed when the invoice is released, not when held rounds away, Opus
+- Review round 1 of S-05 found that `held` can round to zero while the invoice still owes, which
+  left the reservation permanently unreleasable. Reproduced before deciding anything: a
+  1 000 000 IDR minor invoice on a USD program at rate `0.000065` reserves 65 USD minor;
+  releasing 999 000 IDR leaves `held` 0 with 1 000 IDR still owed, status `closed`, and every
+  later release answers `409 RESERVATION_ALREADY_RELEASED`.
+- The code was faithful to the spec, so the spec is what changed. AC-15 said "Given `INV-A` has
+  `held` 0", and the glossary said "Active reservation: `held > 0`. Closed reservation:
+  `held = 0`". Marcin decided: a reservation is closed when the whole invoice amount has been
+  released, so status follows what is left to release rather than what is held. A reservation
+  may now be active with `held` zero: it occupies none of the limit and can still be released to
+  the end. AC-15 amended with a Changes row; the glossary entry rewritten with the rounding case
+  spelled out, since that is the whole reason for the distinction.
+- What else I checked rather than assumed, because a status rule touches more than one
+  requirement: INV-02 (`0 <= held <= reservedAmount`) is unaffected; INV-03 (`reserved` is the
+  sum of `held` of active reservations) is unaffected, because an active reservation with `held`
+  zero contributes zero; AC-11 stays true, because releasing with no amount always takes the
+  remaining invoice amount to zero, so `held` 0 and `closed` still coincide there; AC-12 and
+  AC-13 speak only of `held` and are unaffected.
+- One requirement is affected and is not this slice's: **AC-27** (S-06, reconciliation) says a
+  snapshot that drops a reservation leaves it with `held` 0 **and status closed**. Under the new
+  rule those two coincide only if the adjustment also takes `releasedInvoiceAmount` to the
+  invoice amount. ADR-0011 is still `proposed` and already owes an answer for what
+  `invoiceAmount` and `rate` mean on a reconciliation-created reservation; it now also owes this.
+  Flagged here rather than amended, because it is S-06's decision to make.
+- Glossary also gains `Released invoice amount`, the word S-05 puts in code and on the API, with
+  a worked number.
+- C2 carried from S-04 closed: `Adapter`, `Seam` and `Fake` no longer illustrate themselves with
+  a `RateProvider`, a `ConfigRateProvider` and a config rate table, none of which exist because
+  A-02 decided the rate comes from the client. They now name seams the service has: a Prisma
+  repository, a Kafka consumer, the `Clock` port and its fixed-time fake.
+- Branch `docs/closed-reservation-and-glossary` from `main` at 4bd138b. Wiki only, no code.
