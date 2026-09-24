@@ -313,9 +313,15 @@ describe('Releases', () => {
       overcommitted: false,
       asOf: null,
     });
-    expect(afterRelease.body).toMatchObject({
+    // AC-18 names all six fields and says both reads carry them, not just the two that moved.
+    expect(afterRelease.body).toEqual({
+      programId,
+      currency: USD,
+      limit: Number(TEN_MILLION_USD),
       reserved: ONE_MILLION_USD / 2,
       available: Number(TEN_MILLION_USD) - ONE_MILLION_USD / 2,
+      overcommitted: false,
+      asOf: null,
     });
   });
 

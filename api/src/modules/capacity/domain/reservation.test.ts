@@ -122,16 +122,14 @@ describe('Reservation', () => {
   describe('release', () => {
     const EUR_INVOICE = Money.of(275_000_000n, EUR);
     const USD_RESERVED = Money.of(302_500_000n, USD);
-    const RELEASE = {releaseId: 'R-1', reason: 'repaid' as const, clientId: CLIENT};
-
     const crossCurrency = (): Reservation =>
       Reservation.open({
         programId: PROGRAM_ID,
         invoiceId: INVOICE_A,
         invoiceAmount: EUR_INVOICE,
         reservedAmount: USD_RESERVED,
-        rate: Rate.parse('1.10'),
         clientId: CLIENT,
+        rate: Rate.parse('1.10'),
         createdAt: AT_10_00,
       });
 
@@ -146,7 +144,7 @@ describe('Reservation', () => {
     it('should convert a partial release with the stored rate and derive held from what is left (ADR-0009)', () => {
       const reservation = crossCurrency();
 
-      const outcome = reservation.release({...RELEASE, amount: Money.of(100_000_000n, EUR)});
+      const outcome = reservation.release({amount: Money.of(100_000_000n, EUR)});
 
       // 175 000 000 EUR left at 1.10 is 192 500 000 USD, so held falls by 110 000 000.
       expect(outcome.heldAfter).toEqual(Money.of(192_500_000n, USD));
@@ -159,9 +157,9 @@ describe('Reservation', () => {
 
     it('should treat an absent amount as everything left and close the reservation', () => {
       const reservation = crossCurrency();
-      reservation.release({...RELEASE, amount: Money.of(100_000_000n, EUR)});
+      reservation.release({amount: Money.of(100_000_000n, EUR)});
 
-      const outcome = reservation.release({...RELEASE, releaseId: 'R-2', amount: null});
+      const outcome = reservation.release({amount: null});
 
       expect(outcome.heldAfter).toEqual(Money.zero(USD));
       expect(outcome.deltaHeld).toBe(-192_500_000n);
@@ -181,13 +179,9 @@ describe('Reservation', () => {
       });
 
       // Rounding each instalment on its own (the declined Option 1) would leave held at 1.
-      reservation.release({...RELEASE, amount: Money.of(33_333_333n, EUR)});
-      reservation.release({...RELEASE, releaseId: 'R-2', amount: Money.of(33_333_333n, EUR)});
-      const last = reservation.release({
-        ...RELEASE,
-        releaseId: 'R-3',
-        amount: Money.of(33_333_334n, EUR),
-      });
+      reservation.release({amount: Money.of(33_333_333n, EUR)});
+      reservation.release({amount: Money.of(33_333_333n, EUR)});
+      const last = reservation.release({amount: Money.of(33_333_334n, EUR)});
 
       expect(last.heldAfter).toEqual(Money.zero(USD));
       expect(reservation.held).toEqual(Money.zero(USD));
@@ -197,7 +191,7 @@ describe('Reservation', () => {
     it('should refuse a release beyond what the invoice has left, in invoice currency (AC-13)', () => {
       const reservation = crossCurrency();
 
-      expect(() => reservation.release({...RELEASE, amount: Money.of(275_000_001n, EUR)})).toThrow(
+      expect(() => reservation.release({amount: Money.of(275_000_001n, EUR)})).toThrow(
         ReleaseExceedsHeldError,
       );
       expect(reservation.held).toEqual(USD_RESERVED);
@@ -206,11 +200,11 @@ describe('Reservation', () => {
 
     it('should refuse any release once nothing is held, before judging the amount (AC-15)', () => {
       const reservation = crossCurrency();
-      reservation.release({...RELEASE, amount: null});
+      reservation.release({amount: null});
 
-      expect(() =>
-        reservation.release({...RELEASE, releaseId: 'R-2', amount: Money.of(1n, EUR)}),
-      ).toThrow(ReservationAlreadyReleasedError);
+      expect(() => reservation.release({amount: Money.of(1n, EUR)})).toThrow(
+        ReservationAlreadyReleasedError,
+      );
     });
   });
 
@@ -236,9 +230,6 @@ describe('Reservation', () => {
 
       reservation.release({
         amount: Money.of(999_000n, 'IDR'),
-        releaseId: 'R-1',
-        reason: 'repaid',
-        clientId: CLIENT,
       });
 
       expect(reservation.held).toEqual(Money.zero(USD));
@@ -250,16 +241,10 @@ describe('Reservation', () => {
       const reservation = tinyRate();
       reservation.release({
         amount: Money.of(999_000n, 'IDR'),
-        releaseId: 'R-1',
-        reason: 'repaid',
-        clientId: CLIENT,
       });
 
       const last = reservation.release({
         amount: null,
-        releaseId: 'R-2',
-        reason: 'repaid',
-        clientId: CLIENT,
       });
 
       expect(last.heldAfter).toEqual(Money.zero(USD));

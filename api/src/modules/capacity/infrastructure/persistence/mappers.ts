@@ -50,13 +50,21 @@ export const toMovementColumns = (
   occurredAt: movement.occurredAt,
 });
 
+/** The column is constrained to these two (migration `releases`), so anything else is a row
+ * no writer of ours could have made and the mapper says so rather than casting blindly. */
+const toReleaseReason = (reason: string | null): ReleaseReason | null => {
+  if (reason === null) return null;
+  if (reason === 'repaid' || reason === 'cancelled') return reason;
+  throw new Error(`Movement carries an unknown release reason: ${reason}`);
+};
+
 export const toMovement = (row: CapacityMovementRow): CapacityMovement => ({
   kind: row.kind,
   programId: row.programId,
   reservationId: row.reservationId,
   deltaHeld: row.deltaHeld,
   releaseId: row.releaseId,
-  reason: row.reason === null ? null : (row.reason as ReleaseReason),
+  reason: toReleaseReason(row.reason),
   limitAfter: Money.of(row.limitAfter, row.currency),
   reservedAfter: Money.of(row.reservedAfter, row.currency),
   availableAfter: Money.of(row.availableAfter, row.currency),

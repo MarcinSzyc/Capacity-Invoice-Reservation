@@ -66,12 +66,7 @@ export class ReleaseCapacity {
   ): Promise<Reservation> {
     const amount =
       command.amount === null ? null : Money.of(command.amount, reservation.invoiceAmount.currency);
-    const outcome = reservation.release({
-      amount,
-      releaseId: command.releaseId,
-      reason: command.reason,
-      clientId: command.clientId,
-    });
+    const outcome = reservation.release({amount});
     const movement = program.release({
       deltaHeld: outcome.deltaHeld,
       clientId: command.clientId,

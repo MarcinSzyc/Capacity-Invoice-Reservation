@@ -9,15 +9,11 @@ import {ReleaseCapacity} from './application/release-capacity.use-case';
 import {RejectTreasuryMessage} from './application/reject-treasury-message.use-case';
 import {ReserveCapacity} from './application/reserve-capacity.use-case';
 import {CLOCK} from './domain/ports/clock';
-import {LEDGER_REPOSITORY} from './domain/ports/ledger.repository';
 import {PROGRAM_REPOSITORY} from './domain/ports/program.repository';
-import {RESERVATION_REPOSITORY} from './domain/ports/reservation.repository';
 import {UNIT_OF_WORK} from './domain/ports/unit-of-work';
 import {ProgramsController} from './infrastructure/http/programs.controller';
 import {TreasuryCapacityConsumer} from './infrastructure/messaging/treasury-capacity.consumer';
-import {PrismaLedgerRepository} from './infrastructure/persistence/prisma-ledger.repository';
 import {PrismaProgramRepository} from './infrastructure/persistence/prisma-program.repository';
-import {PrismaReservationRepository} from './infrastructure/persistence/prisma-reservation.repository';
 import {PrismaUnitOfWork} from './infrastructure/persistence/prisma-unit-of-work';
 import {SystemClock} from './infrastructure/system-clock';
 
@@ -34,16 +30,6 @@ import {SystemClock} from './infrastructure/system-clock';
     {
       provide: PROGRAM_REPOSITORY,
       useFactory: (prisma: PrismaService) => new PrismaProgramRepository(prisma),
-      inject: [PrismaService],
-    },
-    {
-      provide: RESERVATION_REPOSITORY,
-      useFactory: (prisma: PrismaService) => new PrismaReservationRepository(prisma),
-      inject: [PrismaService],
-    },
-    {
-      provide: LEDGER_REPOSITORY,
-      useFactory: (prisma: PrismaService) => new PrismaLedgerRepository(prisma),
       inject: [PrismaService],
     },
     ApplyCapacityUpdate,

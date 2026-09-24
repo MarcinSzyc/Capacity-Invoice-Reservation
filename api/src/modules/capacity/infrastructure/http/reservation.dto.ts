@@ -116,7 +116,8 @@ export class ReservationDto {
   @ApiProperty({
     enum: ['active', 'closed'],
     example: 'active',
-    description: 'active while held > 0.',
+    description:
+      'active until the whole invoice has been released; `held` may already be 0 (AC-15).',
   })
   status!: ReservationStatus;
 
