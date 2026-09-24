@@ -2147,3 +2147,18 @@ correct with a new one. Format:
   A-02 decided the rate comes from the client. They now name seams the service has: a Prisma
   repository, a Kafka consumer, the `Clock` port and its fixed-time fake.
 - Branch `docs/closed-reservation-and-glossary` from `main` at 4bd138b. Wiki only, no code.
+
+## 2026-09-24, spec: over-release is judged on the invoice, not on held, Opus
+- Review round 2 of S-05 found the glossary still saying "A release larger than `held` is
+  rejected". ADR-0009 decided otherwise and S-05 implements otherwise: over-release is judged in
+  invoice currency against what the invoice still has to give back, so a release that is legal
+  in invoice terms cannot fail on a rounding boundary. The ubiquitous language was contradicting
+  an accepted ADR in the area the slice implements.
+- Corrected in `Release`, with the reason named rather than just the rule, since the whole point
+  of judging on the invoice is the rounding boundary.
+- No AC or INV changed: AC-13 says `RELEASE_EXCEEDS_HELD` and no state change, and says nothing
+  about which quantity the comparison uses. The glossary has no `## Changes` table, so no row is
+  owed.
+- I first made this edit on the slice branch, which `/implement` may not do, and took it back
+  out. It belongs here, the way #32 did.
+- Branch `docs/release-glossary-over-release` from `main` at 49c34c0. Wiki only, no code.
