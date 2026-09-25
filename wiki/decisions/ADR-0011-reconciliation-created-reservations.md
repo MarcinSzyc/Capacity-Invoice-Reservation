@@ -1,7 +1,7 @@
 # ADR-0011: Reservations created by reconciliation
 
-- Status: proposed
-- Date: 2026-09-19
+- Status: accepted
+- Date: proposed 2026-09-19, accepted 2026-09-25
 - Slice: S-06
 - Related: A-02, A-08, A-12, AC-19, AC-26, INV-08, ADR-0010, ADR-0012
 
@@ -38,7 +38,26 @@ reservation.
 
 ## Decision
 
-(empty until Marcin decides)
+Option 1, as recommended, with both addenda. Decided by Marcin on 2026-09-25.
+
+A snapshot that lists an invoice we do not know creates a reservation with:
+
+- `invoiceAmount` equal to the listed `heldAmount`, `invoiceCurrency` the program currency,
+  `rate` 1, so `reservedAmount` and `held` equal `heldAmount` too;
+- `source: reconciliation`, `clientId` null, and one `adjustment` movement of `+heldAmount`
+  attributed to the snapshot's `messageId` (INV-09);
+- `createdAt` equal to the snapshot's `asOf`, not the moment we processed it, so a later snapshot
+  judges it on the treasury's clock alone (ADR-0010).
+
+A client may release it like any other reservation, in what is now its invoice currency, the
+program's. When a later snapshot omits it, it is dropped with `releasedInvoiceAmount` equal to
+`invoiceAmount`, so `held` 0 and status closed coincide (AC-27). A listed `heldAmount` of 0 for
+an unknown invoice creates nothing, since the reservation would be closed at birth.
+
+Option 2, nullable invoice fields, was declined for putting a branch in every reader of a
+reservation and a special release rule. Option 3, refusing to create, was declined because it
+contradicts AC-26 and throws away what the treasury knows.
+
 
 ## Consequences
 

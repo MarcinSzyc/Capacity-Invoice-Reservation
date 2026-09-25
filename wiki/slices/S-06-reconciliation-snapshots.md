@@ -5,7 +5,7 @@
 - AC: AC-26, AC-27, AC-28, AC-29, AC-30, AC-31
 - INV: INV-05, INV-06, INV-07
 - Risk: high. Reconciliation: comparing two systems' clocks, set differences between local and remote reservations, a correction that has to live alongside a `held` derived from the invoice (ADR-0009), monotonic application under shuffled delivery, replay of everything. Implemented on Fable per `CLAUDE.md §8`.
-- Depends on: S-05. ADRs that must be accepted first: [[../decisions/ADR-0010-reconciliation-created-at-versus-as-of]], [[../decisions/ADR-0011-reconciliation-created-reservations]], [[../decisions/ADR-0012-snapshot-corrections-on-a-derived-held]]. ADR-0007 (accepted in S-02) governs the currency field.
+- Depends on: S-05. ADRs, all accepted 2026-09-25: [[../decisions/ADR-0010-reconciliation-created-at-versus-as-of]], [[../decisions/ADR-0011-reconciliation-created-reservations]], [[../decisions/ADR-0012-snapshot-corrections-on-a-derived-held]]. ADR-0007 (accepted in S-02) governs the currency field.
 
 ## What the shipped code already gives this slice
 
@@ -33,7 +33,7 @@ Domain:
   - a local active reservation created before `asOf - keepWindow` and not listed is dropped: `held` 0, `releasedInvoiceAmount` equal to `invoiceAmount` so it is closed (AC-27 as clarified 2026-09-25), one `adjustment` of minus its current `held`, whatever releases it had after `asOf`;
   - a local active reservation created in `[asOf - keepWindow, asOf)` and not listed is kept and logged as "kept within window" (ADR-0010);
   - a local reservation created before `asOf` and listed is brought to the snapshot's `held` as of `asOf`: the target is the listed `heldAmount` plus the signed `deltaHeld` of that reservation's client movements after `asOf`, floored at zero (ADR-0012, question 2). A difference is one `adjustment`; no difference, no movement;
-  - a listed reservation that is closed locally is reopened or left, per ADR-0012 question 3;
+  - a listed reservation closed at or before `asOf` is reopened to the listed `held`; one whose closing release came after `asOf` stays closed (ADR-0012, question 3, Option 3A);
   - an invoice only in the snapshot becomes a new `Reservation` with `source: reconciliation` per ADR-0011 (`createdAt` is the snapshot's `asOf`) and an `adjustment` of `+heldAmount`. A listed `heldAmount` of 0 for an unknown invoice creates nothing (local decision 4).
 - `Reservation` gains `fromSnapshot`, `correctTo(targetHeld)` and `drop()`; `held` keeps its ADR-0009 derivation with the stored correction from ADR-0012 question 1. `Program` gains `adjust(deltaHeld, reservationId, messageId, occurredAt)`: signed, no capacity check (A-06: overcommit is legal here), `reserved` never below zero (INV-03).
 - `SnapshotCurrencyMismatch` is the existing `CurrencyMismatchError`; no new error class.
@@ -45,10 +45,10 @@ Infrastructure:
 - `ReconciliationSnapshotMessageDto` for `type: 'reconciliation_snapshot'`: `{messageId, type, programId, currency, creditLimit, asOf, activeReservations: [{invoiceId, heldAmount}]}`, nested validation, `asOf` with a zone like `eventTime`, invoice ids unique within the list and within `INVOICE_ID_MAX_LENGTH`, at most `SNAPSHOT_RESERVATIONS_MAX` entries (local decision 5).
 - The treasury consumer reads `type` first and dispatches to the matching parser and use case; an unknown `type` is rejected like any malformed message.
 - `ReservationRepository.findActiveByProgram(programId)` and `findByInvoices(programId, invoiceIds)`; `save` also persists the correction column. `LedgerRepository.findClientMovementsSince(programId, since)` returns the `reserve` and `release` rows after a moment, in one query rather than one per reservation. Each gets an integration test and a fake in `in-memory-capacity.fake.ts`.
-- Migration: `reservations.held_correction BIGINT NOT NULL DEFAULT 0` if ADR-0012 question 1 is decided as recommended. Nothing else: the enum values and `as_of` exist.
+- Migration: `reservations.held_correction BIGINT NOT NULL DEFAULT 0` (ADR-0012, 1A). Nothing else: the enum values and `as_of` exist.
 - `GET .../reservations/:invoiceId` shows `source: reconciliation` and `adjustment` movements with `messageId`; no new field (local decision 11).
 - Availability `asOf` returns the last applied snapshot moment (AC-31); nothing to change in the mapper.
-- Configuration: `RECONCILIATION_KEEP_WINDOW_SECONDS` if ADR-0010 is decided with a window.
+- Configuration: `RECONCILIATION_KEEP_WINDOW_SECONDS`, default 30 (ADR-0010).
 - Dev tooling: `npm run dev:treasury -- snapshot --program PRG-1 --currency USD --limit ... --as-of ... --reservations INV-A:70000000,INV-B:0`, with `DevTreasuryProducer.publishSnapshot`.
 - Test harness: `test/support/test-app.ts` gains a settable clock override for `CLOCK`, so AC-27, AC-28 and INV-06 use the times the criteria are written in (09:00, 18:00:30, 18:00) rather than offsets from the real clock.
 
@@ -88,7 +88,7 @@ touches a spec word is listed under "Owed to `/spec`".
 8. **Only client movements count as "after `asOf`".** ADR-0012 question 2 sums `reserve` and
    `release` rows with `occurredAt` after `asOf`. Adjustment rows are left out: they belong to
    earlier snapshots, whose view this one replaces.
-9. **The clock stays the `Clock` port.** Recommended in ADR-0010's revised text: it is what S-03
+9. **The clock stays the `Clock` port.** Decided in ADR-0010: it is what S-03
    shipped, and it is what lets the e2e tests set 09:00 without writing rows behind the API.
 10. **A future `asOf` is not refused.** The treasury's clock is not ours to judge, and refusing
     would stall the program. One further than the keep window ahead of our clock is logged as a
@@ -124,8 +124,8 @@ Supporting tests, untagged because they prove a decision rather than close a req
 |---|---|---|
 | `it('should judge a listed reservation against its held at asOf, not after a later release')` | unit | ADR-0012 question 2 |
 | `it('should leave closed a reservation the client fully released after asOf')` | unit | ADR-0012 question 3, the boundary |
-| `it('should reopen a reservation closed before asOf that a later snapshot lists')` | unit | ADR-0012 question 3, if decided as recommended |
-| `it('should keep an omitted reservation created within the keep window before asOf')` | unit | ADR-0010, if decided with a window |
+| `it('should reopen a reservation closed before asOf that a later snapshot lists')` | unit | ADR-0012, 3A |
+| `it('should keep an omitted reservation created within the keep window before asOf')` | unit | ADR-0010, the keep window |
 | `it('should apply the reservations and skip the limit of a snapshot older than the last capacity update')` | unit | local decision 2 |
 | `it('should create nothing for an unknown invoice listed with a held of zero')` | unit | local decision 4 |
 | `it('should dead-letter a snapshot whose currency differs while a reservation is active')` | contract | ADR-0007 |
@@ -136,16 +136,16 @@ Supporting tests, untagged because they prove a decision rather than close a req
 
 ## ADR candidates
 
-- [[../decisions/ADR-0010-reconciliation-created-at-versus-as-of]]: strict `createdAt < asOf` versus a keep window; which clock stamps `createdAt`. Recommendation revised on 2026-09-25: Option 2 rather than Option 3, because "listed wins" would alter a listed reservation created after `asOf`, which INV-06 forbids.
-- [[../decisions/ADR-0011-reconciliation-created-reservations]]: what `invoiceAmount`, `invoiceCurrency`, `rate` and `createdAt` a reservation born from a snapshot carries, and how a client later releases it. Addendum 2026-09-25: `createdAt` is the snapshot's `asOf`.
-- [[../decisions/ADR-0012-snapshot-corrections-on-a-derived-held]], new: how a correction survives a later release, what a listed reservation is compared against when the client released after `asOf`, and whether a listed reservation closed locally is reopened.
+- [[../decisions/ADR-0010-reconciliation-created-at-versus-as-of]]: accepted 2026-09-25, Option 2: a 30 s keep window before `asOf` for omitted reservations, nothing created at or after `asOf` is touched, `createdAt` from the `Clock` port.
+- [[../decisions/ADR-0011-reconciliation-created-reservations]]: accepted 2026-09-25, Option 1: `invoiceAmount` equals the listed `heldAmount`, program currency, rate 1, `createdAt` the snapshot's `asOf`.
+- [[../decisions/ADR-0012-snapshot-corrections-on-a-derived-held]]: accepted 2026-09-25, 1A, 2A, 3A: a stored signed `heldCorrection`, a listed reservation compared as of `asOf`, a reopen unless the client closed it after `asOf`.
 
 ## Owed to `/spec`
 
 Before `/review`, in their own PR, with Changes rows:
 
-- A-12: the keep window (ADR-0010), the comparison "as of `asOf`" for listed reservations (ADR-0012 question 2) and the reopen rule (question 3), each once its ADR is accepted.
-- Glossary `Held`: "reserve minus the sum of releases" becomes "plus adjustments". Glossary `Adjustment` gets ADR-0011's sentence. `Snapshot moment` mentions the window. A new entry for the correction column's word, if ADR-0012 question 1 is accepted as recommended, with a number example.
+- A-12: the keep window (ADR-0010), the comparison "as of `asOf`" for listed reservations (ADR-0012, 2A) and the reopen rule (3A).
+- Glossary `Held`: "reserve minus the sum of releases" becomes "plus adjustments". Glossary `Adjustment` gets ADR-0011's sentence. `Snapshot moment` mentions the window. A new entry for `heldCorrection` (ADR-0012, 1A) with the AC-29 example.
 
 ## Definition of done
 
@@ -160,3 +160,4 @@ Beyond `CLAUDE.md §9`:
 |---|---|---|
 | 2026-09-19 | plan | slice written |
 | 2026-09-25 | plan | revised against the shipped S-05 code: ADR-0012 proposed, ADR-0010 recommendation revised, ADR-0011 addendum, thirteen local decisions, test names unchanged |
+| 2026-09-25 | plan | ADR-0010, ADR-0011 and ADR-0012 accepted as recommended |
