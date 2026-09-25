@@ -3035,3 +3035,62 @@ Findings, most severe first:
   candidate; with this constraint gone no path found so far reaches it with valid input.
 - Tests beyond the plan, added to the previous entry's list: the persistence case and the e2e case
   above.
+
+## 2026-09-25, verify S-06, Opus
+- VERIFY S-06: PASS, at b88c97d. Run on Opus by Marcin's model choice; the skill table names
+  Sonnet for verify.
+- Gate: `npm run gate` green in one run, nothing retried. Unit 187 (api) and 2 (web),
+  integration 42, e2e 64, cold start smoke 3 with the stack healthy in 287 s.
+- Coverage: 9/9 AC (AC-26 to AC-31, AC-42 to AC-44) and 3/3 INV (INV-05 to INV-07) found by tag,
+  none skipped or focused, all passing. Levels match the plan: the eight e2e criteria and INV-05
+  and INV-06 go through HTTP with a real broker, AC-30 and INV-07 run through the real consumer
+  and broker at integration level. INV-06 exercises both directions of its rule, a snapshot
+  describing a moment before the reservation (omitted and listed) and after it.
+- Style and layers: prose check clean; no nested ternary or braced one-line `if` in the diff; no
+  `@nestjs`, ORM or Kafka import in `domain/` (the one "Prisma" hit is a comment).
+- Cold start: covered by the gate's smoke, which starts from empty volumes on its own project,
+  waits for health, gets `401` without a token and `200` with one, and tears down.
+- README followed literally on the default stack, after checking that no stack, volume or port of
+  it existed, so `down -v` destroyed nothing but what this check started. Every documented call
+  answered as written. The slice's own done item was run by hand: `dev:treasury snapshot`
+  produced the unknown, omitted, corrected and older cases on a fresh program, with the logs
+  showing the applied and stale outcomes.
+- Findings, none blocking: (minor) README does not yet document the snapshot contract, its list
+  bound or `dev:treasury snapshot`, which the slice's definition of done requires and `/ship`
+  writes; (minor, older than S-06) `dev:treasury` prints a kafkajs `TimeoutNegativeWarning` on
+  stderr on every run. Still open from implement, not a verify finding: the ADR candidate for a
+  permanently failing message that is redelivered forever.
+
+## 2026-09-25, review S-06, Fable
+- REVIEW S-06: 9 findings (2/3/4), at b88c97d, fresh context. Not a pass.
+- Findings, most severe first:
+  - (blocker, standards) `reconciliation-snapshot-message.dto.ts:78,112`: an entry that is itself
+    an array (`activeReservations: [[]]`) passes `@ValidateNested`, then `BigInt(undefined)`
+    throws inside the parser, the handler rejects, the offset is never committed and the message
+    is redelivered forever, stalling the partition (CLAUDE.md §2, A-13 clause 4, AC-25). Found by
+    running the parser on hostile lists.
+  - (blocker, spec) `reconciliation.ts:125-131` with `reservation.ts:281-301`: a closed USD
+    reservation survives a re-denomination to EUR (not active, not listed), and a later EUR
+    snapshot listing it reopens it with `held` in EUR, `reservedAmount` and invoice in USD and
+    the USD rate 1 applied as a USD to EUR rate. Violates INV-08 and ADR-0007. Reproduced in the
+    domain.
+  - (major, spec) `reconciliation.ts:128-129`: two rejection rules beyond A-12 and ADR-0007 (another
+    currency refused when the limit part is stale, and when a closed reservation is listed) live
+    only in the slice's local decision 3 and the work-log; not in A-12, not in "Owed to /spec".
+  - (major, standards) `reconciliation-snapshot-message.dto.ts:39,74`: 1 025 entries at
+    `Number.MAX_SAFE_INTEGER` pass validation and overflow `programs.reserved` (BIGINT), a
+    database error that is redelivered forever.
+  - (major, spec) `apply-reconciliation-snapshot.use-case.ts:101-105` against
+    `prisma-unit-of-work.ts:13`: nothing shows a snapshot at the 10 000 entry bound fits the 15 s
+    transaction timeout (about 20 000 sequential statements); if it does not, a valid message fails
+    the same way on every redelivery. Local decision 5's "one bounded transaction" is unproven.
+  - (minor, spec) `reservation.invariants.test.ts:51`: the `[INV-02]` test is still named and built
+    for `0 <= held <= reservedAmount` and never releases a corrected reservation, the one path the
+    amendment adds.
+  - (minor, spec) `reconciliation.ts:85`, local decision 1: two snapshots with the same `asOf` and
+    different content end in whichever arrived last, so INV-07 is order dependent on a tie; not
+    written in INV-07 or A-13.
+  - (minor, standards) `reservation.ts:261`: `drop` (and the `ReconciliationNote` kinds) have no
+    glossary word; the glossary says "released by adjustment".
+  - (minor, standards) `reconciliation.ts:177`: the closed guard in `stepForOmitted` handles a case
+    the input contract excludes (only active reservations are unlisted locals).

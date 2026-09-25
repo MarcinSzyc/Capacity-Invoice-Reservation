@@ -164,3 +164,5 @@ Beyond `CLAUDE.md §9`:
 | 2026-09-25 | plan | AC-42, AC-43, AC-44 added from the A-12 amendment (#38); their three untagged tests become the tagged ones |
 | 2026-09-25 | implement | started on Opus 5.5 by Marcin's decision (the slice is `risk: high`, `CLAUDE.md §8` asks for Fable) |
 | 2026-09-25 | implement | first pass: all twelve tagged tests pass; stopped on a conflict between INV-02 and ADR-0012 (a snapshot may list `held` above `reservedAmount`) |
+| 2026-09-25 | verify | PASS at b88c97d: gate green, 9/9 AC and 3/3 INV at the planned level, two minors (README snapshot contract owed by ship, a kafkajs warning in dev:treasury) |
+| 2026-09-25 | review | REVIEW S-06: 9 findings (2/3/4) at b88c97d; blockers: a nested-array entry stalls the partition, a reopen after re-denomination mixes currencies (INV-08) |
