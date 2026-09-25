@@ -162,6 +162,22 @@ snapshot with `asOf` 12:00 arrives. Then no state changes and it is recorded as 
 7 000 000. Then the program's limit is 7 000 000 and `asOf` in availability equals the
 snapshot's `asOf`. [A-12]
 
+**AC-42 Snapshot keeps a reservation created just before asOf.** Given the keep window is
+its default of 30 seconds and `INV-D` was created at 17:59:45 and is active. When a
+snapshot with `asOf` 18:00:00 does not list `INV-D`. Then `INV-D` is unchanged and no
+movement is recorded for it. [A-12]
+
+**AC-43 A release after asOf stands.** Given `INV-B` held 1 925 000 at 18:00 and the
+client released 500 000 at 18:05, so `held` is 1 425 000. When a snapshot with `asOf`
+18:00 lists `INV-B` with `heldAmount` 1 900 000. Then `held` is 1 400 000 and one
+`adjustment` of −25 000 exists: the snapshot corrects the difference it saw and does not
+undo the release. [A-12]
+
+**AC-44 Snapshot reopens a reservation it lists.** Given a snapshot with `asOf` 12:00
+omitted `INV-F`, so `INV-F` is closed. When a snapshot with `asOf` 18:00 lists `INV-F`
+with `heldAmount` 300 000. Then `INV-F` is active with `held` 300 000 and an `adjustment`
+of +300 000 referencing the second snapshot's `messageId` exists. [A-12]
+
 ## Authentication
 
 **AC-32 No token.** When any business request arrives without a bearer token. Then
@@ -217,3 +233,4 @@ Every addition, amendment or supersession of an AC, newest last. Ids never chang
 | 2026-09-19 | AC-00 | amended: four containers, `web` is a React UI in its own folder (ADR-0001) | docs/adr-renumber-and-deployment |
 | 2026-09-24 | AC-15 | amended: a reservation is closed when the whole invoice has been released, not when `held` reaches zero; `held` can round to zero while the invoice still owes, and the old wording stranded that remainder. Found by review round 1 of S-05 | docs/closed-reservation-and-glossary |
 | 2026-09-25 | AC-27 | clarified: a snapshot that drops a reservation counts the whole invoice as released, so `held` 0 and status closed still coincide after the AC-15 amendment split them. Found by review round 4 of S-05 | docs/ac-27-adjustment-closes |
+| 2026-09-25 | AC-42, AC-43, AC-44 | added: the keep window, a release after `asOf` standing, and a reopen, the A-12 rules of ADR-0010 and ADR-0012 that had only untagged tests as proof | docs/s-06-reconciliation-wording |
