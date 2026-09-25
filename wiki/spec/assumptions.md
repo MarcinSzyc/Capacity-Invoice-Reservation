@@ -346,7 +346,8 @@ commands they produce for the domain stay.
 ## A-12 Reconciliation is a comparison against the snapshot moment, never a wholesale replace
 
 - Status: accepted 2026-09-19, amended 2026-09-21 (a currency change needs an empty program,
-  ADR-0007)
+  ADR-0007), amended 2026-09-25 (keep window, comparison as of `asOf`, reopen; ADR-0010,
+  ADR-0011, ADR-0012)
 - Source: Q16
 
 **Statement.** A snapshot describes a program at `asOf` and says nothing about what
@@ -375,6 +376,31 @@ re-express it (A-02: rates arrive from clients, per reservation). So a currency 
 applied to an empty program as a re-denomination, and refused otherwise with reason
 `CURRENCY_MISMATCH`, which is a rejection recorded against the message rather than a failure
 that stops consumption (A-13). The limit alone is still overwritten in every case.
+
+Amended 2026-09-25, after ADR-0010, ADR-0011 and ADR-0012 were accepted in the S-06 plan. The
+statement compares `createdAt` with `asOf` and a local `held` with the snapshot's, and says
+nothing of how. Four rules fill that in; the example program is `PRG-1` in USD.
+
+- **A keep window before `asOf`** (ADR-0010). A local reservation missing from the snapshot is
+  released by adjustment only when it was created more than the window before `asOf`, default
+  30 s. Created within the window, it is kept and the keep is logged: two clocks are compared,
+  and a wrongly kept reservation is fixed by the next snapshot while a wrongly released one
+  frees capacity another invoice may take. The window only widens keeping. A reservation
+  created at or after `asOf` is untouched whether the snapshot lists it or not (INV-06), and a
+  listed reservation created before `asOf` is compared whatever the window.
+- **A reservation the snapshot creates** (ADR-0011) has `invoiceAmount` equal to the listed
+  held amount, in program currency, at rate 1, and `createdAt` equal to the snapshot's `asOf`,
+  since that is when the treasury knew it. A listed held amount of 0 for an unknown invoice
+  creates nothing.
+- **A listed reservation is compared as of `asOf`** (ADR-0012). The snapshot says nothing about
+  what happened after its moment, so a client's releases after `asOf` stand. Example: `INV-B`
+  held 1 925 000 at 18:00, the client released 500 000 at 18:05, and a snapshot of 18:00 lists
+  it at 1 900 000. The treasury's figure after that release would be 1 400 000; `held` is
+  1 425 000, so the adjustment is minus 25 000, the difference the treasury actually saw. A
+  correction stays in force through later releases.
+- **A listed reservation that is closed is reopened** (ADR-0012) when it was closed at or before
+  `asOf`, with `held` set to the listed amount. When the client's release that closed it came
+  after `asOf`, it stays closed: that repayment is newer than the snapshot.
 
 ## A-13 Kafka messages are deduplicated, staleness-checked, ordered per program, dead-lettered on failure
 
@@ -499,3 +525,4 @@ program is not an acceptance criterion.
 | 2026-09-22 | A-10 | amended: conversion respects each currency's ISO 4217 minor unit exponent (JPY 0, KWD 3, default 2) and `rate` reads back canonical; gaps found while revising the S-04 plan | docs/a-10-minor-units-and-rate-format |
 | 2026-09-24 | A-08 | amended: `held` is derived from what the invoice has left rather than decremented per release, and over-release is judged in invoice currency (ADR-0009); found by review round 3 of S-05 | docs/release-assumptions |
 | 2026-09-24 | A-09 | amended: a release is refused once nothing is left to release, which is not the same as `held` reaching zero (AC-15, amended); found by review round 3 of S-05 | docs/release-assumptions |
+| 2026-09-25 | A-12 | amended: a 30 s keep window before `asOf` for omitted reservations, the shape and `createdAt` of a snapshot-created reservation, a listed reservation compared as of `asOf`, and a reopen of one closed at or before `asOf` (ADR-0010, ADR-0011, ADR-0012) | docs/s-06-reconciliation-wording |
