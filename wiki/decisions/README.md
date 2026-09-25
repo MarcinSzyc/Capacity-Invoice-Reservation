@@ -21,4 +21,5 @@ Template: [[ADR-0000-template]].
 | [[ADR-0010-reconciliation-created-at-versus-as-of]] | Deciding whether a local reservation is older than a snapshot | accepted | S-06 |
 | [[ADR-0011-reconciliation-created-reservations]] | Reservations created by reconciliation | accepted | S-06 |
 | [[ADR-0012-snapshot-corrections-on-a-derived-held]] | Snapshot corrections on a reservation whose held is derived | accepted | S-06 |
+| [[ADR-0013-treasury-messages-that-always-fail]] | A treasury message that fails the same way every time | accepted | S-06 |
 | [[ADR-0001-technology-baseline]] | Technology baseline: Node 24 LTS, NestJS 12, TypeScript 6 strict, npm | accepted | S-01 |

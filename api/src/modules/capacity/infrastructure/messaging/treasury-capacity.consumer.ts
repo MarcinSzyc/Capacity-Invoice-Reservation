@@ -29,6 +29,12 @@ import {
 
 const CONTEXT = 'TreasuryCapacityConsumer';
 const RESUBSCRIBE_AFTER_MS = 2_000;
+// ADR-0013: a message is tried this many times in one delivery before it is set aside.
+const ATTEMPTS = 3;
+const RETRY_PAUSE_MS = 250;
+
+type Attempted<T> =
+  {readonly ok: true; readonly value: T} | {readonly ok: false; readonly error: string};
 
 type ParsedJson =
   {readonly ok: true; readonly payload: unknown} | {readonly ok: false; readonly error: string};
@@ -115,7 +121,12 @@ export class TreasuryCapacityConsumer implements OnApplicationBootstrap, OnModul
       return this.reject(message, {messageId, payload: parsed.payload}, update.error, receivedAt);
     }
 
-    const result = await this.applyCapacityUpdate.execute(update.command);
+    const readable = {messageId, payload: parsed.payload};
+    const attempted = await this.attempted(update.command.messageId, () =>
+      this.applyCapacityUpdate.execute(update.command),
+    );
+    if (!attempted.ok) return this.setAside(message, readable, attempted.error, receivedAt);
+    const result = attempted.value;
     if (result.outcome === 'rejected') {
       const error = `${result.reason}: ${result.error}`;
       return this.reject(message, {messageId, payload: parsed.payload}, error, receivedAt);
@@ -133,7 +144,13 @@ export class TreasuryCapacityConsumer implements OnApplicationBootstrap, OnModul
     if (!snapshot.ok) return this.reject(message, {messageId, payload}, snapshot.error, receivedAt);
 
     const {programId} = snapshot.command;
-    const result = await this.applyReconciliationSnapshot.execute(snapshot.command);
+    const attempted = await this.attempted(snapshot.command.messageId, () =>
+      this.applyReconciliationSnapshot.execute(snapshot.command),
+    );
+    if (!attempted.ok) {
+      return this.setAside(message, {messageId, payload}, attempted.error, receivedAt);
+    }
+    const result = attempted.value;
     if (result.outcome === 'rejected') {
       const error = `${result.reason}: ${result.error}`;
       return this.reject(message, {messageId, payload}, error, receivedAt);
@@ -142,6 +159,45 @@ export class TreasuryCapacityConsumer implements OnApplicationBootstrap, OnModul
       for (const note of result.notes) this.logger.warn(describeNote(programId, note), CONTEXT);
     }
     this.logger.log(`reconciliation snapshot ${result.outcome} for ${programId}`, CONTEXT);
+  }
+
+  /**
+   * ADR-0013: an error while applying is tried again, up to `ATTEMPTS` in all. Each attempt is its
+   * own transaction, so a failed one leaves nothing behind.
+   */
+  private async attempted<T>(messageId: string, work: () => Promise<T>): Promise<Attempted<T>> {
+    let failure = '';
+    for (let attempt = 1; attempt <= ATTEMPTS; attempt += 1) {
+      try {
+        return {ok: true, value: await work()};
+      } catch (reason: unknown) {
+        failure = reason instanceof Error ? reason.message : String(reason);
+        this.logger.warn(`message ${messageId} failed attempt ${attempt}: ${failure}`, CONTEXT);
+      }
+      if (attempt < ATTEMPTS) await new Promise((resolve) => setTimeout(resolve, RETRY_PAUSE_MS));
+    }
+    return {ok: false, error: failure};
+  }
+
+  /**
+   * ADR-0013: after the last attempt the message is a rejection like any other: dead-lettered with
+   * the error, recorded, and consumption continues. If the broker or the database cannot take the
+   * dead letter or the record, `reject` throws, the offset stays uncommitted and the message is
+   * delivered again, so an outage delays messages rather than setting them aside.
+   */
+  private async setAside(
+    message: InboundMessage,
+    readable: {messageId: string | null; payload: unknown},
+    failure: string,
+    receivedAt: Date,
+  ): Promise<void> {
+    const error = `failed ${ATTEMPTS} attempts: ${failure}`;
+    this.logger.error(
+      `message ${readable.messageId ?? 'without id'} set aside, ${error}`,
+      undefined,
+      CONTEXT,
+    );
+    await this.reject(message, readable, error, receivedAt);
   }
 
   /**
