@@ -1,7 +1,8 @@
 import {useEffect, useMemo, useState} from 'react';
-import {apiBaseUrl, CallRecord, createApi} from './api';
+import {apiBaseUrl, availabilityOf, CallRecord, createApi, movementsOf} from './api';
+import type {Availability, Movement} from './api';
 import {Generator} from './generator';
-import {Availability, Ledger, Movement} from './ledger';
+import {Ledger} from './ledger';
 import {REQUEST_LOG_SIZE, RequestLog} from './request-log';
 import {TreasuryPanel} from './treasury-panel';
 
@@ -16,11 +17,6 @@ const LINKS = [
   {label: 'Redoc', path: '/redoc'},
   {label: 'OpenAPI document', path: '/openapi.json'},
 ];
-
-const movementsOf = (body: unknown): Movement[] =>
-  typeof body === 'object' && body !== null && 'movements' in body && Array.isArray(body.movements)
-    ? (body.movements as Movement[])
-    : [];
 
 /** The demo page (glossary): four panels over the real api and the real topic (A-17, AC-38). */
 export const App = (): React.JSX.Element => {
@@ -38,17 +34,24 @@ export const App = (): React.JSX.Element => {
   );
 
   useEffect(() => {
+    // An answer for a program id that is no longer shown arrives after this run was cleaned up
+    // and is dropped, so a slow poll never paints the previous program over the current one.
+    const run = {current: true};
     const poll = async (): Promise<void> => {
       const [program, ledger] = await Promise.all([
         api.read(`/programs/${programId}/availability`),
         api.read(`/dev/programs/${programId}/movements`),
       ]);
-      setAvailability(program.status === 200 ? (program.body as Availability) : null);
+      if (!run.current) return;
+      setAvailability(program.status === 200 ? availabilityOf(program.body) : null);
       setMovements(ledger.status === 200 ? movementsOf(ledger.body) : []);
     };
     void poll();
     const timer = setInterval(() => void poll(), POLL_MS);
-    return () => clearInterval(timer);
+    return () => {
+      run.current = false;
+      clearInterval(timer);
+    };
   }, [api, programId]);
 
   const currency = availability?.currency ?? DEFAULT_CURRENCY;
