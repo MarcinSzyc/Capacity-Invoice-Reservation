@@ -3259,3 +3259,56 @@ Findings, most severe first:
   INV-A was corrected. Stack taken down.
 - Findings: none new. Owed to `/ship` as before: the README's snapshot contract and
   `dev:treasury snapshot`; the kafkajs warning on stderr (minor, older than S-06).
+
+## 2026-09-25, review S-06 (round 3), Opus
+- REVIEW S-06: 6 findings (0/1/5), at 2f1bdbe against base d98a421, fresh context. Not a pass.
+  Run on Opus 5.5 by Marcin's decision: the skill asks for Fable, which is out of usage credits.
+- Round 2, finding by finding: the blocker is closed (a snapshot-created reservation is judged on
+  the treasury's clock with no window, in code, ADR-0010, A-12 and two unit tests). The major is
+  closed (`FailingUnitOfWork` fakes the port, the use case is real). The `reserved` JSON bound,
+  the reopen read, ADR-0013's Consequences and the slice header are closed. The one not changed,
+  parsing outside the three attempts, does not hold: its reason was that no input reaches a throw
+  there, and one does (first finding below).
+- Findings, most severe first:
+  - (major, spec) `treasury-capacity.consumer.ts:119,143`: a message about 10 KB long with an
+    unknown field nested 5 000 arrays deep makes `plainToInstance` overflow the stack; the
+    `RangeError` leaves `handle`, the offset is not committed and the message is delivered again
+    forever, stalling the partition against A-13 clause 4. Same for a capacity update. Reproduced
+    on the built consumer: `handle` rejected, no dead letter, no record.
+  - (minor, spec) `prisma-ledger.repository.ts:31-40`: the comment says `DISTINCT ON`, but Prisma
+    without `nativeDistinct` sends a plain `SELECT ... ORDER BY` and dedupes in memory (query log
+    checked), so the read loads every movement of every closed listed reservation, not one each.
+  - (minor, spec) `apply-reconciliation-snapshot.use-case.ts:118,121`: the active reservations and
+    the client movements after `asOf` are not bounded by `SNAPSHOT_RESERVATIONS_MAX`, so local
+    decision 5's "one bounded transaction" does not hold for a program with more active
+    reservations than the list bound, and no bound test covers release by omission at scale.
+  - (minor, standards) `apply-reconciliation-snapshot.use-case.ts:130,140-143`: `sumOfDeltas`
+    filters every movement after `asOf` once per local reservation, quadratic inside the locked
+    transaction; 10 000 by 10 000 measured at 0.5 s in plain Node.
+  - (minor, spec) `wiki/spec/glossary.md:185-186`: `Snapshot moment` still says reservations
+    created at or after `asOf` are never changed by that snapshot, which the round 2 amendment
+    made untrue for a snapshot-created reservation of the same moment.
+  - (minor, standards) `domain/ports/ledger.repository.ts:13-19`: the doc comment of
+    `findClientMovementsSince` now sits above `findLastByReservations`, two stacked blocks, and
+    `findClientMovementsSince` has none.
+
+## 2026-09-25, ship S-06, Opus
+- Precondition not met, and shipped anyway by Marcin's explicit decision: verify's third pass is
+  PASS and newer than the last code commit, but review round 3 has one major. Marcin, after three
+  review rounds: "this is enough we are doing a super edge case here, lets move on", and then
+  "yes ship". The major (a message nesting an unknown field about 5 000 arrays deep overflows the
+  parser, which runs outside ADR-0013's three attempts) and five minors are recorded as known
+  limitations in the changelog and carried to S-07. The skill says never to ship over a major;
+  this records that the user overrode it, rather than presenting the slice as clean.
+- `wiki/plan/plan.md`: the thirteen S-06 rows `done` with their test files, and thirteen `extra`
+  rows for the supporting tests. Commit column waits for the merge commit.
+- ADR-0010 to ADR-0013 were accepted during the slice; nothing left to finalise.
+- Assumptions: nothing the code relies on is missing from the register, with one thing for
+  `/spec` to consider: the snapshot's 10 000 entry bound and its listed-total bound are limits on
+  what the treasury may send, today local decisions of the slice and not in A-11's contract.
+- README gains "Reconcile it": the snapshot contract, a `dev:treasury snapshot` example, the rules
+  in one table, the bounds and the three attempts. Run literally on a fresh stack: `INV-A` ended at
+  100 000 000 with an adjustment of -20 000 000, `INV-X` was created from the snapshot with its
+  `messageId`, and availability reported `asOf`.
+- Changelog row, slice status `done`, slice index and Home updated; Home names S-07 next and lists
+  what S-06 carries into it.

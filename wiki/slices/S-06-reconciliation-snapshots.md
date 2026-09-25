@@ -1,7 +1,7 @@
 # S-06 Reconciliation snapshots
 
 - Outcome: a treasury snapshot brings a program's limit and reservations up to date as of one moment, every difference is an explicit adjustment in the ledger, and nothing a client was already told is undone by an older snapshot.
-- Status: in progress
+- Status: done 2026-09-25
 - AC: AC-26, AC-27, AC-28, AC-29, AC-30, AC-31, AC-42, AC-43, AC-44 (the last three added 2026-09-25 with the A-12 amendment)
 - INV: INV-05, INV-06, INV-07, INV-02 (amended 2026-09-25; first closed by S-05, reopened here because S-06 changed what it says)
 - Risk: high. Reconciliation: comparing two systems' clocks, set differences between local and remote reservations, a correction that has to live alongside a `held` derived from the invoice (ADR-0009), monotonic application under shuffled delivery, replay of everything. `CLAUDE.md §8` asks for Fable; implemented and reviewed on Opus by Marcin's decision, Fable being out of credits.
@@ -171,3 +171,5 @@ Beyond `CLAUDE.md §9`:
 | 2026-09-25 | verify | PASS at e3a805e: gate green, 9/9 AC and 4/4 INV at the planned level, no new findings |
 | 2026-09-25 | review | REVIEW S-06: 7 findings (1/1/5) at 7e2d03d, round 2, on Opus (Fable out of credits); round 1 all closed; blocker: a snapshot changes a reservation created at its own `asOf`, against ADR-0010 |
 | 2026-09-25 | verify | PASS at 36f36ba: gate green, 9/9 AC and 4/4 INV, no new findings |
+| 2026-09-25 | review | REVIEW S-06: 6 findings (0/1/5) at 2f1bdbe, round 3, on Opus (Fable out of credits); round 2 closed except the parse left outside the attempts; major: a deeply nested message overflows the parser's stack and stalls the partition |
+| 2026-09-25 | ship | done, over review round 3's one major by Marcin's decision (edge case); six findings carried as known limitations |
