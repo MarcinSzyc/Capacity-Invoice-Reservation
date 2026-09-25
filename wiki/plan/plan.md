@@ -55,7 +55,7 @@ Status: `planned`, `in progress`, `done`, `superseded by <id>`.
 | AC-43 | S-06 | planned | `[AC-43] should keep a release made after asOf when a snapshot corrects held` | e2e | | |
 | AC-44 | S-06 | planned | `[AC-44] should reopen a reservation closed by an earlier snapshot when a later snapshot lists it` | e2e | | |
 | INV-01 | S-03 | done | `[INV-01] should never overcommit under parallel reservations on one program` | invariant (e2e) | `api/test/capacity-invariant.e2e-test.ts` | `2d159f6` (tag `S-03`) |
-| INV-02 | S-05 | done | `[INV-02] should keep held between 0 and reservedAmount over random release sequences` | unit | `api/src/modules/capacity/domain/reservation.invariants.test.ts` | |
+| INV-02 | S-06 | in progress | `[INV-02] should keep held at or above zero and never let a release raise it, with snapshot corrections among the releases` | unit | | |
 | INV-03 | S-03 | done | `[INV-03] should keep program reserved equal to the sum of held of active reservations after every scenario` | invariant (e2e) | `api/test/capacity-invariant.e2e-test.ts`, `api/test/support/ledger-invariants.ts` | `2d159f6` (tag `S-03`) |
 | INV-04 | S-03 | done | `[INV-04] should chain reserved_after from the previous row plus delta_held and recompute the stored state` | unit + e2e helper | `api/src/modules/capacity/domain/ledger.test.ts`, `api/test/support/ledger-invariants.ts` | `2d159f6` (tag `S-03`) |
 | INV-05 | S-06 | planned | `[INV-05] should leave every balance and ledger row unchanged when every message and request of a scenario is replayed` | invariant (e2e) | | |

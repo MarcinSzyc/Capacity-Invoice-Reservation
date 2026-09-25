@@ -3156,3 +3156,13 @@ Findings, most severe first:
 - Review round 1 is now answered finding by finding: both blockers and all three majors fixed, the
   four minors fixed or written down. One stays for `/plan`: the tagged INV-02 test's name still
   states the old bound.
+
+## 2026-09-25, plan S-06 (correction: INV-02 as amended), Opus
+- Small correction on the slice branch, as `CLAUDE.md §6` allows. INV-02 was closed by S-05 with a
+  property over client releases, and S-06 amended what it says: `held` may now go above
+  `reservedAmount`, but only through a snapshot. The S-05 test still holds, but it never releases a
+  corrected reservation, which review round 1 noted. So the requirement row moves to S-06 with
+  status `in progress` and names the property that mixes snapshot corrections among releases; the
+  S-05 test stays as a supporting test without the tag. The S-05 slice file is done and unchanged.
+- Cross-checked: every AC and INV in the spec appears once in `plan.md`, and the thirteen S-06
+  names match the slice file. Test file and commit columns stay empty for `/ship`.
