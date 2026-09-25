@@ -3,6 +3,11 @@ import {INestApplication} from '@nestjs/common';
 import request from 'supertest';
 import {KafkaService} from '../../src/messaging/kafka.service';
 import {DevTreasuryProducer} from '../../src/modules/capacity/infrastructure/messaging/dev-treasury-producer';
+import {
+  PrismaTreasuryMessageStore,
+  StoredTreasuryMessage,
+} from '../../src/modules/capacity/infrastructure/persistence/prisma-treasury-message.store';
+import {PrismaService} from '../../src/persistence/prisma.service';
 import {httpServer} from './test-app';
 import {bearer, validToken} from './tokens';
 
@@ -26,6 +31,60 @@ export interface AvailabilityBody {
   readonly overcommitted: boolean;
   readonly asOf: string | null;
 }
+
+export interface Snapshot {
+  readonly programId: string;
+  readonly currency?: string;
+  readonly creditLimit: bigint;
+  readonly asOf: Date;
+  readonly activeReservations?: readonly {
+    readonly invoiceId: string;
+    readonly heldAmount: bigint;
+  }[];
+  readonly messageId?: string;
+}
+
+/**
+ * Publishes a reconciliation snapshot over the real broker and waits until the service has
+ * recorded an outcome for it, since a treasury message is asynchronous. Returns the record.
+ */
+export const applySnapshot = async (
+  app: INestApplication,
+  {
+    programId,
+    currency = USD,
+    creditLimit,
+    asOf,
+    activeReservations = [],
+    messageId = uniqueId('m-snap'),
+  }: Snapshot,
+): Promise<StoredTreasuryMessage> => {
+  await new DevTreasuryProducer(app.get(KafkaService)).publishSnapshot({
+    messageId,
+    programId,
+    currency,
+    creditLimit,
+    asOf,
+    activeReservations,
+  });
+  return awaitMessage(app, messageId, () => true);
+};
+
+/** Polls the message record until the predicate holds, for outcomes and duplicate counts. */
+export const awaitMessage = async (
+  app: INestApplication,
+  messageId: string,
+  predicate: (stored: StoredTreasuryMessage) => boolean,
+): Promise<StoredTreasuryMessage> => {
+  const store = new PrismaTreasuryMessageStore(app.get(PrismaService));
+  const deadline = Date.now() + WAIT_MS;
+  while (Date.now() < deadline) {
+    const stored = await store.findById(messageId);
+    if (stored !== null && predicate(stored)) return stored;
+    await new Promise((resolve) => setTimeout(resolve, POLL_MS));
+  }
+  throw new Error(`message ${messageId} did not reach the expected record in ${WAIT_MS}ms`);
+};
 
 export interface CapacityUpdate {
   readonly programId: string;

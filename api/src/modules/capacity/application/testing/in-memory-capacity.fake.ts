@@ -37,6 +37,18 @@ export class InMemoryReservations implements ReservationRepository {
     return Promise.resolve(found ?? null);
   }
 
+  findActiveByProgram(programId: string): Promise<Reservation[]> {
+    return Promise.resolve(
+      this.all.filter((r) => r.programId === programId && r.status === 'active'),
+    );
+  }
+
+  findByInvoices(programId: string, invoiceIds: readonly string[]): Promise<Reservation[]> {
+    return Promise.resolve(
+      this.all.filter((r) => r.programId === programId && invoiceIds.includes(r.invoiceId)),
+    );
+  }
+
   add(reservation: Reservation): Promise<void> {
     this.all.push(reservation);
     return Promise.resolve();
@@ -68,6 +80,17 @@ export class InMemoryLedger implements LedgerRepository {
 
   findByReservation(reservationId: string): Promise<CapacityMovement[]> {
     return Promise.resolve(this.movements.filter((m) => m.reservationId === reservationId));
+  }
+
+  findClientMovementsSince(programId: string, since: Date): Promise<CapacityMovement[]> {
+    return Promise.resolve(
+      this.movements.filter(
+        (m) =>
+          m.programId === programId &&
+          (m.kind === 'reserve' || m.kind === 'release') &&
+          m.occurredAt > since,
+      ),
+    );
   }
 }
 
