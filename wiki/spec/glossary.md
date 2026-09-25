@@ -227,8 +227,26 @@ currency is recorded `stale`, not `rejected` (A-13).
 
 **Rejected.** A treasury message that cannot be applied at all: not JSON, failing the contract
 (a missing field, a limit that is not an integer, a type we do not know), or refused by a rule
-such as `CURRENCY_MISMATCH`. Recorded with its reason when its message id can be read, set
-aside as a dead letter, and consumption continues with the next message.
+such as `CURRENCY_MISMATCH`, or failing to apply three attempts in a row for any other reason
+(ADR-0013). Recorded with its reason when its message id can be read, set aside as a dead
+letter, and consumption continues with the next message.
+
+**Failed attempt.** One try at applying a treasury message that threw. The consumer tries a
+message up to three times in one delivery; each failed try is a row in
+`treasury_message_failures` with the attempt number and the error, and after the third the
+message is rejected (ADR-0013). Example: a snapshot fails twice on a dropped database connection
+and applies on the third try, leaving two rows and an `applied` record. While the database or the
+broker is down, nothing can be recorded, so the message is delivered again instead.
+
+**Reconciliation note.** A log line for every place a snapshot was not followed to the letter, so
+an operator can see it. The kinds: `kept_within_window` (an omitted reservation too close to
+`asOf` to release, ADR-0010), `listed_after_as_of` (a listed reservation created after the
+snapshot's moment, left alone by INV-06), `kept_closed_after_as_of` (listed, but the client closed
+it after `asOf`, ADR-0012), `listed_with_nothing_held` (an unknown invoice listed at 0, so nothing
+is created), `listed_in_other_currency` (a closed reservation from before a re-denomination,
+never reopened), `limit_skipped` (the snapshot's limit is older than the last capacity update) and
+`as_of_ahead_of_our_clock` (the snapshot's moment is further ahead of our clock than the keep
+window).
 
 **Dead letter.** A copy of a treasury message we could not apply, set aside on a separate topic
 next to the original, with the reason and where it came from attached, so a human can look at

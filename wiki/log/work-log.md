@@ -3139,3 +3139,20 @@ Findings, most severe first:
   cause, not only the two found; their specific causes were already fixed in part one.
 - Still owed: the currency questions (blocker 2 and the major about unwritten rules), the tie on
   `asOf`, and the `/spec` wording for A-13 clause 4, the note kinds and the new table.
+
+## 2026-09-25, implement and spec S-06 (review fixes, round 1, part three), Opus
+- Marcin decided the three remaining questions as recommended.
+- Blocker 2, test first and seen red on the review's own scenario (the old-currency reservation
+  reopened): a listed reservation in another currency than the snapshot is skipped with the note
+  `listed_in_other_currency`. The currency guard now refuses another currency only for an active
+  reservation or a stale limit part; the unit test that expected a closed old-currency listing to
+  refuse the whole snapshot was rewritten for the decision, not weakened.
+- Spec wording, on the slice branch as INV-02 was, each with a Changes row: A-12 gains the two
+  currency rules (stale limit refused, other-currency listing skipped); A-13 gains clause (6), three
+  attempts then unprocessable with each failure kept (ADR-0013), and clause (7), the later of two
+  equal `asOf` snapshots wins; INV-07 says such a pair is outside it. Glossary: `Rejected` covers the
+  third failed attempt, and new entries for `Failed attempt` and `Reconciliation note`, which lists
+  every note kind.
+- Review round 1 is now answered finding by finding: both blockers and all three majors fixed, the
+  four minors fixed or written down. One stays for `/plan`: the tagged INV-02 test's name still
+  states the old bound.
