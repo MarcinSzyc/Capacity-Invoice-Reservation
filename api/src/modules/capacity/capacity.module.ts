@@ -11,6 +11,7 @@ import {
 } from './application/apply-reconciliation-snapshot.use-case';
 import {GetAvailability} from './application/get-availability.query';
 import {GetReservation} from './application/get-reservation.query';
+import {ListProgramMovements} from './application/list-program-movements.query';
 import {ReleaseCapacity} from './application/release-capacity.use-case';
 import {RejectTreasuryMessage} from './application/reject-treasury-message.use-case';
 import {ReserveCapacity} from './application/reserve-capacity.use-case';
@@ -50,7 +51,9 @@ import {SystemClock} from './infrastructure/system-clock';
     ReleaseCapacity,
     GetAvailability,
     GetReservation,
+    ListProgramMovements,
     TreasuryCapacityConsumer,
   ],
+  exports: [ListProgramMovements],
 })
 export class CapacityModule {}

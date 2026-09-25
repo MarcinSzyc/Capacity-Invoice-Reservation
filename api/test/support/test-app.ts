@@ -22,7 +22,7 @@ const buildApp = async (
   config: AppConfig,
   {logOutput, clock}: Omit<TestAppOptions, 'config'> = {},
 ): Promise<INestApplication> => {
-  const builder = Test.createTestingModule({imports: [AppModule]})
+  const builder = Test.createTestingModule({imports: [AppModule.forProfile(config.profile)]})
     .overrideProvider(APP_CONFIG)
     .useValue(config);
   if (logOutput !== undefined) {

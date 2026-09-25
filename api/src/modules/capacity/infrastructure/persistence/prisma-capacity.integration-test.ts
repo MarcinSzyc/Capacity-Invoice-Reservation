@@ -392,6 +392,28 @@ describe('Prisma capacity adapters', () => {
     ]);
   });
 
+  it('should list the latest movements of a program newest first, at most the limit asked for', async () => {
+    const programId = uniqueId('PRG');
+    const program = Program.announce(programId, EUR);
+    const limits = [FIVE_MILLION_EUR, ONE_MILLION_EUR, FIVE_MILLION_EUR].map((limit, index) => {
+      const outcome = program.setLimit(limit, new Date(AT_10_00.getTime() + index), uniqueId('m'));
+      if (outcome.kind !== 'applied') throw new Error('expected every limit to apply');
+      return outcome.movement;
+    });
+    await unitOfWork.run(async ({programs, ledger}) => {
+      await programs.save(program);
+      await ledger.appendAll(limits);
+    });
+    const other = await announcedProgram(uniqueId('PRG'));
+
+    const rows = await unitOfWork.readSnapshot(({ledger}) =>
+      ledger.findLatestByProgram(programId, 2),
+    );
+
+    expect(rows).toEqual([limits[2], limits[1]]);
+    expect(rows.every((row) => row.programId !== other.programId)).toBe(true);
+  });
+
   it('should hold one instant across several reads, so a writer between them cannot split the view', async () => {
     // AC-19 reads the reservation and then its movements. One transaction is not enough: at
     // read committed each statement takes its own snapshot, so a release committing in between

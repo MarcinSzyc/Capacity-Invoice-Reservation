@@ -17,4 +17,6 @@ export interface LedgerRepository {
    * order they were appended. One read per snapshot, not one per reservation.
    */
   findClientMovementsSince(programId: string, since: Date): Promise<CapacityMovement[]>;
+  /** A program's most recent rows, newest first, for the demo page's live ledger (AC-38). */
+  findLatestByProgram(programId: string, limit: number): Promise<CapacityMovement[]>;
 }
