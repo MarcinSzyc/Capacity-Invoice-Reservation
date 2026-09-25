@@ -1,10 +1,10 @@
 # S-06 Reconciliation snapshots
 
 - Outcome: a treasury snapshot brings a program's limit and reservations up to date as of one moment, every difference is an explicit adjustment in the ledger, and nothing a client was already told is undone by an older snapshot.
-- Status: planned
+- Status: done 2026-09-25
 - AC: AC-26, AC-27, AC-28, AC-29, AC-30, AC-31, AC-42, AC-43, AC-44 (the last three added 2026-09-25 with the A-12 amendment)
-- INV: INV-05, INV-06, INV-07
-- Risk: high. Reconciliation: comparing two systems' clocks, set differences between local and remote reservations, a correction that has to live alongside a `held` derived from the invoice (ADR-0009), monotonic application under shuffled delivery, replay of everything. Implemented on Fable per `CLAUDE.md §8`.
+- INV: INV-05, INV-06, INV-07, INV-02 (amended 2026-09-25; first closed by S-05, reopened here because S-06 changed what it says)
+- Risk: high. Reconciliation: comparing two systems' clocks, set differences between local and remote reservations, a correction that has to live alongside a `held` derived from the invoice (ADR-0009), monotonic application under shuffled delivery, replay of everything. `CLAUDE.md §8` asks for Fable; implemented and reviewed on Opus by Marcin's decision, Fable being out of credits.
 - Depends on: S-05. ADRs, all accepted 2026-09-25: [[../decisions/ADR-0010-reconciliation-created-at-versus-as-of]], [[../decisions/ADR-0011-reconciliation-created-reservations]], [[../decisions/ADR-0012-snapshot-corrections-on-a-derived-held]]. ADR-0007 (accepted in S-02) governs the currency field.
 
 ## What the shipped code already gives this slice
@@ -119,6 +119,7 @@ touches a spec word is listed under "Owed to `/spec`".
 | `it('[AC-44] should reopen a reservation closed by an earlier snapshot when a later snapshot lists it')` | e2e | snapshot `asOf` 12:00 omits `INV-F` (reserved earlier by the client), so it is closed; snapshot `asOf` 18:00 lists it at 300 000; status `active`, `held` 300 000, an `adjustment` of +300 000 with the second snapshot's `messageId` (ADR-0012, 3A) |
 | `it('[INV-05] should leave every balance and ledger row unchanged when every message and request of a scenario is replayed')` | invariant (e2e) | scenario: capacity update, two reservations, a partial release, a snapshot, a limit change; record the ledger and balances; replay every Kafka message and every HTTP request with the same ids; ledger and balances identical, HTTP replays answer `409`, each message's duplicate count up by one (local decision 13) |
 | `it('[INV-06] should never alter a reservation by a snapshot whose asOf precedes its creation')` | invariant (e2e) | settable clock; interleavings: a snapshot arriving after the reservation but describing a moment before it, listed and not listed, and a snapshot describing a moment after it; only the last may touch it |
+| `it('[INV-02] should keep held at or above zero and never let a release raise it, with snapshot corrections among the releases')` | unit | INV-02 as amended: random snapshot corrections, up to twice `reservedAmount`, among random releases; `held` never below zero and no release raising it. S-05's property over client releases alone stays as a supporting test |
 | `it('[INV-07] should reach the same final state for shuffled and reversed message order as for in-order delivery')` | invariant (contract) | five capacity updates and three snapshots for one program, including one invoice listed, then omitted, then listed again, delivered in order, reversed and in three seeded shuffles into fresh programs; final state compared as local decision 12 defines it |
 
 Supporting tests, untagged because they prove a decision rather than close a requirement:
@@ -162,3 +163,13 @@ Beyond `CLAUDE.md §9`:
 | 2026-09-25 | plan | revised against the shipped S-05 code: ADR-0012 proposed, ADR-0010 recommendation revised, ADR-0011 addendum, thirteen local decisions, test names unchanged |
 | 2026-09-25 | plan | ADR-0010, ADR-0011 and ADR-0012 accepted as recommended |
 | 2026-09-25 | plan | AC-42, AC-43, AC-44 added from the A-12 amendment (#38); their three untagged tests become the tagged ones |
+| 2026-09-25 | implement | started on Opus 5.5 by Marcin's decision (the slice is `risk: high`, `CLAUDE.md §8` asks for Fable) |
+| 2026-09-25 | implement | first pass: all twelve tagged tests pass; stopped on a conflict between INV-02 and ADR-0012 (a snapshot may list `held` above `reservedAmount`) |
+| 2026-09-25 | verify | PASS at b88c97d: gate green, 9/9 AC and 3/3 INV at the planned level, two minors (README snapshot contract owed by ship, a kafkajs warning in dev:treasury) |
+| 2026-09-25 | review | REVIEW S-06: 9 findings (2/3/4) at b88c97d; blockers: a nested-array entry stalls the partition, a reopen after re-denomination mixes currencies (INV-08) |
+| 2026-09-25 | plan | correction: the amended INV-02 moves to S-06, closed by the property with snapshot corrections among releases |
+| 2026-09-25 | verify | PASS at e3a805e: gate green, 9/9 AC and 4/4 INV at the planned level, no new findings |
+| 2026-09-25 | review | REVIEW S-06: 7 findings (1/1/5) at 7e2d03d, round 2, on Opus (Fable out of credits); round 1 all closed; blocker: a snapshot changes a reservation created at its own `asOf`, against ADR-0010 |
+| 2026-09-25 | verify | PASS at 36f36ba: gate green, 9/9 AC and 4/4 INV, no new findings |
+| 2026-09-25 | review | REVIEW S-06: 6 findings (0/1/5) at 2f1bdbe, round 3, on Opus (Fable out of credits); round 2 closed except the parse left outside the attempts; major: a deeply nested message overflows the parser's stack and stalls the partition |
+| 2026-09-25 | ship | done, over review round 3's one major by Marcin's decision (edge case); six findings carried as known limitations |

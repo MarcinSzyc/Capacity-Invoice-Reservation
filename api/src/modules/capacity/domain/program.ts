@@ -3,6 +3,8 @@ import type {ReleaseReason} from './reservation';
 import {CapacityExceededError, CurrencyMismatchError} from './errors';
 import {Money} from './money';
 
+const MAX_EXACT_JSON_INTEGER = BigInt(Number.MAX_SAFE_INTEGER);
+
 export interface ProgramState {
   readonly programId: string;
   readonly currency: string;
@@ -24,6 +26,15 @@ export interface ReleaseMovementRequest {
   readonly reservationId: string;
   readonly releaseId: string;
   readonly reason: ReleaseReason;
+  readonly occurredAt: Date;
+}
+
+/** What a snapshot's difference on one reservation needs to become a ledger row (A-12). */
+export interface AdjustmentRequest {
+  /** Signed minor units of the program currency: a snapshot may raise `held` or lower it. */
+  readonly deltaHeld: bigint;
+  readonly reservationId: string;
+  readonly messageId: string;
   readonly occurredAt: Date;
 }
 
@@ -155,6 +166,43 @@ export class Program {
       releaseId: request.releaseId,
       reason: request.reason,
     };
+  }
+
+  /**
+   * A-12: a difference a snapshot found, in either direction. No capacity check, because the
+   * treasury is authoritative and overcommit is a legal state it can create (A-06); only a
+   * `reserved` below zero is refused, which is INV-03.
+   */
+  adjust(request: AdjustmentRequest): CapacityMovement {
+    const reservedAfter = this.reserved.amount + request.deltaHeld;
+    // ADR-0006: availability returns `reserved` as one JSON number, so it must stay exact there.
+    // A snapshot beyond it is refused here and set aside by the consumer (ADR-0013).
+    if (reservedAfter > MAX_EXACT_JSON_INTEGER) {
+      throw new RangeError(
+        `Adjustment would take reserved of ${this.programId} to ${reservedAfter}`,
+      );
+    }
+    if (reservedAfter < 0n) {
+      throw new RangeError(
+        `Adjustment for ${request.reservationId} would take reserved of ${this.programId} below zero`,
+      );
+    }
+    this.state = {...this.state, reserved: Money.of(reservedAfter, this.currency)};
+    return {
+      ...this.movement('adjustment', {messageId: request.messageId}, request.occurredAt),
+      reservationId: request.reservationId,
+      deltaHeld: request.deltaHeld,
+    };
+  }
+
+  /** A-12: older than the last applied snapshot changes nothing; an equal moment applies again. */
+  isStaleSnapshot(asOf: Date): boolean {
+    return this.asOf !== null && asOf < this.asOf;
+  }
+
+  /** The moment of the last applied snapshot, which availability reports (AC-31). */
+  reconciledAt(asOf: Date): void {
+    this.state = {...this.state, asOf};
   }
 
   private redenominate(currency: string): void {

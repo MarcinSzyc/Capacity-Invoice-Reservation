@@ -79,4 +79,23 @@ describe('Money', () => {
     expect(() => Rate.parse('1.123456789')).toThrow(RangeError);
     expect(() => Rate.parse('0')).toThrow(RangeError);
   });
+
+  it('should convert back at the same rate, rounding half up to the target minor unit (ADR-0012)', () => {
+    // 302 500 000 USD at 1.10 is 275 000 000 EUR exactly, the way it was converted forwards.
+    expect(Money.of(302_500_000n, USD).convertBack(Rate.parse('1.10'), EUR)).toEqual(
+      Money.of(275_000_000n, EUR),
+    );
+    // 100 USD at 1.13 is 88.495... EUR, which rounds down; 101 is 89.380... likewise; 113 is 100.
+    expect(Money.of(100n, USD).convertBack(Rate.parse('1.13'), EUR)).toEqual(Money.of(88n, EUR));
+    expect(Money.of(113n, USD).convertBack(Rate.parse('1.13'), EUR)).toEqual(Money.of(100n, EUR));
+    // Half up on a tie: 1 USD at 2 is 0.5 of a minor unit of EUR.
+    expect(Money.of(1n, USD).convertBack(Rate.parse('2'), EUR)).toEqual(Money.of(1n, EUR));
+    // Each currency's own exponent, as forwards: 670 USD cents at 0.0067 is 1 000 yen.
+    expect(Money.of(670n, USD).convertBack(Rate.parse('0.0067'), JPY)).toEqual(
+      Money.of(1_000n, JPY),
+    );
+    expect(Money.of(120_000_000n, USD).convertBack(Rate.one(), USD)).toEqual(
+      Money.of(120_000_000n, USD),
+    );
+  });
 });

@@ -47,8 +47,25 @@ const step = (reservation: Reservation, random: SeededRandom): string => {
   }
 };
 
+/**
+ * One random step with snapshots in the mix: a correction to a figure anywhere from nothing to
+ * twice what was reserved (ADR-0012), or otherwise a release as in `step`.
+ */
+const mixedStep = (
+  reservation: Reservation,
+  random: SeededRandom,
+): {entry: string; corrected: boolean; aboveReserved: boolean} => {
+  const reservedAmount = reservation.reservedAmount.amount;
+  if (reservation.status !== 'active' || random.next() >= 0.3) {
+    return {entry: step(reservation, random), corrected: false, aboveReserved: false};
+  }
+  const target = random.bigint(reservedAmount * 2n);
+  reservation.correctTo(Money.of(target, USD));
+  return {entry: `correct ${target}`, corrected: true, aboveReserved: target > reservedAmount};
+};
+
 describe('Reservation invariants', () => {
-  it('[INV-02] should keep held between 0 and reservedAmount over random release sequences', () => {
+  it('should keep held between 0 and reservedAmount over random client release sequences', () => {
     let refused = 0;
     for (let seed = 1; seed <= SEQUENCES; seed += 1) {
       const random = new SeededRandom(seed);
@@ -83,5 +100,37 @@ describe('Reservation invariants', () => {
     // The sequences are meant to reach the boundary, not only to stay inside it. Without this
     // the test would still pass if the random amounts stopped ever asking for too much.
     expect(refused > 0 ? 'boundary reached' : 'boundary never reached').toBe('boundary reached');
+  });
+
+  it('[INV-02] should keep held at or above zero and never let a release raise it, with snapshot corrections among the releases', () => {
+    let corrections = 0;
+    let raisedAboveReserved = 0;
+    for (let seed = 1; seed <= SEQUENCES; seed += 1) {
+      const random = new SeededRandom(seed);
+      const rate = Rate.parse(RATES[seed % RATES.length] ?? RATES[0]);
+      const reservation = reservationAt(rate);
+      const history: string[] = [`rate ${rate.toString()}`];
+
+      for (let index = 0; index < STEPS; index += 1) {
+        const heldBefore = reservation.held.amount;
+        const outcome = mixedStep(reservation, random);
+        history.push(outcome.entry);
+        corrections += outcome.corrected ? 1 : 0;
+        raisedAboveReserved += outcome.aboveReserved ? 1 : 0;
+        const held = reservation.held.amount;
+        const where = `seed ${seed} (${history.join(', ')})`;
+        expect(`${where}: ${held >= 0n ? 'held not negative' : `held ${held}`}`).toBe(
+          `${where}: held not negative`,
+        );
+        const raised = !outcome.corrected && held > heldBefore;
+        expect(
+          `${where}: ${raised ? `release raised held to ${held}` : 'no release raised held'}`,
+        ).toBe(`${where}: no release raised held`);
+      }
+    }
+
+    expect(
+      corrections > 0 && raisedAboveReserved > 0 ? 'both reached' : 'a case never reached',
+    ).toBe('both reached');
   });
 });

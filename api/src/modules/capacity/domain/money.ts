@@ -64,6 +64,17 @@ export class Money {
     return Money.of((numerator + divisor / 2n) / divisor, targetCurrency);
   }
 
+  /**
+   * The inverse of `convert` at the same rate, rounded half up the same way. Only a reopen needs
+   * it (ADR-0012, 3A): a snapshot states `held` in program currency, and what the invoice has
+   * left has to be found in invoice currency from it.
+   */
+  convertBack(rate: Rate, targetCurrency: string): Money {
+    const numerator = this.amount * power(rate.scale + minorUnitExponent(targetCurrency));
+    const divisor = rate.unscaled * power(minorUnitExponent(this.currency));
+    return Money.of((numerator + divisor / 2n) / divisor, targetCurrency);
+  }
+
   private assertSameCurrency(other: Money, operation: string): void {
     if (other.currency === this.currency) return;
     throw new CurrencyMismatchError(this.currency, other.currency, `Money.${operation}`);
