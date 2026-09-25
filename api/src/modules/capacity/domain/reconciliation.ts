@@ -47,7 +47,8 @@ export type ReconciliationNote =
         | 'kept_within_window'
         | 'listed_after_as_of'
         | 'kept_closed_after_as_of'
-        | 'listed_with_nothing_held';
+        | 'listed_with_nothing_held'
+        | 'listed_in_other_currency';
       readonly invoiceId: string;
     };
 
@@ -118,15 +119,17 @@ export const reconcile = (input: ReconciliationInput): ReconciliationResult => {
 };
 
 /**
- * ADR-0007: another currency re-denominates only a program nothing in the old currency is named
- * on. An active reservation holds an amount in it; a listed closed one would be reopened in it;
- * a stale limit part would leave the stored limit in it. Judged before anything is changed.
+ * ADR-0007 and A-12: another currency re-denominates only a program with no active reservation,
+ * which would hold an amount in the old currency, and only when the limit part applies, since a
+ * stale one would leave the stored limit in the old currency. Judged before anything changes. A
+ * listed closed reservation does not stop it: it is skipped instead (`stepForListed`).
  */
 const guardCurrency = ({program, snapshot, local}: ReconciliationInput): void => {
   const currency = snapshot.creditLimit.currency;
   if (currency === program.currency) return;
   const limitStale = program.limitEventTime !== null && snapshot.asOf < program.limitEventTime;
-  if (local.length === 0 && !limitStale) return;
+  const anyActive = local.some((entry) => entry.reservation.status === 'active');
+  if (!anyActive && !limitStale) return;
   throw new CurrencyMismatchError(program.currency, currency, `Program ${program.programId}`);
 };
 
@@ -185,6 +188,14 @@ const stepForOmitted = (reservation: Reservation, input: ReconciliationInput): S
 /** ADR-0012, 2A and 3A: the snapshot's figure plus what the client did after its moment. */
 const stepForListed = (entry: LocalReservation, held: Money): Step => {
   const {reservation} = entry;
+  // A-12, review round 1: a reservation from before a re-denomination is closed and in the old
+  // currency. Reopening it would mix two currencies (INV-08), so the listing is logged and left.
+  if (reservation.held.currency !== held.currency) {
+    return {
+      kind: 'note',
+      note: {kind: 'listed_in_other_currency', invoiceId: reservation.invoiceId},
+    };
+  }
   const target = held.amount + entry.deltaHeldAfterAsOf;
   const targetHeld = Money.of(target < 0n ? 0n : target, held.currency);
   if (reservation.status === 'active') {

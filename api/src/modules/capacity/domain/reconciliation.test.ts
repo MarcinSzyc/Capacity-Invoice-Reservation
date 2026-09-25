@@ -422,7 +422,7 @@ describe('reconcile', () => {
     expect(program.currency).toBe(USD);
   });
 
-  it('should refuse another currency when the snapshot lists a closed reservation of the old one', () => {
+  it('should re-denominate and skip a listed closed reservation of the old currency, with a warning', () => {
     const program = programWith(TEN_MILLION_USD);
     const invoiceF = reserved(program, 'INV-F', SEVEN_HUNDRED_THOUSAND_USD, AT_09_00);
     invoiceF.release({amount: null});
@@ -435,7 +435,7 @@ describe('reconcile', () => {
       occurredAt: AT_12_00,
     });
 
-    expect(() =>
+    const result = applied(
       run(program, {
         snapshot: {
           creditLimit: Money.of(500_000_000n, EUR),
@@ -443,7 +443,44 @@ describe('reconcile', () => {
         },
         local: [local(invoiceF)],
       }),
-    ).toThrow(CurrencyMismatchError);
+    );
+
+    expect(program.currency).toBe(EUR);
+    expect(invoiceF.status).toBe('closed');
+    expect(result.changed).toEqual([]);
+    expect(result.notes).toContainEqual({kind: 'listed_in_other_currency', invoiceId: 'INV-F'});
+  });
+
+  it('should never reopen a closed reservation in the old currency after a re-denomination (review round 1)', () => {
+    const program = programWith(TEN_MILLION_USD);
+    const invoiceF = reserved(program, 'INV-F', SEVEN_HUNDRED_THOUSAND_USD, AT_09_00);
+    invoiceF.release({amount: null});
+    program.release({
+      deltaHeld: -70_000_000n,
+      clientId: CLIENT,
+      reservationId: invoiceF.reservationId,
+      releaseId: 'R-1',
+      reason: 'repaid',
+      occurredAt: AT_12_00,
+    });
+    applied(run(program, {snapshot: {asOf: AT_18_00, creditLimit: Money.of(500_000_000n, EUR)}}));
+
+    const result = applied(
+      run(program, {
+        snapshot: {
+          messageId: 'm-later',
+          asOf: AT_19_00,
+          creditLimit: Money.of(500_000_000n, EUR),
+          activeReservations: [{invoiceId: 'INV-F', held: Money.of(6_000n, EUR)}],
+        },
+        local: [local(invoiceF)],
+      }),
+    );
+
+    expect(invoiceF.status).toBe('closed');
+    expect(invoiceF.held).toEqual(Money.zero(USD));
+    expect(program.reserved).toEqual(Money.zero(EUR));
+    expect(result.notes).toContainEqual({kind: 'listed_in_other_currency', invoiceId: 'INV-F'});
   });
 
   it('should apply a snapshot from ahead of our clock and say so when it is beyond the keep window', () => {
