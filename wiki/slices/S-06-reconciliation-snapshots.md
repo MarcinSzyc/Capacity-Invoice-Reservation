@@ -1,7 +1,7 @@
 # S-06 Reconciliation snapshots
 
 - Outcome: a treasury snapshot brings a program's limit and reservations up to date as of one moment, every difference is an explicit adjustment in the ledger, and nothing a client was already told is undone by an older snapshot.
-- Status: planned
+- Status: in progress
 - AC: AC-26, AC-27, AC-28, AC-29, AC-30, AC-31, AC-42, AC-43, AC-44 (the last three added 2026-09-25 with the A-12 amendment)
 - INV: INV-05, INV-06, INV-07
 - Risk: high. Reconciliation: comparing two systems' clocks, set differences between local and remote reservations, a correction that has to live alongside a `held` derived from the invoice (ADR-0009), monotonic application under shuffled delivery, replay of everything. Implemented on Fable per `CLAUDE.md §8`.
@@ -162,3 +162,5 @@ Beyond `CLAUDE.md §9`:
 | 2026-09-25 | plan | revised against the shipped S-05 code: ADR-0012 proposed, ADR-0010 recommendation revised, ADR-0011 addendum, thirteen local decisions, test names unchanged |
 | 2026-09-25 | plan | ADR-0010, ADR-0011 and ADR-0012 accepted as recommended |
 | 2026-09-25 | plan | AC-42, AC-43, AC-44 added from the A-12 amendment (#38); their three untagged tests become the tagged ones |
+| 2026-09-25 | implement | started on Opus 5.5 by Marcin's decision (the slice is `risk: high`, `CLAUDE.md §8` asks for Fable) |
+| 2026-09-25 | implement | first pass: all twelve tagged tests pass; stopped on a conflict between INV-02 and ADR-0012 (a snapshot may list `held` above `reservedAmount`) |

@@ -2,7 +2,13 @@ import {Module} from '@nestjs/common';
 import {MessagingModule} from '../../messaging/messaging.module';
 import {PersistenceModule} from '../../persistence/persistence.module';
 import {PrismaService} from '../../persistence/prisma.service';
+import {APP_CONFIG} from '../../config/config.module';
+import {AppConfig} from '../../config/configuration';
 import {ApplyCapacityUpdate} from './application/apply-capacity-update.use-case';
+import {
+  ApplyReconciliationSnapshot,
+  RECONCILIATION_KEEP_WINDOW_MS,
+} from './application/apply-reconciliation-snapshot.use-case';
 import {GetAvailability} from './application/get-availability.query';
 import {GetReservation} from './application/get-reservation.query';
 import {ReleaseCapacity} from './application/release-capacity.use-case';
@@ -32,7 +38,13 @@ import {SystemClock} from './infrastructure/system-clock';
       useFactory: (prisma: PrismaService) => new PrismaProgramRepository(prisma),
       inject: [PrismaService],
     },
+    {
+      provide: RECONCILIATION_KEEP_WINDOW_MS,
+      useFactory: (config: AppConfig) => config.reconciliationKeepWindowSeconds * 1_000,
+      inject: [APP_CONFIG],
+    },
     ApplyCapacityUpdate,
+    ApplyReconciliationSnapshot,
     RejectTreasuryMessage,
     ReserveCapacity,
     ReleaseCapacity,

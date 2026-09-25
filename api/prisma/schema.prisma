@@ -52,6 +52,9 @@ model Reservation {
   /// ADR-0009: how much of the invoice has been released, in invoice currency. `held` is
   /// derived from what is left, so the last instalment closes at exactly zero.
   releasedInvoiceAmount BigInt      @map("released_invoice_amount")
+  /// ADR-0012: signed minor units of the program currency a snapshot set so `held` equals the
+  /// treasury's figure; kept through later releases, zero until a snapshot corrects the row.
+  heldCorrection  BigInt            @default(0) @map("held_correction")
   source          ReservationSource
   clientId        String?           @map("client_id") @db.VarChar(128)
   createdAt       DateTime          @map("created_at") @db.Timestamptz(6)

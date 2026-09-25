@@ -20,6 +20,17 @@ export class PrismaLedgerRepository implements LedgerRepository {
     return rows.map(toMovement);
   }
 
+  /** ADR-0012, 2A: what clients did after a snapshot's moment, in the order it was appended. */
+  async findClientMovementsSince(programId: string, since: Date): Promise<CapacityMovement[]> {
+    const rows = await this.db.withClient((client) =>
+      client.capacityMovement.findMany({
+        where: {programId, kind: {in: ['reserve', 'release']}, occurredAt: {gt: since}},
+        orderBy: {id: 'asc'},
+      }),
+    );
+    return rows.map(toMovement);
+  }
+
   /** In the order they were appended, which is the order that explains the balances (INV-04). */
   async findByProgram(programId: string): Promise<CapacityMovement[]> {
     const rows = await this.db.withClient((client) =>

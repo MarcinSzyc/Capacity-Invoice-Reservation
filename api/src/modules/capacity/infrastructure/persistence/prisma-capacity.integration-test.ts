@@ -437,4 +437,112 @@ describe('Prisma capacity adapters', () => {
       ),
     ).rejects.toThrow(/reservations_released_within_invoice/);
   });
+
+  describe('reconciliation reads', () => {
+    const AT_10_30 = new Date('2026-09-21T10:30:00.000Z');
+    const AT_11_00 = new Date('2026-09-21T11:00:00.000Z');
+    const AT_12_00 = new Date('2026-09-21T12:00:00.000Z');
+
+    /** A program holding INV-A (active) and INV-B (fully released), with their ledger rows. */
+    const programWithTwoReservations = async (): Promise<{
+      programId: string;
+      invoiceA: Reservation;
+      invoiceB: Reservation;
+    }> => {
+      const programId = uniqueId('PRG');
+      const program = await announcedProgram(programId);
+      const invoiceA = openReservation(programId, 'INV-A');
+      const invoiceB = openReservation(programId, 'INV-B');
+      const reserveA = program.reserve(invoiceA.held, CLIENT, invoiceA.reservationId, AT_10_10);
+      const reserveB = program.reserve(invoiceB.held, CLIENT, invoiceB.reservationId, AT_10_10);
+      const release = invoiceB.release({amount: null});
+      const releaseB = program.release({
+        deltaHeld: release.deltaHeld,
+        clientId: CLIENT,
+        reservationId: invoiceB.reservationId,
+        releaseId: 'R-1',
+        reason: 'repaid',
+        occurredAt: AT_11_00,
+      });
+      const adjustA = program.adjust({
+        deltaHeld: -1n,
+        reservationId: invoiceA.reservationId,
+        messageId: uniqueId('m'),
+        occurredAt: AT_12_00,
+      });
+      await unitOfWork.run(async ({programs, reservations, ledger}) => {
+        await programs.save(program);
+        await reservations.add(invoiceA);
+        await reservations.add(invoiceB);
+        for (const movement of [reserveA, reserveB, releaseB, adjustA]) {
+          await ledger.append(movement);
+        }
+      });
+      return {programId, invoiceA, invoiceB};
+    };
+
+    it('should list only the active reservations of one program', async () => {
+      const {programId, invoiceA} = await programWithTwoReservations();
+      await programWithTwoReservations();
+
+      const active = await new PrismaReservationRepository(prisma).findActiveByProgram(programId);
+
+      expect(active.map((r) => r.reservationId)).toEqual([invoiceA.reservationId]);
+    });
+
+    it('should find the listed invoices of one program whatever their status', async () => {
+      const {programId, invoiceA, invoiceB} = await programWithTwoReservations();
+
+      const found = await new PrismaReservationRepository(prisma).findByInvoices(programId, [
+        'INV-A',
+        'INV-B',
+        'INV-nobody',
+      ]);
+
+      expect(found.map((r) => r.reservationId).sort()).toEqual(
+        [invoiceA.reservationId, invoiceB.reservationId].sort(),
+      );
+      await expect(
+        new PrismaReservationRepository(prisma).findByInvoices(programId, []),
+      ).resolves.toEqual([]);
+    });
+
+    it('should return only client movements after the given moment', async () => {
+      const {programId, invoiceB} = await programWithTwoReservations();
+
+      const after = await new PrismaLedgerRepository(prisma).findClientMovementsSince(
+        programId,
+        AT_10_30,
+      );
+
+      expect(after).toHaveLength(1);
+      expect(after[0]).toMatchObject({
+        kind: 'release',
+        reservationId: invoiceB.reservationId,
+        occurredAt: AT_11_00,
+      });
+    });
+
+    it('should keep a reservation born from a snapshot, and a correction, through a save and a read (ADR-0011, ADR-0012)', async () => {
+      const programId = uniqueId('PRG');
+      await announcedProgram(programId);
+      const born = Reservation.fromSnapshot({
+        programId,
+        invoiceId: 'INV-X',
+        held: ONE_MILLION_EUR,
+        asOf: AT_12_00,
+      });
+      await unitOfWork.run(({reservations}) => reservations.add(born));
+
+      born.correctTo(Money.of(90_000_000n, EUR));
+      await unitOfWork.run(({reservations}) => reservations.save(born));
+
+      const read = await new PrismaReservationRepository(prisma).findByInvoice(programId, 'INV-X');
+      expect(read).toEqual(born);
+      expect(read?.heldCorrection).toBe(-10_000_000n);
+      expect(read?.source).toBe('reconciliation');
+      expect(read?.clientId).toBeNull();
+      expect(read?.createdAt).toEqual(AT_12_00);
+    });
+  });
 });

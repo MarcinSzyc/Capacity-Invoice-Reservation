@@ -43,9 +43,23 @@ export interface ReservationState {
   readonly releasedInvoiceAmount: Money;
   /** A-02: the rate `invoiceAmount` was converted at, fixed for life; every release reuses it. */
   readonly rate: Rate;
+  /**
+   * ADR-0012, 1A: signed minor units of the program currency that a snapshot set so `held` equals
+   * the treasury's figure. Zero until a snapshot corrects the reservation; kept through releases.
+   */
+  readonly heldCorrection: bigint;
   readonly source: ReservationSource;
   readonly clientId: string | null;
   readonly createdAt: Date;
+}
+
+/** ADR-0011: all a snapshot tells us about an invoice we did not know. */
+export interface SnapshotReservation {
+  readonly programId: string;
+  readonly invoiceId: string;
+  /** In program currency; must hold something, since a reservation holding nothing is closed. */
+  readonly held: Money;
+  readonly asOf: Date;
 }
 
 export interface OpenReservation {
@@ -94,9 +108,35 @@ export class Reservation {
       held: request.reservedAmount,
       releasedInvoiceAmount: Money.zero(request.invoiceAmount.currency),
       rate: request.rate,
+      heldCorrection: 0n,
       source: 'client',
       clientId: request.clientId,
       createdAt: request.createdAt,
+    });
+  }
+
+  /**
+   * ADR-0011: the treasury tells us a held amount in program currency and nothing about the
+   * invoice, so that amount is the invoice, at rate one. `createdAt` is the snapshot's moment,
+   * when the treasury knew it, so a later snapshot judges it on the treasury's clock alone.
+   */
+  static fromSnapshot(request: SnapshotReservation): Reservation {
+    if (request.held.isZero()) {
+      throw new RangeError(`Reservation ${request.invoiceId} from a snapshot would hold nothing`);
+    }
+    return new Reservation({
+      reservationId: randomUUID(),
+      programId: request.programId,
+      invoiceId: request.invoiceId,
+      invoiceAmount: request.held,
+      reservedAmount: request.held,
+      held: request.held,
+      releasedInvoiceAmount: Money.zero(request.held.currency),
+      rate: Rate.one(),
+      heldCorrection: 0n,
+      source: 'reconciliation',
+      clientId: null,
+      createdAt: request.asOf,
     });
   }
 
@@ -131,6 +171,10 @@ export class Reservation {
 
   get rate(): Rate {
     return this.state.rate;
+  }
+
+  get heldCorrection(): bigint {
+    return this.state.heldCorrection;
   }
 
   get releasedInvoiceAmount(): Money {
@@ -184,13 +228,76 @@ export class Reservation {
     }
 
     const heldBefore = this.held;
-    const heldAfter = remaining.subtract(amount).convert(this.rate, heldBefore.currency);
+    const heldAfter = this.heldFor(remaining.subtract(amount));
     this.state = {
       ...this.state,
       held: heldAfter,
       releasedInvoiceAmount: this.releasedInvoiceAmount.add(amount),
     };
     return {heldAfter, deltaHeld: heldAfter.amount - heldBefore.amount};
+  }
+
+  /**
+   * ADR-0012, 1A: a snapshot's figure for an active reservation. The correction is set, never
+   * added to, so `held` is exactly the target and the same snapshot twice moves nothing. Returns
+   * the signed change of `held`, for the adjustment row.
+   */
+  correctTo(target: Money): bigint {
+    if (this.status === 'closed') {
+      throw new RangeError(
+        `Reservation ${this.invoiceId} is closed; a snapshot reopens it instead`,
+      );
+    }
+    const heldBefore = this.held;
+    const converted = this.remainingInvoiceAmount.convert(this.rate, heldBefore.currency);
+    this.state = {...this.state, held: target, heldCorrection: target.amount - converted.amount};
+    return target.amount - heldBefore.amount;
+  }
+
+  /**
+   * AC-27: the treasury says the reservation was gone at its moment, so the whole invoice counts
+   * as released and `held` and status agree again (AC-15, amended).
+   */
+  drop(): bigint {
+    if (this.status === 'closed') {
+      throw new RangeError(`Reservation ${this.invoiceId} is already closed`);
+    }
+    const heldBefore = this.held;
+    this.state = {
+      ...this.state,
+      held: Money.zero(heldBefore.currency),
+      releasedInvoiceAmount: this.invoiceAmount,
+      heldCorrection: 0n,
+    };
+    return -heldBefore.amount;
+  }
+
+  /**
+   * ADR-0012, 3A: a snapshot lists a reservation closed at or before its moment. What the invoice
+   * has left is found from the listed `held` at the stored rate, at least one minor unit so the
+   * reservation is active, at most the whole invoice; the correction makes `held` exact, because
+   * the round trip through two roundings need not come back to the same figure.
+   */
+  reopenTo(target: Money): bigint {
+    if (this.status === 'active') {
+      throw new RangeError(
+        `Reservation ${this.invoiceId} is active; a snapshot corrects it instead`,
+      );
+    }
+    if (target.isZero()) {
+      throw new RangeError(`Reservation ${this.invoiceId} would reopen to nothing`);
+    }
+    const remaining = this.clampToInvoice(
+      target.convertBack(this.rate, this.invoiceAmount.currency),
+    );
+    const converted = remaining.convert(this.rate, target.currency);
+    this.state = {
+      ...this.state,
+      held: target,
+      releasedInvoiceAmount: this.invoiceAmount.subtract(remaining),
+      heldCorrection: target.amount - converted.amount,
+    };
+    return target.amount;
   }
 
   describe(): ReservationDescription {
@@ -207,5 +314,19 @@ export class Reservation {
       source: this.source,
       createdAt: this.createdAt,
     };
+  }
+
+  /** ADR-0009 with ADR-0012's correction: nothing left means nothing held, whatever the correction. */
+  private heldFor(remaining: Money): Money {
+    const currency = this.held.currency;
+    if (remaining.isZero()) return Money.zero(currency);
+    const held = remaining.convert(this.rate, currency).amount + this.heldCorrection;
+    return Money.of(held < 0n ? 0n : held, currency);
+  }
+
+  private clampToInvoice(remaining: Money): Money {
+    if (remaining.isZero()) return Money.of(1n, remaining.currency);
+    if (remaining.isGreaterThan(this.invoiceAmount)) return this.invoiceAmount;
+    return remaining;
   }
 }

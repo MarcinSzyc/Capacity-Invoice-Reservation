@@ -7,8 +7,14 @@ import {
 import {JsonLogger} from '../../../../common/logging/json-logger';
 import {InboundMessage, MESSAGE_SOURCE, MessageSource} from '../../../../messaging/message-source';
 import {ApplyCapacityUpdate} from '../../application/apply-capacity-update.use-case';
+import {
+  ApplyReconciliationSnapshot,
+  RECONCILIATION_SNAPSHOT_TYPE,
+} from '../../application/apply-reconciliation-snapshot.use-case';
 import {RejectTreasuryMessage} from '../../application/reject-treasury-message.use-case';
+import {ReconciliationNote} from '../../domain/reconciliation';
 import {parseCapacityUpdate} from './capacity-update-message.dto';
+import {parseReconciliationSnapshot} from './reconciliation-snapshot-message.dto';
 import {
   MESSAGE_ID_MAX_LENGTH,
   MESSAGE_TYPE_MAX_LENGTH,
@@ -42,6 +48,7 @@ export class TreasuryCapacityConsumer implements OnApplicationBootstrap, OnModul
   constructor(
     @Inject(MESSAGE_SOURCE) private readonly source: MessageSource,
     private readonly applyCapacityUpdate: ApplyCapacityUpdate,
+    private readonly applyReconciliationSnapshot: ApplyReconciliationSnapshot,
     private readonly rejectTreasuryMessage: RejectTreasuryMessage,
     private readonly logger: JsonLogger,
   ) {}
@@ -96,6 +103,12 @@ export class TreasuryCapacityConsumer implements OnApplicationBootstrap, OnModul
     if (!parsed.ok) {
       return this.reject(message, {messageId, payload: null}, parsed.error, receivedAt);
     }
+    // A-11: two message types on one topic. Anything that is not a snapshot is judged as a
+    // capacity update, whose `type` check refuses whatever the contract does not define.
+    const type = readableString(parsed.payload, 'type', MESSAGE_TYPE_MAX_LENGTH);
+    if (type === RECONCILIATION_SNAPSHOT_TYPE) {
+      return this.processSnapshot(message, parsed.payload, messageId, receivedAt);
+    }
 
     const update = await parseCapacityUpdate(parsed.payload, receivedAt);
     if (!update.ok) {
@@ -108,6 +121,27 @@ export class TreasuryCapacityConsumer implements OnApplicationBootstrap, OnModul
       return this.reject(message, {messageId, payload: parsed.payload}, error, receivedAt);
     }
     this.logger.log(`capacity update ${result.outcome} for ${update.command.programId}`, CONTEXT);
+  }
+
+  private async processSnapshot(
+    message: InboundMessage,
+    payload: unknown,
+    messageId: string | null,
+    receivedAt: Date,
+  ): Promise<void> {
+    const snapshot = await parseReconciliationSnapshot(payload, receivedAt);
+    if (!snapshot.ok) return this.reject(message, {messageId, payload}, snapshot.error, receivedAt);
+
+    const {programId} = snapshot.command;
+    const result = await this.applyReconciliationSnapshot.execute(snapshot.command);
+    if (result.outcome === 'rejected') {
+      const error = `${result.reason}: ${result.error}`;
+      return this.reject(message, {messageId, payload}, error, receivedAt);
+    }
+    if (result.outcome === 'applied') {
+      for (const note of result.notes) this.logger.warn(describeNote(programId, note), CONTEXT);
+    }
+    this.logger.log(`reconciliation snapshot ${result.outcome} for ${programId}`, CONTEXT);
   }
 
   /**
@@ -185,3 +219,9 @@ const parseJson = (value: Buffer | null): ParsedJson => {
 
 const readableMessageId = (payload: unknown): string | null =>
   readableString(payload, 'messageId', MESSAGE_ID_MAX_LENGTH);
+
+/** ADR-0010: a keep within the window, and every other departure from the snapshot, is visible. */
+const describeNote = (programId: string, note: ReconciliationNote): string => {
+  if ('invoiceId' in note) return `reconciliation ${programId}: ${note.kind} ${note.invoiceId}`;
+  return `reconciliation ${programId}: ${note.kind}`;
+};

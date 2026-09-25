@@ -2951,3 +2951,65 @@ Findings, most severe first:
 - Branch `docs/plan-S-06`, fast-forwarded to `main` at 1efa91b, since its first PR (#37) is
   merged. Files: `plan.md`, the S-06 slice file, the slice index, `Home.md`, this entry. Nothing
   committed.
+
+## 2026-09-25, implement S-06 (first pass, stopped on a spec conflict), Opus
+- Run on Opus 5.5 by Marcin's decision, although the slice is `risk: high` and `CLAUDE.md §8`
+  asks for Fable. The skill says to wait for a switch; Marcin had kept Opus twice and then said
+  to run implement.
+- Built. Domain: `Money.convertBack`; `Reservation.fromSnapshot`, `correctTo`, `drop`, `reopenTo`
+  and a stored `heldCorrection` that `held` now includes (ADR-0009 with ADR-0012 1A);
+  `Program.adjust`, `isStaleSnapshot`, `reconciledAt`; a pure `reconcile` in
+  `domain/reconciliation.ts` that decides every rule of A-12. Application:
+  `ApplyReconciliationSnapshot`, the same shape as `ApplyCapacityUpdate`, plus
+  `findActiveByProgram`, `findByInvoices` and `findClientMovementsSince` on the ports and fakes.
+  Infrastructure: migration `20260925120000_held_correction`, the Prisma reads, the snapshot DTO
+  with a 10 000 entry bound and unique invoice ids, the consumer routing by `type`, one warning log
+  line per case where a snapshot was not followed, `DevTreasuryProducer.publishSnapshot` and a
+  `snapshot` command in `dev:treasury`. Configuration: `RECONCILIATION_KEEP_WINDOW_SECONDS`,
+  default 30. Test harness: a `SettableClock` the e2e app can take in place of `CLOCK`.
+- All twelve planned tests exist with their exact names and pass: AC-26, AC-27, AC-28, AC-29,
+  AC-31, AC-42, AC-43, AC-44 in `api/test/reconciliation.e2e-test.ts`; INV-05, INV-06 in
+  `api/test/reconciliation-invariants.e2e-test.ts`; AC-30 and INV-07 as contract tests in
+  `treasury-capacity.consumer.integration-test.ts`.
+- Not done by the book, said plainly. For `reconcile`'s unit tests, the consumer's unit tests, the
+  two contract tests and the e2e files, the test was written first but not run red before the code
+  went in. To make up for it each rule was broken on purpose and the tagged tests run against the
+  broken code: without the reopen INV-07 fails; without the stale check AC-30 fails; ignoring
+  releases after `asOf` fails AC-43 alone; dropping the correction from `held` fails AC-29 alone;
+  treating every reservation as older than `asOf` fails INV-06. Every file was restored and
+  checked after each break.
+- One existing contract test changed meaning, not strength: it used a snapshot as the example of
+  a type the contract does not define, which S-06 makes false. It now uses `limit_changed` and
+  asserts the same rejection and dead letter.
+- Borderline local choices, for review. A snapshot in another currency is refused when it names any
+  local reservation, closed ones included, because reopening one would mix currencies; ADR-0007
+  speaks only of active ones. A reservation born from a snapshot at exactly `asOf` is still
+  compared by a second snapshot of the same moment. A reopen restores at least one minor unit of
+  the invoice, so the reservation is really active. A drop writes its adjustment even when `held`
+  was already 0, so the ledger shows the closing; a correction that changes nothing writes nothing.
+  Local decision 10's warning for an `asOf` ahead of our clock is the note `as_of_ahead_of_our_clock`.
+- Stopped on a conflict between INV-02 and ADR-0012, found by the break that treated every
+  reservation as older than `asOf`. INV-02 says `0 <= held <= reservedAmount` and the S-03 CHECK
+  `reservations_held_within_reserved` enforces it; ADR-0012 1A sets `held` to the listed figure,
+  which may be above `reservedAmount` (a reservation of 1 925 000 listed at 2 000 000, or a reopen
+  listed above what was reserved). Today such a snapshot violates the CHECK. Put to Marcin: amend
+  INV-02 so the upper bound applies to client operations and relax the CHECK, or cap a snapshot's
+  figure at `reservedAmount` with a logged note. `wiki/spec/` is not touched here.
+- Second finding, older than this slice: a message that fails for a reason other than validation or
+  `CURRENCY_MISMATCH` is not dead-lettered. The error propagates, the offset stays uncommitted and
+  the message is redelivered forever, which stalls every later message on that partition, other
+  programs included. That is right for a database that is away and wrong for a CHECK violation,
+  which will fail the same way every time. ADR candidate: telling a permanent failure from a
+  transient one in message handling (A-13 clause 4).
+- Third finding, about the tests: the keep window also keeps an omitted reservation created after
+  `asOf`, so AC-28 and AC-42 would pass even if the "never before its creation" rule were broken.
+  INV-06's listed case is the test that holds that rule.
+- Tests beyond the plan, for `/ship`: `Money` convertBack; eleven `Reservation` reconciliation
+  cases; three `Program` reconciliation cases; twenty-two `reconcile` cases; eight
+  `ApplyReconciliationSnapshot` cases; eight snapshot DTO cases; three consumer cases (routing,
+  notes logged, unknown type); two configuration cases; four persistence integration cases (active
+  reads, listed reads, client movements after a moment, a snapshot reservation and its correction
+  round trip); four contract cases (both ADR-0007 cases, an invoice listed twice, the renamed
+  unknown type test).
+- Deferred: the README's snapshot contract (`/ship`); a hand run of `dev:treasury snapshot`
+  against a live stack (`/verify`); everything that depends on the INV-02 decision.

@@ -258,4 +258,73 @@ describe('Program', () => {
     expect(program.overcommitted).toBe(false);
     expect(program.available).toEqual(Money.of(100_000_000n, EUR));
   });
+
+  describe('reconciliation', () => {
+    const AT_18_00 = new Date('2026-09-21T18:00:00.000Z');
+    const AT_18_10 = new Date('2026-09-21T18:10:00.000Z');
+    const SNAPSHOT = 'm-snapshot';
+
+    it('should record an adjustment in either direction attributed to the message, with no capacity check (A-06)', () => {
+      const program = announcedWith(FIVE_MILLION_EUR);
+
+      const raised = program.adjust({
+        deltaHeld: 700_000_000n,
+        reservationId: RESERVATION_ID,
+        messageId: SNAPSHOT,
+        occurredAt: AT_18_10,
+      });
+
+      // More than the limit: the treasury is authoritative, so overcommit is legal here.
+      expect(program.reserved).toEqual(Money.of(700_000_000n, EUR));
+      expect(program.overcommitted).toBe(true);
+      expect(raised).toEqual({
+        kind: 'adjustment',
+        programId: PROGRAM_ID,
+        reservationId: RESERVATION_ID,
+        deltaHeld: 700_000_000n,
+        limitAfter: FIVE_MILLION_EUR,
+        reservedAfter: Money.of(700_000_000n, EUR),
+        availableAfter: Money.zero(EUR),
+        attribution: {messageId: SNAPSHOT},
+        releaseId: null,
+        reason: null,
+        occurredAt: AT_18_10,
+      });
+
+      const lowered = program.adjust({
+        deltaHeld: -250_000_000n,
+        reservationId: RESERVATION_ID,
+        messageId: SNAPSHOT,
+        occurredAt: AT_18_10,
+      });
+
+      expect(lowered.reservedAfter).toEqual(Money.of(450_000_000n, EUR));
+      expect(lowered.availableAfter).toEqual(Money.of(50_000_000n, EUR));
+    });
+
+    it('should refuse an adjustment that would take reserved below zero (INV-03)', () => {
+      const program = announcedWith(FIVE_MILLION_EUR);
+
+      expect(() =>
+        program.adjust({
+          deltaHeld: -1n,
+          reservationId: RESERVATION_ID,
+          messageId: SNAPSHOT,
+          occurredAt: AT_18_10,
+        }),
+      ).toThrow(RangeError);
+      expect(program.reserved).toEqual(Money.zero(EUR));
+    });
+
+    it('should call a snapshot stale only when it is older than the last applied one (A-12)', () => {
+      const program = announcedWith(FIVE_MILLION_EUR);
+      expect(program.isStaleSnapshot(AT_10_00)).toBe(false);
+
+      program.reconciledAt(AT_18_00);
+
+      expect(program.asOf).toEqual(AT_18_00);
+      expect(program.isStaleSnapshot(AT_10_05)).toBe(true);
+      expect(program.isStaleSnapshot(AT_18_00)).toBe(false);
+    });
+  });
 });

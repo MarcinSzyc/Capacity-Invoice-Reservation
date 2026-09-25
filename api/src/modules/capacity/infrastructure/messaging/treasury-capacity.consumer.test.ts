@@ -7,8 +7,13 @@ import {
   OutboundMessage,
 } from '../../../../messaging/message-source';
 import {ApplyCapacityUpdate} from '../../application/apply-capacity-update.use-case';
+import {ApplyReconciliationSnapshot} from '../../application/apply-reconciliation-snapshot.use-case';
 import {RejectTreasuryMessage} from '../../application/reject-treasury-message.use-case';
-import {inMemoryCapacity} from '../../application/testing/in-memory-capacity.fake';
+import {
+  FixedClock,
+  inMemoryCapacity,
+  InMemoryUnitOfWork,
+} from '../../application/testing/in-memory-capacity.fake';
 import {Money} from '../../domain/money';
 import {Program} from '../../domain/program';
 import {TreasuryCapacityConsumer} from './treasury-capacity.consumer';
@@ -45,6 +50,31 @@ const inbound = (payload: unknown): InboundMessage => ({
   headers: {},
 });
 
+const KEEP_WINDOW_MS = 30_000;
+
+const consumerFor = (
+  capacity: InMemoryUnitOfWork,
+  source: MessageSource,
+  logs: MemoryStream = new MemoryStream(),
+): TreasuryCapacityConsumer =>
+  new TreasuryCapacityConsumer(
+    source,
+    new ApplyCapacityUpdate(capacity),
+    new ApplyReconciliationSnapshot(capacity, new FixedClock(AT_10_00), KEEP_WINDOW_MS),
+    new RejectTreasuryMessage(capacity),
+    new JsonLogger(logs),
+  );
+
+const SNAPSHOT = {
+  messageId: 'm-snapshot',
+  type: 'reconciliation_snapshot',
+  programId: PROGRAM_ID,
+  currency: 'USD',
+  creditLimit: 1_000_000_000,
+  asOf: '2026-09-21T18:00:00.000Z',
+  activeReservations: [{invoiceId: 'INV-Z', heldAmount: 0}],
+};
+
 const CURRENCY_CHANGE_ON_BUSY_PROGRAM = {
   messageId: 'm-usd',
   type: 'capacity_update',
@@ -68,12 +98,7 @@ describe('TreasuryCapacityConsumer', () => {
       }),
     );
     const source = new FakeMessageSource();
-    const consumer = new TreasuryCapacityConsumer(
-      source,
-      new ApplyCapacityUpdate(capacity),
-      new RejectTreasuryMessage(capacity),
-      new JsonLogger(new MemoryStream()),
-    );
+    const consumer = consumerFor(capacity, source);
     source.failNextPublish = true;
 
     await expect(consumer.handle(inbound(CURRENCY_CHANGE_ON_BUSY_PROGRAM))).rejects.toThrow(
@@ -95,12 +120,7 @@ describe('TreasuryCapacityConsumer', () => {
   it('should count a malformed repeat of a known messageId as a duplicate and publish nothing (glossary: Duplicate)', async () => {
     const capacity = inMemoryCapacity();
     const source = new FakeMessageSource();
-    const consumer = new TreasuryCapacityConsumer(
-      source,
-      new ApplyCapacityUpdate(capacity),
-      new RejectTreasuryMessage(capacity),
-      new JsonLogger(new MemoryStream()),
-    );
+    const consumer = consumerFor(capacity, source);
     const malformed = {
       ...CURRENCY_CHANGE_ON_BUSY_PROGRAM,
       messageId: 'm-bad',
@@ -121,12 +141,7 @@ describe('TreasuryCapacityConsumer', () => {
   it('should dead-letter a malformed message before recording it, for the same reason', async () => {
     const capacity = inMemoryCapacity();
     const source = new FakeMessageSource();
-    const consumer = new TreasuryCapacityConsumer(
-      source,
-      new ApplyCapacityUpdate(capacity),
-      new RejectTreasuryMessage(capacity),
-      new JsonLogger(new MemoryStream()),
-    );
+    const consumer = consumerFor(capacity, source);
     const malformed = {
       ...CURRENCY_CHANGE_ON_BUSY_PROGRAM,
       messageId: 'm-bad',
@@ -141,5 +156,44 @@ describe('TreasuryCapacityConsumer', () => {
 
     expect(source.published).toHaveLength(1);
     expect(capacity.repositories.treasuryMessages.byId.get('m-bad')?.outcome).toBe('rejected');
+  });
+
+  it('should hand a reconciliation snapshot to its own use case by its type (A-11)', async () => {
+    const capacity = inMemoryCapacity();
+    const source = new FakeMessageSource();
+
+    await consumerFor(capacity, source).handle(inbound(SNAPSHOT));
+
+    const program = capacity.repositories.programs.byId.get(PROGRAM_ID);
+    expect(program?.asOf).toEqual(new Date(SNAPSHOT.asOf));
+    expect(program?.limit).toEqual(Money.of(1_000_000_000n, 'USD'));
+    expect(capacity.repositories.treasuryMessages.byId.get('m-snapshot')).toMatchObject({
+      outcome: 'applied',
+      type: 'reconciliation_snapshot',
+    });
+    expect(source.published).toHaveLength(0);
+  });
+
+  it('should log every case where a snapshot was not followed, as its own event (ADR-0010)', async () => {
+    const logs = new MemoryStream();
+
+    await consumerFor(inMemoryCapacity(), new FakeMessageSource(), logs).handle(inbound(SNAPSHOT));
+
+    expect(logs.lines()).toContainEqual(
+      expect.objectContaining({
+        level: 'warn',
+        message: expect.stringContaining('listed_with_nothing_held INV-Z') as string,
+      }),
+    );
+  });
+
+  it('should reject a message of a type the contract does not define and dead-letter it', async () => {
+    const capacity = inMemoryCapacity();
+    const source = new FakeMessageSource();
+
+    await consumerFor(capacity, source).handle(inbound({...SNAPSHOT, type: 'limit_changed'}));
+
+    expect(capacity.repositories.treasuryMessages.byId.get('m-snapshot')?.outcome).toBe('rejected');
+    expect(source.published).toHaveLength(1);
   });
 });

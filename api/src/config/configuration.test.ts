@@ -19,6 +19,7 @@ describe('loadConfig', () => {
       databaseUrl: COMPLETE_ENV.DATABASE_URL,
       kafkaBrokers: ['localhost:9092'],
       webOrigin: 'http://localhost:8080',
+      reconciliationKeepWindowSeconds: 30,
       jwt: {
         secret: COMPLETE_ENV.JWT_SECRET,
         issuer: 'capacity-dev',
@@ -88,6 +89,26 @@ describe('loadConfig', () => {
 
     expect(config.profile).toBe('development');
     expect(config.port).toBe(3000);
+  });
+
+  it('should read the reconciliation keep window, 30 seconds unless set (ADR-0010)', () => {
+    expect(
+      loadConfig({...COMPLETE_ENV, RECONCILIATION_KEEP_WINDOW_SECONDS: '0'})
+        .reconciliationKeepWindowSeconds,
+    ).toBe(0);
+    expect(
+      loadConfig({...COMPLETE_ENV, RECONCILIATION_KEEP_WINDOW_SECONDS: '120'})
+        .reconciliationKeepWindowSeconds,
+    ).toBe(120);
+  });
+
+  it('should reject a keep window that is not a whole number of seconds', () => {
+    expect(() => loadConfig({...COMPLETE_ENV, RECONCILIATION_KEEP_WINDOW_SECONDS: '-1'})).toThrow(
+      /RECONCILIATION_KEEP_WINDOW_SECONDS/,
+    );
+    expect(() => loadConfig({...COMPLETE_ENV, RECONCILIATION_KEEP_WINDOW_SECONDS: '1.5'})).toThrow(
+      /RECONCILIATION_KEEP_WINDOW_SECONDS/,
+    );
   });
 
   it('should split a comma separated broker list', () => {
