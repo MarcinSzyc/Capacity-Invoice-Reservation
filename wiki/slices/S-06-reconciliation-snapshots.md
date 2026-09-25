@@ -4,7 +4,7 @@
 - Status: in progress
 - AC: AC-26, AC-27, AC-28, AC-29, AC-30, AC-31, AC-42, AC-43, AC-44 (the last three added 2026-09-25 with the A-12 amendment)
 - INV: INV-05, INV-06, INV-07, INV-02 (amended 2026-09-25; first closed by S-05, reopened here because S-06 changed what it says)
-- Risk: high. Reconciliation: comparing two systems' clocks, set differences between local and remote reservations, a correction that has to live alongside a `held` derived from the invoice (ADR-0009), monotonic application under shuffled delivery, replay of everything. Implemented on Fable per `CLAUDE.md §8`.
+- Risk: high. Reconciliation: comparing two systems' clocks, set differences between local and remote reservations, a correction that has to live alongside a `held` derived from the invoice (ADR-0009), monotonic application under shuffled delivery, replay of everything. `CLAUDE.md §8` asks for Fable; implemented and reviewed on Opus by Marcin's decision, Fable being out of credits.
 - Depends on: S-05. ADRs, all accepted 2026-09-25: [[../decisions/ADR-0010-reconciliation-created-at-versus-as-of]], [[../decisions/ADR-0011-reconciliation-created-reservations]], [[../decisions/ADR-0012-snapshot-corrections-on-a-derived-held]]. ADR-0007 (accepted in S-02) governs the currency field.
 
 ## What the shipped code already gives this slice

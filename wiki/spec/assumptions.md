@@ -391,7 +391,10 @@ nothing of how. Four rules fill that in; the example program is `PRG-1` in USD.
 - **A reservation the snapshot creates** (ADR-0011) has `invoiceAmount` equal to the listed
   held amount, in program currency, at rate 1, and `createdAt` equal to the snapshot's `asOf`,
   since that is when the treasury knew it. A listed held amount of 0 for an unknown invoice
-  creates nothing.
+  creates nothing. Its `createdAt` is on the treasury's clock, so a later snapshot judges it with
+  no keep window: created at or before that snapshot's `asOf`, it is corrected when listed and
+  released when omitted, also by a second snapshot of the same moment (amended 2026-09-25, from
+  review round 2 of S-06, ADR-0010).
 - **A listed reservation is compared as of `asOf`** (ADR-0012). The snapshot says nothing about
   what happened after its moment, so a client's releases after `asOf` stand. Example: `INV-B`
   held 1 925 000 at 18:00, the client released 500 000 at 18:05, and a snapshot of 18:00 lists
@@ -547,3 +550,4 @@ program is not an acceptance criterion.
 | 2026-09-25 | A-12 | amended: a 30 s keep window before `asOf` for omitted reservations, the shape and `createdAt` of a snapshot-created reservation, a listed reservation compared as of `asOf`, and a reopen of one closed at or before `asOf` (ADR-0010, ADR-0011, ADR-0012) | docs/s-06-reconciliation-wording |
 | 2026-09-25 | A-12 | amended: a snapshot in another currency with a stale limit is refused; a listed reservation in another currency is skipped and logged, and no longer stops a re-denomination; found by review round 1 of S-06 | slice/S-06-reconciliation-snapshots |
 | 2026-09-25 | A-13 | amended: clause (6), three attempts then unprocessable, each failure kept (ADR-0013); clause (7), on an equal `asOf` the later snapshot delivered is applied; found by review round 1 of S-06 | slice/S-06-reconciliation-snapshots |
+| 2026-09-25 | A-12 | amended: a reservation a snapshot created is judged on the treasury's clock with no keep window, and a snapshot of the same moment may correct or release it (ADR-0010, amended); found by review round 2 of S-06 | slice/S-06-reconciliation-snapshots |
