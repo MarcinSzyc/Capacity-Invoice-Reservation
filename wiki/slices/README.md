@@ -17,7 +17,7 @@ Execution order with risk and dependencies, kept by `/plan`; status kept by `/sh
 | [[S-03-reservations-and-capacity-invariant]] | Reservations and the capacity invariant | high | S-02 | AC-01, AC-02, AC-03, AC-04, AC-05, AC-08, AC-09, AC-21, AC-22, INV-01, INV-03, INV-04, INV-09, INV-11 | done |
 | [[S-04-cross-currency-reservations]] | Cross-currency reservations | high | S-03 | AC-06, AC-07, INV-08 | done |
 | [[S-05-releases]] | Releases | high | S-04 | AC-10, AC-11, AC-12, AC-13, AC-14, AC-15, AC-16, AC-17, AC-18, AC-19, AC-34, INV-02 | done |
-| [[S-06-reconciliation-snapshots]] | Reconciliation snapshots | high | S-05 | AC-26, AC-27, AC-28, AC-29, AC-30, AC-31, AC-42, AC-43, AC-44, INV-02 (amended), INV-05, INV-06, INV-07 | planned |
+| [[S-06-reconciliation-snapshots]] | Reconciliation snapshots | high | S-05 | AC-26, AC-27, AC-28, AC-29, AC-30, AC-31, AC-42, AC-43, AC-44, INV-02 (amended), INV-05, INV-06, INV-07 | done |
 | [[S-07-demo-and-operations]] | Demo page and operations | low | S-06 | AC-38, AC-39 | planned |
 
 ## Why this order
