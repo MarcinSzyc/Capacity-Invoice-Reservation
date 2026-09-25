@@ -125,9 +125,10 @@ export class ApplyReconciliationSnapshot {
       .map((reservation) => reservation.reservationId);
     const closing = await ledger.findLastByReservations(closedIds);
 
+    const deltasAfterAsOf = sumOfDeltasByReservation(after);
     const local = [...byId.values()].map((reservation) => ({
       reservation,
-      deltaHeldAfterAsOf: sumOfDeltas(after, reservation.reservationId),
+      deltaHeldAfterAsOf: deltasAfterAsOf.get(reservation.reservationId) ?? 0n,
       closedByClientAfterAsOf: closedByClientAfter(
         closing.get(reservation.reservationId),
         command.asOf,
@@ -137,10 +138,15 @@ export class ApplyReconciliationSnapshot {
   }
 }
 
-const sumOfDeltas = (movements: readonly CapacityMovement[], reservationId: string): bigint =>
-  movements
-    .filter((movement) => movement.reservationId === reservationId)
-    .reduce((sum, movement) => sum + movement.deltaHeld, 0n);
+/** One pass over the movements, not one per reservation: this runs inside the program lock. */
+const sumOfDeltasByReservation = (movements: readonly CapacityMovement[]): Map<string, bigint> => {
+  const sums = new Map<string, bigint>();
+  for (const {reservationId, deltaHeld} of movements) {
+    if (reservationId === null) continue;
+    sums.set(reservationId, (sums.get(reservationId) ?? 0n) + deltaHeld);
+  }
+  return sums;
+};
 
 /** ADR-0012, 3A: a closed reservation whose closing row is a client release after `asOf`. */
 const closedByClientAfter = (closing: CapacityMovement | undefined, asOf: Date): boolean =>
