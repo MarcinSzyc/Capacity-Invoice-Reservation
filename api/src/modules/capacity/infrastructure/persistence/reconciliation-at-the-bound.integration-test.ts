@@ -4,6 +4,9 @@ import {loadConfig} from '../../../../config/configuration';
 import {PrismaService} from '../../../../persistence/prisma.service';
 import {SNAPSHOT_RESERVATIONS_MAX} from '../../domain/identifier-limits';
 import {Money} from '../../domain/money';
+import {Program} from '../../domain/program';
+import {Rate} from '../../domain/rate';
+import {Reservation} from '../../domain/reservation';
 import {PrismaProgramRepository} from './prisma-program.repository';
 import {PrismaUnitOfWork} from './prisma-unit-of-work';
 import {SystemClock} from '../system-clock';
@@ -14,6 +17,9 @@ const KEEP_WINDOW_MS = 30_000;
 const AS_OF = new Date('2026-09-21T18:00:00.000Z');
 const HELD_EACH = 1_000n;
 const TEST_TIMEOUT_MS = 120_000;
+// A program's active reservations are not bounded by the list bound (review round 3 of S-06).
+const BEYOND_THE_BOUND = 2 * SNAPSHOT_RESERVATIONS_MAX;
+const CLIENT = 'client-bound';
 
 describe('ApplyReconciliationSnapshot against PostgreSQL', () => {
   let prisma: PrismaService;
@@ -149,6 +155,62 @@ describe('ApplyReconciliationSnapshot against PostgreSQL', () => {
       expect(program?.reserved).toEqual(
         Money.of(HELD_EACH * BigInt(SNAPSHOT_RESERVATIONS_MAX), USD),
       );
+    },
+    TEST_TIMEOUT_MS,
+  );
+
+  it(
+    'should release by omission more active reservations than the list bound in one transaction',
+    async () => {
+      const programId = `PRG-${randomUUID().slice(0, 8)}`;
+      const unitOfWork = new PrismaUnitOfWork(prisma);
+      const createdAt = new Date(AS_OF.getTime() - 3_600_000);
+      const program = Program.announce(programId, USD);
+      program.setLimit(Money.of(1_000_000_000n, USD), createdAt, `m-${randomUUID()}`);
+      const held = Money.of(HELD_EACH, USD);
+      const reservations = Array.from({length: BEYOND_THE_BOUND}, (_, index) =>
+        Reservation.open({
+          programId,
+          invoiceId: `INV-${index}`,
+          invoiceAmount: held,
+          reservedAmount: held,
+          rate: Rate.one(),
+          clientId: CLIENT,
+          createdAt,
+        }),
+      );
+      const movements = reservations.map((reservation) =>
+        program.reserve(held, CLIENT, reservation.reservationId, createdAt),
+      );
+      await unitOfWork.run(async (repositories) => {
+        await repositories.programs.save(program);
+        await repositories.reservations.addAll(reservations);
+        await repositories.ledger.appendAll(movements);
+      });
+      const useCase = new ApplyReconciliationSnapshot(
+        unitOfWork,
+        new SystemClock(),
+        KEEP_WINDOW_MS,
+      );
+
+      const started = Date.now();
+      const result = await useCase.execute({
+        messageId: `m-${randomUUID()}`,
+        programId,
+        currency: USD,
+        creditLimit: 1_000_000_000n,
+        asOf: AS_OF,
+        activeReservations: [],
+        payload: {},
+        receivedAt: new Date(),
+      });
+      process.stdout.write(
+        `release by omission of ${BEYOND_THE_BOUND} applied in ${Date.now() - started} ms\n`,
+      );
+
+      expect(result).toMatchObject({outcome: 'applied'});
+      const after = await new PrismaProgramRepository(prisma).findById(programId);
+      expect(after?.reserved).toEqual(Money.zero(USD));
     },
     TEST_TIMEOUT_MS,
   );
