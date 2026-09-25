@@ -3,7 +3,7 @@
 - Status: proposed
 - Date: 2026-09-19
 - Slice: S-06
-- Related: A-02, A-08, A-12, AC-19, AC-26, INV-08
+- Related: A-02, A-08, A-12, AC-19, AC-26, INV-08, ADR-0010, ADR-0012
 
 ## Context
 
@@ -53,3 +53,12 @@ reaches zero, which split two things AC-27 states as one. Marcin decided the sna
 invoice too, so this ADR's shape for a snapshot-created reservation has to leave the same two
 fields consistent: whatever `invoiceAmount` it chooses, an omitted reservation ends with
 `releasedInvoiceAmount` equal to it.
+
+Added 2026-09-25, from the S-06 plan revision: which `createdAt` such a reservation carries. It
+must be the snapshot's `asOf`, not the moment we processed the message. The treasury knew the
+invoice at `asOf`; if `createdAt` were our processing time, a later snapshot that omits the
+invoice would find a `createdAt` after its own `asOf` whenever messages queue for a while, and
+keep a reservation the treasury has dropped (ADR-0010, INV-06). `clientId` is null, since no
+client made it, and the `adjustment` movement is attributed to the message (INV-09). Under
+Option 1 a later correction goes through ADR-0012 like any other reservation's: with rate 1 and
+the program's currency, the reverse conversion ADR-0012 Option 3A needs for a reopen is exact.
