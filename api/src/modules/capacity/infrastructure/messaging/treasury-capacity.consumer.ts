@@ -118,7 +118,8 @@ export class TreasuryCapacityConsumer implements OnApplicationBootstrap, OnModul
 
     const update = await parsedOrRefused(() => parseCapacityUpdate(parsed.payload, receivedAt));
     if (!update.ok) {
-      return this.reject(message, {messageId, payload: parsed.payload}, update.error, receivedAt);
+      const payload = storablePayload(update, parsed.payload);
+      return this.reject(message, {messageId, payload}, update.error, receivedAt);
     }
 
     const readable = {messageId, payload: parsed.payload};
@@ -141,7 +142,10 @@ export class TreasuryCapacityConsumer implements OnApplicationBootstrap, OnModul
     receivedAt: Date,
   ): Promise<void> {
     const snapshot = await parsedOrRefused(() => parseReconciliationSnapshot(payload, receivedAt));
-    if (!snapshot.ok) return this.reject(message, {messageId, payload}, snapshot.error, receivedAt);
+    if (!snapshot.ok) {
+      const kept = storablePayload(snapshot, payload);
+      return this.reject(message, {messageId, payload: kept}, snapshot.error, receivedAt);
+    }
 
     const {programId} = snapshot.command;
     const attempted = await this.attempted(snapshot.command.messageId, () =>
@@ -296,14 +300,21 @@ const parseJson = (value: Buffer | null): ParsedJson => {
  */
 const parsedOrRefused = async <T extends {readonly ok: boolean}>(
   parse: () => Promise<T>,
-): Promise<T | {readonly ok: false; readonly error: string}> => {
+): Promise<T | {readonly ok: false; readonly error: string; readonly unparseable: true}> => {
   try {
     return await parse();
   } catch (reason: unknown) {
     const detail = reason instanceof Error ? reason.message : String(reason);
-    return {ok: false, error: `message could not be parsed: ${detail}`};
+    return {ok: false, error: `message could not be parsed: ${detail}`, unparseable: true};
   }
 };
+
+/**
+ * What broke the parser breaks Prisma's JSON serialiser too, so such a message is recorded
+ * without its payload; the dead letter still carries the original bytes (ADR-0003).
+ */
+const storablePayload = (refused: object, payload: unknown): unknown =>
+  'unparseable' in refused ? null : payload;
 
 const readableMessageId = (payload: unknown): string | null =>
   readableString(payload, 'messageId', MESSAGE_ID_MAX_LENGTH);
