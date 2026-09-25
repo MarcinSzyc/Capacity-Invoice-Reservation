@@ -327,7 +327,7 @@ because it is already exact.
 
 ## A-11 The treasury message contract is defined by us
 
-- Status: accepted 2026-09-19
+- Status: accepted 2026-09-19, amended 2026-09-25 (the two snapshot bounds)
 - Source: Q15
 
 **Statement.** No contract is given, so we define two message types, keyed by
@@ -338,7 +338,11 @@ because it is already exact.
   `activeReservations[]` of `{invoiceId, heldAmount}` in program currency
 
 Amounts in minor units. The schema is validated on consumption; a message that fails
-validation is rejected (A-13).
+validation is rejected (A-13). Two bounds on a snapshot, so that one fits a transaction and
+its sums stay exact: at most 10 000 entries in `activeReservations`, and their `heldAmount`
+summed at most 2^53 - 1, the largest exact JSON integer (ADR-0006). A snapshot past either
+bound is rejected like any malformed message. Amended 2026-09-25: the bounds were local
+decisions of S-06 and are part of the contract the treasury has to respect.
 
 **If wrong.** A real treasury contract replaces the two DTOs and their validators; the
 commands they produce for the domain stay.
@@ -551,3 +555,4 @@ program is not an acceptance criterion.
 | 2026-09-25 | A-12 | amended: a snapshot in another currency with a stale limit is refused; a listed reservation in another currency is skipped and logged, and no longer stops a re-denomination; found by review round 1 of S-06 | slice/S-06-reconciliation-snapshots |
 | 2026-09-25 | A-13 | amended: clause (6), three attempts then unprocessable, each failure kept (ADR-0013); clause (7), on an equal `asOf` the later snapshot delivered is applied; found by review round 1 of S-06 | slice/S-06-reconciliation-snapshots |
 | 2026-09-25 | A-12 | amended: a reservation a snapshot created is judged on the treasury's clock with no keep window, and a snapshot of the same moment may correct or release it (ADR-0010, amended); found by review round 2 of S-06 | slice/S-06-reconciliation-snapshots |
+| 2026-09-25 | A-11 | amended: a snapshot lists at most 10 000 reservations whose held amounts sum to at most 2^53 - 1; local decisions of S-06 until now, carried to S-07 by the S-06 ship | docs/plan-S-07 |
