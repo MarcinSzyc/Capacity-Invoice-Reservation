@@ -65,7 +65,7 @@ const mixedStep = (
 };
 
 describe('Reservation invariants', () => {
-  it('[INV-02] should keep held between 0 and reservedAmount over random release sequences', () => {
+  it('should keep held between 0 and reservedAmount over random client release sequences', () => {
     let refused = 0;
     for (let seed = 1; seed <= SEQUENCES; seed += 1) {
       const random = new SeededRandom(seed);
@@ -102,7 +102,7 @@ describe('Reservation invariants', () => {
     expect(refused > 0 ? 'boundary reached' : 'boundary never reached').toBe('boundary reached');
   });
 
-  it('should keep held at or above zero and never let a release raise it, with snapshot corrections among the releases (INV-02, amended)', () => {
+  it('[INV-02] should keep held at or above zero and never let a release raise it, with snapshot corrections among the releases', () => {
     let corrections = 0;
     let raisedAboveReserved = 0;
     for (let seed = 1; seed <= SEQUENCES; seed += 1) {
