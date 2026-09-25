@@ -13,7 +13,7 @@ export const UNIT_OF_WORK = Symbol('UnitOfWork');
 export interface CapacityReads {
   readonly programs: Pick<ProgramRepository, 'findById'>;
   readonly reservations: Pick<ReservationRepository, 'findByInvoice'>;
-  readonly ledger: Pick<LedgerRepository, 'findByReservation'>;
+  readonly ledger: Pick<LedgerRepository, 'findByReservation' | 'findLatestByProgram'>;
 }
 
 export interface CapacityRepositories {

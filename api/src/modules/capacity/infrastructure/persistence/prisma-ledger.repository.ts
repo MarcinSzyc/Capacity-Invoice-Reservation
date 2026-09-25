@@ -58,6 +58,13 @@ export class PrismaLedgerRepository implements LedgerRepository {
     return rows.map(toMovement);
   }
 
+  async findLatestByProgram(programId: string, limit: number): Promise<CapacityMovement[]> {
+    const rows = await this.db.withClient((client) =>
+      client.capacityMovement.findMany({where: {programId}, orderBy: {id: 'desc'}, take: limit}),
+    );
+    return rows.map(toMovement);
+  }
+
   /** In the order they were appended, which is the order that explains the balances (INV-04). */
   async findByProgram(programId: string): Promise<CapacityMovement[]> {
     const rows = await this.db.withClient((client) =>

@@ -13,7 +13,8 @@ export interface MintTokenOptions {
 
 /**
  * Signs a token the way the service verifies it (ADR-0005). Used by `npm run dev:token`, by the
- * e2e helper and by nothing at runtime: the service never mints, it only verifies.
+ * e2e helper and, outside production only, by the demo page's `GET /dev/token`. In production
+ * the service never mints, it only verifies.
  */
 export const mintToken = async (options: MintTokenOptions): Promise<string> => {
   const now = Math.floor(Date.now() / 1000);
