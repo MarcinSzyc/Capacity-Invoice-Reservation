@@ -3166,3 +3166,17 @@ Findings, most severe first:
   S-05 test stays as a supporting test without the tag. The S-05 slice file is done and unchanged.
 - Cross-checked: every AC and INV in the spec appears once in `plan.md`, and the thirteen S-06
   names match the slice file. Test file and commit columns stay empty for `/ship`.
+
+## 2026-09-25, verify S-06 (second pass, after review fixes round 1), Opus
+- VERIFY S-06: PASS, at e3a805e.
+- Gate: `npm run gate` green in one run, nothing retried. Unit 194 (api) and 2 (web), integration
+  46, e2e 64, cold start smoke 3 with the stack healthy in 46 s.
+- Coverage: 9/9 AC and 4/4 INV (INV-02 as amended, INV-05, INV-06, INV-07) found by tag and
+  passing, none skipped or focused; levels as the plan names them, INV-02 a unit property.
+- Style and layers: prose clean; no nested ternary or braced one-line `if` in the diff since
+  review round 1; nothing from Nest, Prisma or Kafka in `domain/`, no ORM in `application/`.
+- README followed again on the default stack, after checking none of it existed: every documented
+  call answered as written, and a live snapshot through `dev:treasury` corrected a reservation
+  with an adjustment. No message was set aside. Stack taken down.
+- Findings: none new. Still open and owed to `/ship`: the README's snapshot contract and
+  `dev:treasury snapshot`, and the kafkajs warning on stderr (minor, older than S-06).

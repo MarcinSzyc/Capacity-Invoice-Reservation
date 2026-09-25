@@ -168,3 +168,4 @@ Beyond `CLAUDE.md §9`:
 | 2026-09-25 | verify | PASS at b88c97d: gate green, 9/9 AC and 3/3 INV at the planned level, two minors (README snapshot contract owed by ship, a kafkajs warning in dev:treasury) |
 | 2026-09-25 | review | REVIEW S-06: 9 findings (2/3/4) at b88c97d; blockers: a nested-array entry stalls the partition, a reopen after re-denomination mixes currencies (INV-08) |
 | 2026-09-25 | plan | correction: the amended INV-02 moves to S-06, closed by the property with snapshot corrections among releases |
+| 2026-09-25 | verify | PASS at e3a805e: gate green, 9/9 AC and 4/4 INV at the planned level, no new findings |
