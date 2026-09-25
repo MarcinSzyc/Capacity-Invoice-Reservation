@@ -3424,3 +3424,16 @@ Findings, most severe first:
   - (minor, spec) `wiki/slices/S-07-demo-and-operations.md:34`: Scope still says
     `DevTreasuryProducer` becomes a provider exported by `CapacityModule`; the code provides it in
     `CapacityDevModule` (`capacity-dev.module.ts:14`). The plan correction is only in the work-log.
+
+## 2026-09-25, implement S-07 (review round 1 fixes), Opus
+- The major: a message that made the parser throw was rejected, but its record kept the payload
+  and Prisma overflows serialising the same nesting into jsonb, so the partition still stalled on
+  the real store. The record now keeps no payload for such a message (the dead letter still holds
+  the original bytes). New integration test on the real database and broker, red first (the next
+  valid message never applied), then green:
+  `should dead-letter and record a message whose parsing throws, and apply the next one on the real store`.
+- The seven minors are carried to `/ship` as known limitations, per the goal Marcin set (a
+  review without blockers ships): generator invoices not tied to a program, no stale-answer
+  guard on the poll, a non-JSON body logged as `API_UNREACHABLE` and an empty token cached, two
+  unnarrowed casts in `app.tsx`, the "Stale" comment, no test of the generator timer, and the
+  slice Scope line on where `DevTreasuryProducer` is provided.
