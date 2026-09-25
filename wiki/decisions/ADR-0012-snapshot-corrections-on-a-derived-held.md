@@ -1,7 +1,7 @@
 # ADR-0012: Snapshot corrections on a reservation whose held is derived
 
-- Status: proposed
-- Date: 2026-09-25
+- Status: accepted
+- Date: proposed 2026-09-25, accepted 2026-09-25
 - Slice: S-06
 - Related: A-08, A-12, AC-15, AC-27, AC-29, INV-02, INV-06, INV-07, ADR-0009, ADR-0011
 
@@ -97,7 +97,28 @@ moment.
 
 ## Decision
 
-(empty until Marcin decides)
+Options 1A, 2A and 3A, as recommended. Decided by Marcin on 2026-09-25.
+
+- **1A: a stored, signed correction.** The reservation gains `heldCorrection`, signed minor units
+  of the program currency, 0 by default. `held` is 0 when the reservation is closed, and
+  otherwise `max(0, convert(invoiceAmount - releasedInvoiceAmount, rate) + heldCorrection)`. A
+  snapshot sets the correction so `held` equals its target; it never adds to it, so the same
+  snapshot twice writes nothing the second time. Releases keep ADR-0009 unchanged. In AC-29 the
+  correction becomes minus 25 000 and a release of 900 000 then leaves `held` 1 000 000.
+  Option 1B was declined because the reverse conversion rounds and would change what
+  `releasedInvoiceAmount` means. Option 1C was declined because the next release undoes it.
+- **2A: a listed reservation is compared as of `asOf`.** The target is the listed `heldAmount`
+  plus the signed `deltaHeld` of that reservation's `reserve` and `release` movements after
+  `asOf`, floored at zero. Adjustment rows are not counted. An omitted reservation is still
+  dropped entirely. Option 2B was declined because it undoes a release the client was told
+  succeeded after the snapshot's moment.
+- **3A: reopen, unless the client closed it after `asOf`.** A listed reservation closed at or
+  before `asOf` is reopened: the remaining invoice amount is restored to the listed `held`
+  converted back at the stored rate (round half up, at least one minor unit, at most
+  `invoiceAmount`), the correction makes `held` exactly the listed amount, and one `adjustment`
+  records it. A reservation whose closing release came after `asOf` stays closed. Option 3B was
+  declined because INV-07 fails for an invoice dropped and then listed again.
+
 
 ## Consequences
 

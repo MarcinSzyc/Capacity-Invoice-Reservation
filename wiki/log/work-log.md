@@ -2885,3 +2885,17 @@ Findings, most severe first:
 - Branch `docs/plan-S-06` cut from `main` at c206c30. Files: the S-06 slice file, ADR-0012 (new),
   ADR-0010 and ADR-0011 (recommendation revised, addendum), the decisions index, `Home.md`, this
   entry. `wiki/plan/plan.md` and the slice index needed no change. Nothing committed.
+
+## 2026-09-25, plan S-06 (ADR decisions), Opus
+- Marcin accepted ADR-0010, ADR-0011 and ADR-0012 as recommended, on the plan branch before its PR
+  was opened. ADR-0010: Option 2, a 30 s keep window before `asOf` for omitted reservations,
+  nothing created at or after `asOf` touched, `createdAt` from the `Clock` port. ADR-0011:
+  Option 1, a snapshot-born reservation has `invoiceAmount` equal to the listed `heldAmount`,
+  program currency, rate 1 and `createdAt` equal to `asOf`. ADR-0012: 1A, 2A, 3A, a stored signed
+  `heldCorrection`, a listed reservation compared as of `asOf`, a reopen unless the client closed
+  it after `asOf`.
+- The slice file loses its "if decided as recommended" conditions: the migration, the keep window
+  setting and the supporting tests are now plain scope. Decisions index and Home updated.
+- Still owed to `/spec` before `/review`: A-12 wording for the window, the comparison as of `asOf`
+  and the reopen rule, and glossary entries for `Held`, `Adjustment`, `Snapshot moment` and
+  `heldCorrection`, each with a Changes row.
