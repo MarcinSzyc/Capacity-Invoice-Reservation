@@ -17,7 +17,7 @@ Obsidian vault root is this folder. Working rules: `../CLAUDE.md`.
 | Gate | State |
 |---|---|
 | spec | done 2026-09-19: 28 questions answered, A-01..A-19, AC-01..AC-41, INV-01..INV-11 |
-| plan | done 2026-09-19: 7 slices S-01..S-07, 53 requirement rows, 11 ADRs; ADR-0001 to ADR-0008 accepted; S-03 revised 2026-09-22 against the shipped S-02 code; S-04 revised 2026-09-22 against the shipped S-03 code; A-10 amended twice for S-04; S-05 revised 2026-09-23 against the shipped S-04 code and ADR-0009; AC-15, AC-27, A-08 and A-09 amended during S-05 |
+| plan | done 2026-09-19: 7 slices S-01..S-07, 53 requirement rows, 11 ADRs; ADR-0001 to ADR-0008 accepted; S-03 revised 2026-09-22 against the shipped S-02 code; S-04 revised 2026-09-22 against the shipped S-03 code; A-10 amended twice for S-04; S-05 revised 2026-09-23 against the shipped S-04 code and ADR-0009; AC-15, AC-27, A-08 and A-09 amended during S-05; S-06 revised 2026-09-25 against the shipped S-05 code; ADR-0010, ADR-0011 and ADR-0012 accepted 2026-09-25 |
 
 | Slice | State |
 |---|---|
@@ -29,12 +29,11 @@ Obsidian vault root is this folder. Working rules: `../CLAUDE.md`.
 | S-06 Reconciliation snapshots | planned, next |
 | S-07 Demo page and operations | planned |
 
-Next: `/plan` review of S-06 against the shipped S-05 code, then `/implement S-06` on branch
-`slice/S-06-reconciliation-snapshots`. S-06 is `risk: high` (a snapshot disagreeing with local
-state) and wants Fable per `CLAUDE.md §8`.
-[[decisions/ADR-0010-reconciliation-created-at-versus-as-of]] and
-[[decisions/ADR-0011-reconciliation-created-reservations]] are both still `proposed` and have to
-be decided in the S-06 plan PR before `/implement` may start. ADR-0011 also owes the rule S-05
-put on it: an adjustment that drops a reservation takes `releasedInvoiceAmount` to the whole
-invoice, which is what keeps AC-27's "`held` 0, status closed" true now that AC-15 derives
-status from what the invoice has left.
+Next: merge the plan PR from `docs/plan-S-06`, then a `/spec` PR for the A-12 and glossary
+wording the three accepted ADRs owe (the keep window, the comparison as of `asOf`, the reopen
+rule, `heldCorrection`), then `/implement S-06` on branch `slice/S-06-reconciliation-snapshots`.
+S-06 is `risk: high` (a snapshot disagreeing with a `held` that ADR-0009 derives from the invoice,
+two clocks, shuffled delivery) and wants Fable per `CLAUDE.md §8`.
+[[decisions/ADR-0010-reconciliation-created-at-versus-as-of]],
+[[decisions/ADR-0011-reconciliation-created-reservations]] and
+[[decisions/ADR-0012-snapshot-corrections-on-a-derived-held]] are accepted as recommended.
