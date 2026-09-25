@@ -3246,3 +3246,16 @@ Findings, most severe first:
   input that reaches a throw there; round 1's crash was a validation gap, closed by validating every
   entry as an object, and the mapping after validation reads only validated fields. Handling a case
   no input can reach is what `CLAUDE.md §3` rules out.
+
+## 2026-09-25, verify S-06 (third pass, after review fixes round 2), Opus
+- VERIFY S-06: PASS, at 36f36ba.
+- Gate: `npm run gate` green in one run, nothing retried. Unit 197 (api) and 2 (web),
+  integration 48, e2e 64, cold start smoke 3 with the stack healthy in 33 s.
+- Coverage: 9/9 AC and 4/4 INV found by tag and passing, none skipped or focused, at the planned
+  levels. Style and layers clean in the diff since the second pass.
+- README followed again on the default stack after checking none of it existed. Every documented
+  call answered as written. Live check of the round 2 rule: two snapshots of the same moment
+  through `dev:treasury`, the first creating INV-X, the second omitting it; INV-X ended closed and
+  INV-A was corrected. Stack taken down.
+- Findings: none new. Owed to `/ship` as before: the README's snapshot contract and
+  `dev:treasury snapshot`; the kafkajs warning on stderr (minor, older than S-06).

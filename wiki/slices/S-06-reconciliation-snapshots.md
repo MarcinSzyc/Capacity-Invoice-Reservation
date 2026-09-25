@@ -170,3 +170,4 @@ Beyond `CLAUDE.md §9`:
 | 2026-09-25 | plan | correction: the amended INV-02 moves to S-06, closed by the property with snapshot corrections among releases |
 | 2026-09-25 | verify | PASS at e3a805e: gate green, 9/9 AC and 4/4 INV at the planned level, no new findings |
 | 2026-09-25 | review | REVIEW S-06: 7 findings (1/1/5) at 7e2d03d, round 2, on Opus (Fable out of credits); round 1 all closed; blocker: a snapshot changes a reservation created at its own `asOf`, against ADR-0010 |
+| 2026-09-25 | verify | PASS at 36f36ba: gate green, 9/9 AC and 4/4 INV, no new findings |
