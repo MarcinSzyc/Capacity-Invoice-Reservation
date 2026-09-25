@@ -68,9 +68,10 @@ Example. Invoice of 1 100 000 EUR in a USD program at rate 1.10:
 | release the rest | 1 100 000 EUR | 1 210 000 USD | 0 USD |
 
 **Held.** See the table: the part of a reservation still counted against the limit,
-in program currency. Starts equal to `reservedAmount`, ends at zero. It is what is left of the
-invoice converted at the stored rate, plus the `heldCorrection` a snapshot may have set (ADR-0009,
-ADR-0012). Can always be recomputed from the ledger as the reserve plus the signed amounts of
+in program currency. Starts equal to `reservedAmount`, ends at zero. A client's release only
+lowers it; a snapshot may set it higher than `reservedAmount` (INV-02, amended 2026-09-25). It
+is what is left of the invoice converted at the stored rate, plus the `heldCorrection` a snapshot
+may have set (ADR-0009, ADR-0012). Can always be recomputed from the ledger as the reserve plus the signed amounts of
 the releases and adjustments of that invoice.
 
 **Active reservation, closed reservation.** A reservation is closed when the whole invoice
