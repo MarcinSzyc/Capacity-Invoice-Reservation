@@ -15,9 +15,18 @@ export interface TreasuryMessageRecord {
   readonly receivedAt: Date;
 }
 
+/** ADR-0013: one failed attempt to apply a message, kept so the reason can be read later. */
+export interface TreasuryMessageFailure {
+  readonly messageId: string;
+  readonly attempt: number;
+  readonly error: string;
+  readonly failedAt: Date;
+}
+
 /** Every consumed message leaves a trace here, which is what makes redelivery a no-op (A-13). */
 export interface TreasuryMessageStore {
   wasProcessed(messageId: string): Promise<boolean>;
   recordOutcome(record: TreasuryMessageRecord): Promise<void>;
   recordDuplicate(messageId: string): Promise<void>;
+  recordFailure(failure: TreasuryMessageFailure): Promise<void>;
 }

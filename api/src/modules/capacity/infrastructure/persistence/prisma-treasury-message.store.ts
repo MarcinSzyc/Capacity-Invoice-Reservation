@@ -1,5 +1,6 @@
 import type {Prisma} from '../../../../generated/prisma/client';
 import {
+  TreasuryMessageFailure,
   TreasuryMessageRecord,
   TreasuryMessageStore,
 } from '../../domain/ports/treasury-message-store';
@@ -34,6 +35,10 @@ export class PrismaTreasuryMessageStore implements TreasuryMessageStore {
         },
       }),
     );
+  }
+
+  async recordFailure(failure: TreasuryMessageFailure): Promise<void> {
+    await this.db.withClient((client) => client.treasuryMessageFailure.create({data: failure}));
   }
 
   async recordDuplicate(messageId: string): Promise<void> {

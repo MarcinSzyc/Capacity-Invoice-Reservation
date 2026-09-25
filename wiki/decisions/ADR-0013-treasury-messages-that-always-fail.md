@@ -79,6 +79,13 @@ three times, then record somewhere that there was an error and move on".
   that is down for an hour delays the treasury's messages but does not sideline them; only a
   message that fails three times while both are up is set aside.
 
+- **Every failed attempt has a row.** Marcin added: keep these errors in a table of their own.
+  `treasury_message_failures` holds one row per failed attempt (message id, attempt number, error
+  text, time), written in its own short transaction so the rolled-back attempt does not take it
+  along. It is best effort: when the database is what is failing, the row cannot be written and
+  the log line is all there is. Kept deliberately small, since this is an edge case: no API, no
+  link to `treasury_messages` (an attempt can fail before the message has a record); pgweb reads it.
+
 The counting lives in the handler, not in storage: that is what answers Option 4's objection. A
 count kept across deliveries would reset on every restart in memory, and could not be written in
 the database while the database is what is failing.

@@ -261,6 +261,14 @@ describe('TreasuryCapacityConsumer', () => {
         error: expect.stringContaining('value out of range') as string,
       });
       expect(capacity.repositories.treasuryMessages.byId.get('m-next')?.outcome).toBe('applied');
+      expect(capacity.repositories.treasuryMessages.failures).toEqual(
+        [1, 2, 3].map((attempt) => ({
+          messageId: 'm-limit',
+          attempt,
+          error: 'value out of range for type bigint',
+          failedAt: expect.any(Date) as Date,
+        })),
+      );
       expect(logs.lines()).toContainEqual(
         expect.objectContaining({
           level: 'error',

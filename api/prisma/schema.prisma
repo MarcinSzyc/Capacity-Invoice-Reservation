@@ -129,3 +129,17 @@ model TreasuryMessage {
 
   @@map("treasury_messages")
 }
+
+/// ADR-0013: one row per failed attempt to apply a treasury message, kept for whoever looks into
+/// why a message was set aside. Not keyed to `treasury_messages`: an attempt can fail before the
+/// message has any record.
+model TreasuryMessageFailure {
+  id        BigInt   @id @default(autoincrement())
+  messageId String   @map("message_id") @db.VarChar(128)
+  attempt   Int
+  error     String
+  failedAt  DateTime @map("failed_at") @db.Timestamptz(6)
+
+  @@index([messageId])
+  @@map("treasury_message_failures")
+}
