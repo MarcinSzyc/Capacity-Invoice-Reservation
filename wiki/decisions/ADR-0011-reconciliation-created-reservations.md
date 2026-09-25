@@ -45,3 +45,11 @@ reservation.
 No nullable amount anywhere (INV-08 stays simple). The glossary entry `Adjustment` should say
 that a reconciliation-created reservation's `invoiceAmount` is the held amount reported by the
 treasury (glossary update through `/spec` on acceptance).
+
+Added 2026-09-25, from S-05: an adjustment that drops a reservation has to set
+`releasedInvoiceAmount` to the whole invoice amount, not only take `held` to zero. S-05 amended
+AC-15 so that a reservation is closed when the invoice is fully released rather than when `held`
+reaches zero, which split two things AC-27 states as one. Marcin decided the snapshot closes the
+invoice too, so this ADR's shape for a snapshot-created reservation has to leave the same two
+fields consistent: whatever `invoiceAmount` it chooses, an omitted reservation ends with
+`releasedInvoiceAmount` equal to it.
