@@ -27,10 +27,9 @@ Obsidian vault root is this folder. Working rules: `../CLAUDE.md`.
 | S-04 Cross-currency reservations | done 2026-09-23: AC-06, AC-07, INV-08 |
 | S-05 Releases | done 2026-09-25: AC-10 to AC-19, AC-34, INV-02 |
 | S-06 Reconciliation snapshots | done 2026-09-25: AC-26 to AC-31, AC-42 to AC-44, INV-02 (amended), INV-05 to INV-07 |
-| S-07 Demo page and operations | planned, next |
+| S-07 Demo page and operations | done 2026-09-25: AC-38, AC-39 |
 
-Next: `/implement S-07` on branch `slice/S-07-demo-and-operations`. S-07 is `risk: low`
-(AC-38, AC-39) and runs on Opus per `CLAUDE.md §8`. Its first commits close what S-06 carried:
-the parser overflow (the open major), the quadratic sum, the two ledger comments; the glossary's
-`Snapshot moment` and A-11's bounds were corrected in the plan PR. Still a known limitation: a
-program with more active reservations than the 10 000 list bound has no bound test.
+Every slice is done and the plan is complete: every AC and INV in [[plan/plan]] is `done`.
+Known limitations, carried as they stand in [[log/changelog]]: a treasury message with `\u0000`
+in a string stalls its partition (the one open major, older than S-07), eight minors of the S-07
+review, and no bound test for a program past 10 000 active reservations.

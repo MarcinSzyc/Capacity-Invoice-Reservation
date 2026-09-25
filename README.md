@@ -17,7 +17,7 @@ That builds and starts five containers defined in [docker-compose.yml](docker-co
 | Service | URL | What it is |
 |---|---|---|
 | `api` | http://localhost:3000 | the NestJS service: HTTP endpoints, the treasury Kafka consumer, the ledger |
-| `web` | http://localhost:8080 | a small React page that only shows what `api` returns (the demo lands in S-07) |
+| `web` | http://localhost:8080 | the demo page: it shows what `api` returns and computes nothing |
 | `db` | localhost:5432 | PostgreSQL, its own volume |
 | `kafka` | localhost:9092 | a single broker in KRaft mode, standing in for the treasury's broker |
 | `studio` | http://localhost:5555 | pgweb, to browse and edit rows by hand (dev profile only, ADR-0002) |
@@ -31,6 +31,23 @@ If one of those ports is already taken on your machine, move it without editing 
 `npm run smoke` never touches this stack: it runs its own throwaway one under the compose
 project name `capacity-smoke` on its own ports, so running the gate cannot stop your
 containers or delete rows you edited in pgweb.
+
+### See it working
+
+Open http://localhost:8080 once the stack is up. The page runs against the real `api` and the
+real treasury topic, on program `PRG-1` unless you type another id:
+
+| Panel | What it does |
+|---|---|
+| Request generator | Start, Stop, One request: random reservations of up to 100 000 minor units, and releases of them in full or in part |
+| Request log | the last 50 calls the page made, with method, path, status and the error `code` |
+| Live ledger | availability and the latest 100 movements, polled every second, amounts in minor units |
+| Treasury panel | Limit change, Snapshot (reservations as `INV-A:70000000,INV-B:0`), Duplicate (the last message again), Stale (an update from 2000) |
+
+The page gets its token from `GET /dev/token` and reaches the ledger and the treasury through
+`GET /dev/programs/:programId/movements` and `POST /dev/treasury`. Those dev endpoints need no
+token and exist only outside the production profile; with `NODE_ENV=production` they answer
+`404` because they are not registered. Stop and start the stack and every number reads the same.
 
 ### Where to look first
 

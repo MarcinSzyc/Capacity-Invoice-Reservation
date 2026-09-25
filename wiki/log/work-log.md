@@ -3483,3 +3483,19 @@ Findings, most severe first:
     `DevTreasuryProducer` in `CapacityModule`; the code provides it in `CapacityDevModule`.
 - Scratch probes were written under `api/src/` and deleted; the working tree holds only this
   entry and the slice log row.
+
+## 2026-09-25, ship S-07, Sonnet then Opus
+- Precondition not met, and shipped anyway by Marcin's standing decision for this session: verify
+  round 2 is PASS at 7a3181b and newer than the last code commit, but review round 2 has one
+  major. Marcin's goal for the session: "verify must pass and review must have no blockers,
+  major can go in", with PRs opened and merged without asking. The major (a `\u0000` in a message
+  string makes the rejection record unwritable, so the message stalls its partition) is older
+  than S-07 and recorded as a known limitation, not presented as fixed.
+- `wiki/plan/plan.md`: AC-38 and AC-39 `done` with their test files; four `extra` rows. The
+  commit column stays empty, as for S-04 to S-06, until the merge commit is backfilled.
+- No ADR touched. No assumption missing from the register.
+- README: the `web` row no longer promises the demo for S-07; new "See it working" section with
+  the four panels and the three dev endpoints.
+- Slice file: status `done`; its Scope line on where `DevTreasuryProducer` is provided corrected
+  to match the code (review minor, a factual correction of the plan text).
+- Changelog row, slice index and Home updated: every slice done, the plan complete.
