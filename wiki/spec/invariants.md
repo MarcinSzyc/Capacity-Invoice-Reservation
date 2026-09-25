@@ -48,6 +48,9 @@ after the reservation but describes a moment before it. [A-12]
 never decreases, and the applied limit `eventTime` never decreases. Guards against:
 out-of-order delivery reverting state. Test: deliver messages in reversed and shuffled
 order; assert final state equals in-order delivery. [A-13]
+Amended 2026-09-25: two snapshots with the same `asOf` and different content are outside this
+invariant. They describe one moment twice, the treasury is expected not to send such a pair, and
+if it does the later one delivered wins (A-13 clause 7), which depends on delivery order.
 
 **INV-08 Money is integer minor units with a currency.** No amount exists without a
 currency; no arithmetic combines two currencies without a stored rate; no float
@@ -78,3 +81,4 @@ property over random event sequences including limit reductions.
 | 2026-09-19 | INV-01 to INV-11 | first version, output of the spec gate | PR #5 |
 | 2026-09-19 | INV-10 | wording: exceptions are the `api` dev-only endpoints, not a demo page on the api | docs/adr-renumber-and-deployment |
 | 2026-09-25 | INV-02 | amended: `held` stays at or above zero always, and above `reservedAmount` only by a snapshot's adjustment (ADR-0012), never by a client operation; found implementing S-06 | slice/S-06-reconciliation-snapshots |
+| 2026-09-25 | INV-07 | amended: two snapshots of one moment with different content are outside the invariant; the later delivered wins (A-13 clause 7); found by review round 1 of S-06 | slice/S-06-reconciliation-snapshots |
