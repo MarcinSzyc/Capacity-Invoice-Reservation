@@ -525,6 +525,21 @@ describe('Prisma capacity adapters', () => {
       ).resolves.toEqual([]);
     });
 
+    it('should return the last movement of each reservation asked for, in one read', async () => {
+      const {programId, invoiceA, invoiceB} = await programWithTwoReservations();
+
+      const last = await new PrismaLedgerRepository(prisma).findLastByReservations([
+        invoiceA.reservationId,
+        invoiceB.reservationId,
+      ]);
+
+      expect(last.get(invoiceA.reservationId)).toMatchObject({kind: 'adjustment', programId});
+      expect(last.get(invoiceB.reservationId)).toMatchObject({kind: 'release', releaseId: 'R-1'});
+      await expect(new PrismaLedgerRepository(prisma).findLastByReservations([])).resolves.toEqual(
+        new Map(),
+      );
+    });
+
     it('should return only client movements after the given moment', async () => {
       const {programId, invoiceB} = await programWithTwoReservations();
 

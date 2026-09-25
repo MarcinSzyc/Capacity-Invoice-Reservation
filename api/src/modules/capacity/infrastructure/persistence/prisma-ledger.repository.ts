@@ -28,6 +28,21 @@ export class PrismaLedgerRepository implements LedgerRepository {
     return rows.map(toMovement);
   }
 
+  /** `DISTINCT ON (reservation_id)` ordered by id descending: the latest row of each, in one read. */
+  async findLastByReservations(
+    reservationIds: readonly string[],
+  ): Promise<Map<string, CapacityMovement>> {
+    if (reservationIds.length === 0) return new Map();
+    const rows = await this.db.withClient((client) =>
+      client.capacityMovement.findMany({
+        where: {reservationId: {in: [...reservationIds]}},
+        orderBy: [{reservationId: 'asc'}, {id: 'desc'}],
+        distinct: ['reservationId'],
+      }),
+    );
+    return new Map(rows.map((row) => [row.reservationId ?? '', toMovement(row)]));
+  }
+
   /** ADR-0012, 2A: what clients did after a snapshot's moment, in the order it was appended. */
   async findClientMovementsSince(programId: string, since: Date): Promise<CapacityMovement[]> {
     const rows = await this.db.withClient((client) =>

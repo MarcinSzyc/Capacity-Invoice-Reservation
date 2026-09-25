@@ -3,6 +3,8 @@ import type {ReleaseReason} from './reservation';
 import {CapacityExceededError, CurrencyMismatchError} from './errors';
 import {Money} from './money';
 
+const MAX_EXACT_JSON_INTEGER = BigInt(Number.MAX_SAFE_INTEGER);
+
 export interface ProgramState {
   readonly programId: string;
   readonly currency: string;
@@ -173,6 +175,13 @@ export class Program {
    */
   adjust(request: AdjustmentRequest): CapacityMovement {
     const reservedAfter = this.reserved.amount + request.deltaHeld;
+    // ADR-0006: availability returns `reserved` as one JSON number, so it must stay exact there.
+    // A snapshot beyond it is refused here and set aside by the consumer (ADR-0013).
+    if (reservedAfter > MAX_EXACT_JSON_INTEGER) {
+      throw new RangeError(
+        `Adjustment would take reserved of ${this.programId} to ${reservedAfter}`,
+      );
+    }
     if (reservedAfter < 0n) {
       throw new RangeError(
         `Adjustment for ${request.reservationId} would take reserved of ${this.programId} below zero`,

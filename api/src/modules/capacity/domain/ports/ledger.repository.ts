@@ -14,5 +14,7 @@ export interface LedgerRepository {
    * ADR-0012, 2A: a program's `reserve` and `release` rows that occurred after a moment, in the
    * order they were appended. One read per snapshot, not one per reservation.
    */
+  /** The most recent row of each reservation asked for, in one read (ADR-0012, 3A). */
+  findLastByReservations(reservationIds: readonly string[]): Promise<Map<string, CapacityMovement>>;
   findClientMovementsSince(programId: string, since: Date): Promise<CapacityMovement[]>;
 }
