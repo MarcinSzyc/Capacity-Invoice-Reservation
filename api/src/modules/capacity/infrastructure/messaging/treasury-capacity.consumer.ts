@@ -116,7 +116,7 @@ export class TreasuryCapacityConsumer implements OnApplicationBootstrap, OnModul
       return this.processSnapshot(message, parsed.payload, messageId, receivedAt);
     }
 
-    const update = await parseCapacityUpdate(parsed.payload, receivedAt);
+    const update = await parsedOrRefused(() => parseCapacityUpdate(parsed.payload, receivedAt));
     if (!update.ok) {
       return this.reject(message, {messageId, payload: parsed.payload}, update.error, receivedAt);
     }
@@ -140,7 +140,7 @@ export class TreasuryCapacityConsumer implements OnApplicationBootstrap, OnModul
     messageId: string | null,
     receivedAt: Date,
   ): Promise<void> {
-    const snapshot = await parseReconciliationSnapshot(payload, receivedAt);
+    const snapshot = await parsedOrRefused(() => parseReconciliationSnapshot(payload, receivedAt));
     if (!snapshot.ok) return this.reject(message, {messageId, payload}, snapshot.error, receivedAt);
 
     const {programId} = snapshot.command;
@@ -286,6 +286,22 @@ const parseJson = (value: Buffer | null): ParsedJson => {
   } catch (reason: unknown) {
     const detail = reason instanceof Error ? reason.message : String(reason);
     return {ok: false, error: `message is not valid JSON: ${detail}`};
+  }
+};
+
+/**
+ * A-13 clause 4: a message that makes the parser itself throw, such as an unknown field nested
+ * thousands of arrays deep overflowing class-transformer's stack, is malformed like any other.
+ * Left to propagate it would keep the offset uncommitted and stall the partition for good.
+ */
+const parsedOrRefused = async <T extends {readonly ok: boolean}>(
+  parse: () => Promise<T>,
+): Promise<T | {readonly ok: false; readonly error: string}> => {
+  try {
+    return await parse();
+  } catch (reason: unknown) {
+    const detail = reason instanceof Error ? reason.message : String(reason);
+    return {ok: false, error: `message could not be parsed: ${detail}`};
   }
 };
 

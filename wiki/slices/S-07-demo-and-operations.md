@@ -1,7 +1,7 @@
 # S-07 Demo page and operations
 
 - Outcome: a reviewer opens the `web` container's page in the dev profile and watches reservations, releases and treasury messages flow through the real `api` endpoints and the real topic; state survives a restart.
-- Status: planned
+- Status: in progress
 - AC: AC-38, AC-39
 - INV: none
 - Risk: low. No business rule; a small React UI, three dev-only endpoints and a durability check. A-17 budgets half a day. The fixes carried from S-06 are local and each has a test. Runs on Opus per `CLAUDE.md §8`.
@@ -89,3 +89,4 @@ Beyond `CLAUDE.md §9`:
 | 2026-09-19 | plan | slice written |
 | 2026-09-19 | plan (revision) | compose shape per ADR-0001: api, web, db, kafka; demo in the web container |
 | 2026-09-25 | plan (revision) | reconciled with the shipped S-06 code: dev module chosen by profile, the ledger read, the treasury endpoint body, panels proved by render tests, the S-06 carried findings |
+| 2026-09-25 | implement | started on Fable; carried S-06 findings first |
