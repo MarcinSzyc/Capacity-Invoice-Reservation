@@ -143,3 +143,4 @@ Beyond `CLAUDE.md §9`:
 |---|---|---|
 | 2026-09-25 | plan | slice written for the S-06 and S-07 carried findings, at Marcin's request |
 | 2026-09-25 | implement | started on Opus |
+| 2026-09-26 | implement | done: items 1 to 11, npm run gate green |

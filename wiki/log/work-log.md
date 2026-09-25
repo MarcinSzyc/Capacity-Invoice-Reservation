@@ -3512,3 +3512,25 @@ Findings, most severe first:
 - The S-06 minor becomes a bound test of 20 000 active reservations released by omission; if it
   does not fit one transaction, making it fit is implement's job.
 - Commit column backfill for S-04 to S-07 goes to `/ship`. No ADR.
+
+## 2026-09-26, implement S-08, Opus
+- Items 1 to 4 (1dfd020): `storablePayload` is now a property of the payload, in
+  `readable-payload.ts`: null past depth 32 or with NUL in any string or key, iterative walk. The
+  `unparseable` mark is gone, so the parser and Prisma no longer need to overflow together.
+  `readableString` refuses NUL; error texts lose NUL before the record and the failure row;
+  `WithoutNul` (a `ValidateBy`, since a regex with `\u0000` trips `no-control-regex`) on
+  `messageId`, `programId`, `invoiceId` of both message DTOs. The integration test on the real
+  store was red first (the next valid message never applied), then green.
+- Item 5 (27a0ee4): 20 000 active client reservations released by omission in one transaction,
+  4.8 s against the 15 s timeout. Passed the first time: the requirement already held, the test
+  proves it. Setup writes the reservations in one transaction through the repositories, not
+  20 000 reservation requests.
+- Items 6 to 11 (web): invoices kept with their program id, a 404 drops one; the poll drops
+  answers after its cleanup; `fetch` failure is the only `API_UNREACHABLE`, a non-JSON body keeps
+  its status with no code; an empty token is asked for again; `availabilityOf` and `movementsOf`
+  narrow with guards, no cast left in `web/src` outside tests; the Stale comment corrected. The
+  generator timer test passed first (the S-07 fix was already there); checked it can fail by
+  putting the S-07 bug back: it failed, then the file was restored.
+- Tests beyond the plan, for `/ship`: `storableText` removes NUL
+  (`readable-payload.test.ts`).
+- `npm run gate` green: unit 205, web 9, integration 52, e2e 66, cold start 3.
