@@ -20,7 +20,7 @@ import {
   MESSAGE_TYPE_MAX_LENGTH,
   PROGRAM_ID_MAX_LENGTH,
 } from '../../domain/identifier-limits';
-import {readableString} from './readable-payload';
+import {readableString, storablePayload, storableText} from './readable-payload';
 import {
   TREASURY_CONSUMER_GROUP,
   TREASURY_DEAD_LETTER_TOPIC,
@@ -118,8 +118,7 @@ export class TreasuryCapacityConsumer implements OnApplicationBootstrap, OnModul
 
     const update = await parsedOrRefused(() => parseCapacityUpdate(parsed.payload, receivedAt));
     if (!update.ok) {
-      const payload = storablePayload(update, parsed.payload);
-      return this.reject(message, {messageId, payload}, update.error, receivedAt);
+      return this.reject(message, {messageId, payload: parsed.payload}, update.error, receivedAt);
     }
 
     const readable = {messageId, payload: parsed.payload};
@@ -142,10 +141,7 @@ export class TreasuryCapacityConsumer implements OnApplicationBootstrap, OnModul
     receivedAt: Date,
   ): Promise<void> {
     const snapshot = await parsedOrRefused(() => parseReconciliationSnapshot(payload, receivedAt));
-    if (!snapshot.ok) {
-      const kept = storablePayload(snapshot, payload);
-      return this.reject(message, {messageId, payload: kept}, snapshot.error, receivedAt);
-    }
+    if (!snapshot.ok) return this.reject(message, {messageId, payload}, snapshot.error, receivedAt);
 
     const {programId} = snapshot.command;
     const attempted = await this.attempted(snapshot.command.messageId, () =>
@@ -190,7 +186,7 @@ export class TreasuryCapacityConsumer implements OnApplicationBootstrap, OnModul
       await this.rejectTreasuryMessage.recordFailure({
         messageId,
         attempt,
-        error,
+        error: storableText(error),
         failedAt: new Date(),
       });
     } catch (reason: unknown) {
@@ -241,8 +237,8 @@ export class TreasuryCapacityConsumer implements OnApplicationBootstrap, OnModul
         messageId: readable.messageId,
         programId: readableString(readable.payload, 'programId', PROGRAM_ID_MAX_LENGTH),
         type: readableString(readable.payload, 'type', MESSAGE_TYPE_MAX_LENGTH),
-        payload: readable.payload,
-        error,
+        payload: storablePayload(readable.payload),
+        error: storableText(error),
         receivedAt,
       },
       () => this.deadLetter(message, error),
@@ -300,21 +296,14 @@ const parseJson = (value: Buffer | null): ParsedJson => {
  */
 const parsedOrRefused = async <T extends {readonly ok: boolean}>(
   parse: () => Promise<T>,
-): Promise<T | {readonly ok: false; readonly error: string; readonly unparseable: true}> => {
+): Promise<T | {readonly ok: false; readonly error: string}> => {
   try {
     return await parse();
   } catch (reason: unknown) {
     const detail = reason instanceof Error ? reason.message : String(reason);
-    return {ok: false, error: `message could not be parsed: ${detail}`, unparseable: true};
+    return {ok: false, error: `message could not be parsed: ${detail}`};
   }
 };
-
-/**
- * What broke the parser breaks Prisma's JSON serialiser too, so such a message is recorded
- * without its payload; the dead letter still carries the original bytes (ADR-0003).
- */
-const storablePayload = (refused: object, payload: unknown): unknown =>
-  'unparseable' in refused ? null : payload;
 
 const readableMessageId = (payload: unknown): string | null =>
   readableString(payload, 'messageId', MESSAGE_ID_MAX_LENGTH);

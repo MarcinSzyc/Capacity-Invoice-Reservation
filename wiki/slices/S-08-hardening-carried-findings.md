@@ -1,7 +1,7 @@
 # S-08 Hardening: the carried review findings
 
 - Outcome: no treasury message can stall its partition by what it contains, the demo page shows only the program it is asked about, and the snapshot path is proved at the scale its bound promises; every finding carried out of the S-06 and S-07 reviews is closed.
-- Status: planned
+- Status: in progress
 - AC: none new. Strengthens AC-25 (a malformed message is dead-lettered and the next one applied) and AC-38 (the demo page), both already `done`.
 - INV: none
 - Risk: medium. No new rule, but it changes what the treasury consumer writes when it refuses a message, the one path whose failure stalls a partition (A-13 clause 4). Runs on Opus per `CLAUDE.md §8`.
@@ -142,3 +142,4 @@ Beyond `CLAUDE.md §9`:
 | Date | Gate | Result |
 |---|---|---|
 | 2026-09-25 | plan | slice written for the S-06 and S-07 carried findings, at Marcin's request |
+| 2026-09-25 | implement | started on Opus |
