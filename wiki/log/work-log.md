@@ -3367,3 +3367,22 @@ Findings, most severe first:
   keeping two inside the keep window. Headless Chrome rendered the page with all four panels, the
   limit from the api and nine ledger rows. Not checked by hand: clicking the buttons in a browser
   (no browser driver in the repo); the render tests and the curl run cover the same calls.
+
+## 2026-09-25, verify S-07, Sonnet then Opus
+- VERIFY S-07: PASS, at 84cf460.
+- gate: `npm run gate` green. Unit 200, web 4, integration 49, e2e 66, cold start 3.
+- coverage: 2/2 AC, 0 INV. AC-38 has three tagged tests: one e2e over HTTP in
+  `api/test/demo.e2e-test.ts` (dev endpoints through the real topic, and `404` in production),
+  two render tests in `web/src/app.test.tsx`. AC-39 has one e2e test over HTTP in
+  `api/test/restart.e2e-test.ts`. All names match the plan rows word for word. No skipped or
+  focused tests.
+- Style and layers: prose check clean; no nested ternary and no braced one-line `if` in the
+  diff; no `@nestjs` in `domain/`, no ORM or Kafka import in `domain/` or `application/`.
+- Cold start on the default stack, after checking none of it existed: ready, `401` without a
+  token, `200` with one, `web` `200`, `/dev/token` answers. The README followed literally
+  answered as written every time (reserve, EUR reserve, R-1, R-2, R-1 again `409`, the reservation
+  read, the snapshot: INV-A at 100 000 000 with -20 000 000, INV-X from reconciliation). Stack
+  taken down.
+- Findings:
+  - (minor) `README.md` table row for `web` still says "the demo lands in S-07"; the
+    "See it working" section is `/ship`'s definition of done.
