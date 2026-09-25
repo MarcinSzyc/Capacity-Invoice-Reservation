@@ -2933,3 +2933,21 @@ Findings, most severe first:
   rule applied to a whole invoice, so it stays a supporting test rather than a fourth criterion.
 - `wiki/plan/plan.md` does not list the three yet. That is a targeted `/plan AC-42 AC-43 AC-44`
   into S-06, which is not done, so they are the next step before `/implement S-06`.
+
+## 2026-09-25, plan AC-42 AC-43 AC-44 (into S-06), Opus
+- Targeted run for the three criteria #38 added. The skill's targeted mode writes a new slice
+  file; these went into S-06 instead, as Marcin agreed when the criteria were proposed, because
+  they refine S-06's own reconciliation rules, S-06 is still `planned`, and a separate slice
+  after S-07 would have had to reopen S-06's code.
+- Three rows in `wiki/plan/plan.md`, all e2e: AC-42 the keep window (17:59:45 against an
+  18:00:00 snapshot), AC-43 a release after `asOf` standing (1 925 000, 500 000 released at
+  18:05, 1 400 000 after a snapshot of 18:00 listing 1 900 000), AC-44 a reopen (omitted at
+  12:00, listed at 300 000 at 18:00). Each uses the settable clock the slice already plans.
+- The three untagged supporting tests that proved those rules are removed from the slice file,
+  since tagged tests now close them. The one that stays is a full client release after `asOf`
+  leaving a listed reservation closed: AC-43's rule on a whole invoice, not a criterion.
+- Cross-checked: every AC and INV of the spec appears exactly once in the checklist, and all
+  twelve S-06 test names match the slice file.
+- Branch `docs/plan-S-06`, fast-forwarded to `main` at 1efa91b, since its first PR (#37) is
+  merged. Files: `plan.md`, the S-06 slice file, the slice index, `Home.md`, this entry. Nothing
+  committed.
