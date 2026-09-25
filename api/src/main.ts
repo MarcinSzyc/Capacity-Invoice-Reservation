@@ -3,6 +3,7 @@ import {AppModule} from './app.module';
 import {configureApp} from './app-setup';
 import {JsonLogger} from './common/logging/json-logger';
 import {APP_CONFIG, AppConfig} from './config/config.module';
+import {loadConfig} from './config/configuration';
 
 const logger = new JsonLogger();
 
@@ -10,7 +11,10 @@ const bootstrap = async (): Promise<void> => {
   // The logger goes in at creation, not after: Nest logs a failure during creation through its
   // own handler, so anything it prints before that point would not be JSON (A-18). With
   // abortOnError it would also exit before the handler below could report the failure.
-  const app = await NestFactory.create(AppModule, {logger, abortOnError: false});
+  const app = await NestFactory.create(AppModule.forProfile(loadConfig(process.env).profile), {
+    logger,
+    abortOnError: false,
+  });
 
   const config = app.get<AppConfig>(APP_CONFIG);
   configureApp(app, config);

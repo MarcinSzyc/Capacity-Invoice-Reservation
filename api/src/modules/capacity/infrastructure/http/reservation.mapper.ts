@@ -21,7 +21,7 @@ export const toReservationDto = (reservation: Reservation): ReservationDto => {
 };
 
 /** AC-19: `amount` is the movement's signed effect on `held`, in program currency. */
-const toMovementDto = (movement: CapacityMovement): CapacityMovementDto => ({
+export const toMovementDto = (movement: CapacityMovement): CapacityMovementDto => ({
   kind: movement.kind,
   amount: jsonInteger(movement.deltaHeld, 'amount'),
   reason: movement.reason,

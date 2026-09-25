@@ -10,11 +10,13 @@ export interface LedgerRepository {
    * idempotency check: a release id that is already on one of these rows is a repeat (AC-16).
    */
   findByReservation(reservationId: string): Promise<CapacityMovement[]>;
+  /** The most recent row of each reservation asked for, in one read (ADR-0012, 3A). */
+  findLastByReservations(reservationIds: readonly string[]): Promise<Map<string, CapacityMovement>>;
   /**
    * ADR-0012, 2A: a program's `reserve` and `release` rows that occurred after a moment, in the
    * order they were appended. One read per snapshot, not one per reservation.
    */
-  /** The most recent row of each reservation asked for, in one read (ADR-0012, 3A). */
-  findLastByReservations(reservationIds: readonly string[]): Promise<Map<string, CapacityMovement>>;
   findClientMovementsSince(programId: string, since: Date): Promise<CapacityMovement[]>;
+  /** A program's most recent rows, newest first, for the demo page's live ledger (AC-38). */
+  findLatestByProgram(programId: string, limit: number): Promise<CapacityMovement[]>;
 }

@@ -28,7 +28,11 @@ export class PrismaLedgerRepository implements LedgerRepository {
     return rows.map(toMovement);
   }
 
-  /** `DISTINCT ON (reservation_id)` ordered by id descending: the latest row of each, in one read. */
+  /**
+   * The latest row of each reservation, in one read. Prisma's `distinct` without the
+   * `nativeDistinct` preview is not `DISTINCT ON`: it selects every row of these reservations,
+   * ordered, and keeps the first of each in memory. One round trip, but not one row each.
+   */
   async findLastByReservations(
     reservationIds: readonly string[],
   ): Promise<Map<string, CapacityMovement>> {
@@ -50,6 +54,13 @@ export class PrismaLedgerRepository implements LedgerRepository {
         where: {programId, kind: {in: ['reserve', 'release']}, occurredAt: {gt: since}},
         orderBy: {id: 'asc'},
       }),
+    );
+    return rows.map(toMovement);
+  }
+
+  async findLatestByProgram(programId: string, limit: number): Promise<CapacityMovement[]> {
+    const rows = await this.db.withClient((client) =>
+      client.capacityMovement.findMany({where: {programId}, orderBy: {id: 'desc'}, take: limit}),
     );
     return rows.map(toMovement);
   }
