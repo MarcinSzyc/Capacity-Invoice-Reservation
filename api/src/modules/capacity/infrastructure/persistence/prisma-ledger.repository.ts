@@ -12,6 +12,14 @@ export class PrismaLedgerRepository implements LedgerRepository {
     );
   }
 
+  /** One multi-row INSERT: its rows take their ids in the order of the list, so they chain. */
+  async appendAll(movements: readonly CapacityMovement[]): Promise<void> {
+    if (movements.length === 0) return;
+    await this.db.withClient((client) =>
+      client.capacityMovement.createMany({data: movements.map(toMovementColumns)}),
+    );
+  }
+
   /** A reservation's own rows, oldest first: what AC-19 shows and what AC-16 searches. */
   async findByReservation(reservationId: string): Promise<CapacityMovement[]> {
     const rows = await this.db.withClient((client) =>

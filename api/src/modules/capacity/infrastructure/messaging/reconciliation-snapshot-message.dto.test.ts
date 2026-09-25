@@ -112,6 +112,49 @@ describe('parseReconciliationSnapshot', () => {
     expect(extraEntry.ok).toBe(false);
   });
 
+  it('should refuse a list whose held amounts add up to more than one exact JSON integer (ADR-0006)', async () => {
+    const atTheBound = await parseReconciliationSnapshot(
+      {
+        ...VALID,
+        activeReservations: [
+          {invoiceId: 'INV-X', heldAmount: Number.MAX_SAFE_INTEGER - 1},
+          {invoiceId: 'INV-Y', heldAmount: 1},
+        ],
+      },
+      RECEIVED_AT,
+    );
+    const beyond = await parseReconciliationSnapshot(
+      {
+        ...VALID,
+        activeReservations: [
+          {invoiceId: 'INV-X', heldAmount: Number.MAX_SAFE_INTEGER},
+          {invoiceId: 'INV-Y', heldAmount: 1},
+        ],
+      },
+      RECEIVED_AT,
+    );
+
+    expect(atTheBound.ok).toBe(true);
+    expect(beyond).toEqual({
+      ok: false,
+      error: expect.stringContaining('activeReservations') as string,
+    });
+  });
+
+  it('should refuse a list entry that is not an object, rather than crash on it (review round 1)', async () => {
+    for (const entry of [[], null, 'INV-X', 7]) {
+      const parsed = await parseReconciliationSnapshot(
+        {...VALID, activeReservations: [entry]},
+        RECEIVED_AT,
+      );
+
+      expect(parsed).toEqual({
+        ok: false,
+        error: expect.stringContaining('activeReservations') as string,
+      });
+    }
+  });
+
   it('should refuse a message that is not a snapshot or not an object', async () => {
     const wrongType = await parseReconciliationSnapshot(
       {...VALID, type: 'capacity_update'},

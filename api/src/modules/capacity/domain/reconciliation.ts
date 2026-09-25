@@ -173,13 +173,13 @@ const stepForLocal = (
 };
 
 /** AC-27 and ADR-0010: omitted means gone at `asOf`, unless it is too close to `asOf` to be sure. */
+// Only active reservations reach here unlisted: `local` is the active ones plus the listed ones.
 const stepForOmitted = (reservation: Reservation, input: ReconciliationInput): Step => {
-  if (reservation.status === 'closed') return NONE;
   const releasableBefore = input.snapshot.asOf.getTime() - input.keepWindowMs;
   if (reservation.createdAt.getTime() >= releasableBefore) {
     return {kind: 'note', note: {kind: 'kept_within_window', invoiceId: reservation.invoiceId}};
   }
-  return {kind: 'changed', reservation, deltaHeld: reservation.drop()};
+  return {kind: 'changed', reservation, deltaHeld: reservation.releaseByAdjustment()};
 };
 
 /** ADR-0012, 2A and 3A: the snapshot's figure plus what the client did after its moment. */

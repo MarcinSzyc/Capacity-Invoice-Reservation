@@ -334,10 +334,10 @@ describe('Reservation', () => {
       expect(reservation.status).toBe('closed');
     });
 
-    it('should close when dropped, the whole invoice counted as released (AC-27)', () => {
+    it('should close when released by adjustment, the whole invoice counted as released (AC-27)', () => {
       const reservation = holdingInvoiceB();
 
-      const deltaHeld = reservation.drop();
+      const deltaHeld = reservation.releaseByAdjustment();
 
       expect(deltaHeld).toBe(-192_500_000n);
       expect(reservation.held).toEqual(Money.zero(USD));
@@ -355,7 +355,7 @@ describe('Reservation', () => {
         clientId: CLIENT,
         createdAt: AT_10_00,
       });
-      reservation.drop();
+      reservation.releaseByAdjustment();
 
       const deltaHeld = reservation.reopenTo(THREE_HUNDRED_THOUSAND_USD);
 
@@ -379,7 +379,7 @@ describe('Reservation', () => {
         clientId: CLIENT,
         createdAt: AT_10_00,
       });
-      reservation.drop();
+      reservation.releaseByAdjustment();
 
       reservation.reopenTo(Money.of(100n, USD));
 
@@ -392,7 +392,7 @@ describe('Reservation', () => {
     it('should refuse to correct a closed reservation and to reopen an active one', () => {
       const active = holdingInvoiceB();
       const closed = holdingInvoiceB();
-      closed.drop();
+      closed.releaseByAdjustment();
 
       expect(() => active.reopenTo(THREE_HUNDRED_THOUSAND_USD)).toThrow(RangeError);
       expect(() => closed.correctTo(THREE_HUNDRED_THOUSAND_USD)).toThrow(RangeError);
