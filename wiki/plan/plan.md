@@ -19,16 +19,16 @@ Status: `planned`, `in progress`, `done`, `superseded by <id>`.
 | AC-07 | S-04 | done | `[AC-07] should answer 400 naming rate when it is missing for a cross-currency reservation or not 1 for a same-currency one` | e2e | `api/test/reservations.e2e-test.ts` | |
 | AC-08 | S-03 | done | `[AC-08] should answer 400 naming the field for a non-positive, non-integer or non-ISO-4217 reservation` | e2e | `api/test/reservations.e2e-test.ts` | `2d159f6` (tag `S-03`) |
 | AC-09 | S-03 | done | `[AC-09] should reject any reservation on an overcommitted program with CAPACITY_EXCEEDED and available 0` | e2e | `api/test/reservations.e2e-test.ts` | `2d159f6` (tag `S-03`) |
-| AC-10 | S-05 | planned | `[AC-10] should apply a partial release in invoice currency, reduce held by the converted amount and grow availability` | e2e | | |
-| AC-11 | S-05 | planned | `[AC-11] should close the reservation when the release carries no amount` | e2e | | |
-| AC-12 | S-05 | planned | `[AC-12] should close exactly at zero when the final instalment does not divide evenly by the rate` | e2e | | |
-| AC-13 | S-05 | planned | `[AC-13] should reject a release beyond held with RELEASE_EXCEEDS_HELD and change nothing` | e2e | | |
-| AC-14 | S-05 | planned | `[AC-14] should answer 404 RESERVATION_NOT_FOUND for a release on an unknown invoice` | e2e | | |
-| AC-15 | S-05 | planned | `[AC-15] should answer 409 RESERVATION_ALREADY_RELEASED for a new releaseId on a closed reservation` | e2e | | |
-| AC-16 | S-05 | planned | `[AC-16] should answer 409 RELEASE_ALREADY_PROCESSED with the original outcome for a repeated releaseId` | e2e | | |
-| AC-17 | S-05 | planned | `[AC-17] should record the release reason on the movement, defaulting to repaid, without changing the effect` | e2e | | |
-| AC-18 | S-05 | planned | `[AC-18] should reflect a reservation and a release in availability immediately after the response` | e2e | | |
-| AC-19 | S-05 | planned | `[AC-19] should return the reservation with its amounts, rate, status, source and movements` | e2e | | |
+| AC-10 | S-05 | done | `[AC-10] should apply a partial release in invoice currency, reduce held by the converted amount and grow availability` | e2e | `api/test/releases.e2e-test.ts` | |
+| AC-11 | S-05 | done | `[AC-11] should close the reservation when the release carries no amount` | e2e | `api/test/releases.e2e-test.ts` | |
+| AC-12 | S-05 | done | `[AC-12] should close exactly at zero when the final instalment does not divide evenly by the rate` | e2e | `api/test/releases.e2e-test.ts` | |
+| AC-13 | S-05 | done | `[AC-13] should reject a release beyond held with RELEASE_EXCEEDS_HELD and change nothing` | e2e | `api/test/releases.e2e-test.ts` | |
+| AC-14 | S-05 | done | `[AC-14] should answer 404 RESERVATION_NOT_FOUND for a release on an unknown invoice` | e2e | `api/test/releases.e2e-test.ts` | |
+| AC-15 | S-05 | done | `[AC-15] should answer 409 RESERVATION_ALREADY_RELEASED for a new releaseId on a closed reservation` | e2e | `api/test/releases.e2e-test.ts` | |
+| AC-16 | S-05 | done | `[AC-16] should answer 409 RELEASE_ALREADY_PROCESSED with the original outcome for a repeated releaseId` | e2e | `api/test/releases.e2e-test.ts` | |
+| AC-17 | S-05 | done | `[AC-17] should record the release reason on the movement, defaulting to repaid, without changing the effect` | e2e | `api/test/releases.e2e-test.ts` | |
+| AC-18 | S-05 | done | `[AC-18] should reflect a reservation and a release in availability immediately after the response` | e2e | `api/test/releases.e2e-test.ts` | |
+| AC-19 | S-05 | done | `[AC-19] should return the reservation with its amounts, rate, status, source and movements` | e2e | `api/test/releases.e2e-test.ts` | |
 | AC-20 | S-02 | done | `[AC-20] should create the program from the first capacity update and expose its availability` | e2e | `api/test/programs.e2e-test.ts` | `3090d8b` (tag `S-02`) |
 | AC-21 | S-03 | done | `[AC-21] should raise available when the treasury raises the limit above current usage` | e2e | `api/test/reservations.e2e-test.ts` | `2d159f6` (tag `S-03`) |
 | AC-22 | S-03 | done | `[AC-22] should read available 0 and overcommitted true when the limit drops below usage while every held stays` | e2e | `api/test/reservations.e2e-test.ts` | `2d159f6` (tag `S-03`) |
@@ -43,7 +43,7 @@ Status: `planned`, `in progress`, `done`, `superseded by <id>`.
 | AC-31 | S-06 | planned | `[AC-31] should set limit and currency from the snapshot and expose its asOf in availability` | e2e | | |
 | AC-32 | S-02 | done | `[AC-32] should answer 401 to a business request without a bearer token` | e2e | `api/test/authentication.e2e-test.ts` | `3090d8b` (tag `S-02`) |
 | AC-33 | S-02 | done | `[AC-33] should answer 401 to an expired or wrongly signed token` | e2e | `api/test/authentication.e2e-test.ts` | `3090d8b` (tag `S-02`) |
-| AC-34 | S-05 | planned | `[AC-34] should record the authenticated client id on reserve and release movements` | e2e | | |
+| AC-34 | S-05 | done | `[AC-34] should record the authenticated client id on reserve and release movements` | e2e | `api/test/releases.e2e-test.ts` | |
 | AC-35 | S-02 | done | `[AC-35] should serve liveness, readiness and the API documentation without a token and without business data` | e2e | `api/test/authentication.e2e-test.ts` | `3090d8b` (tag `S-02`) |
 | AC-36 | S-02 | done | `[AC-36] should start from a clean checkout and answer an authenticated availability request for the sample program` | cold start | `api/test/cold-start/programs.smoke-test.ts` | `3090d8b` (tag `S-02`) |
 | AC-37 | S-02 | done | `[AC-37] should mint a dev token that the availability request accepts` | cold start | `api/test/cold-start/programs.smoke-test.ts` | `3090d8b` (tag `S-02`) |
@@ -52,7 +52,7 @@ Status: `planned`, `in progress`, `done`, `superseded by <id>`.
 | AC-40 | S-02 | done | `[AC-40] should write JSON log lines sharing one correlation id per request and per message` | e2e | `api/test/programs.e2e-test.ts` | `3090d8b` (tag `S-02`) |
 | AC-41 | S-01 | done | `[AC-41] should link the README to the assumptions register, the decision records and the run instructions` | unit | `api/test/readme.test.ts` | `4215d1c` (tag `S-01`) |
 | INV-01 | S-03 | done | `[INV-01] should never overcommit under parallel reservations on one program` | invariant (e2e) | `api/test/capacity-invariant.e2e-test.ts` | `2d159f6` (tag `S-03`) |
-| INV-02 | S-05 | planned | `[INV-02] should keep held between 0 and reservedAmount over random release sequences` | unit | | |
+| INV-02 | S-05 | done | `[INV-02] should keep held between 0 and reservedAmount over random release sequences` | unit | `api/src/modules/capacity/domain/reservation.invariants.test.ts` | |
 | INV-03 | S-03 | done | `[INV-03] should keep program reserved equal to the sum of held of active reservations after every scenario` | invariant (e2e) | `api/test/capacity-invariant.e2e-test.ts`, `api/test/support/ledger-invariants.ts` | `2d159f6` (tag `S-03`) |
 | INV-04 | S-03 | done | `[INV-04] should chain reserved_after from the previous row plus delta_held and recompute the stored state` | unit + e2e helper | `api/src/modules/capacity/domain/ledger.test.ts`, `api/test/support/ledger-invariants.ts` | `2d159f6` (tag `S-03`) |
 | INV-05 | S-06 | planned | `[INV-05] should leave every balance and ledger row unchanged when every message and request of a scenario is replayed` | invariant (e2e) | | |
@@ -115,3 +115,11 @@ than closing a requirement of their own (`CLAUDE.md §4`).
 | S-04 | extra | A rate survives `NUMERIC(20,8)` in both directions, including one at the full eight places, which `toString` would have returned in exponential form | `api/src/modules/capacity/infrastructure/persistence/prisma-capacity.integration-test.ts` |
 | S-04 | extra | A rate that is not a decimal string (a JSON number, `abc`, `0`, nine places, empty, an explicit `null`) answers `400` naming `rate` | `api/test/reservations.e2e-test.ts` |
 | S-04 | extra | Conversion respects both currencies' minor units over HTTP in each direction: 1.00 USD at `0.30712` is 307 KWD minor units, and 1 000 JPY at `0.0067` is 670 USD minor units (A-10) | `api/test/reservations.e2e-test.ts` |
+| S-05 | extra | `Reservation.release` converts with the stored rate and derives `held` from what the invoice has left: a partial release, an absent amount meaning everything left, three instalments at `1.13` closing at exactly zero, an over-release refused in invoice currency, and a reservation with nothing left refused before the amount is judged (ADR-0009, AC-15) | `api/src/modules/capacity/domain/reservation.test.ts` |
+| S-05 | extra | A remainder worth less than half a minor unit rounds `held` to zero while the invoice still owes: the reservation stays active and can be released to the end (AC-15, amended) | `api/src/modules/capacity/domain/reservation.test.ts` |
+| S-05 | extra | `Program.release` lowers `reserved`, lets an overcommitted program stop being overcommitted, and refuses a delta that would raise `held` or take `reserved` below zero | `api/src/modules/capacity/domain/program.test.ts` |
+| S-05 | extra | `ReleaseCapacity` against the fakes: the converted release, the absent amount, `PROGRAM_NOT_FOUND`, `RESERVATION_NOT_FOUND`, the repeat answered before the amount is judged with the outcome that release had, the over-release, the already-released reservation, the reason on the movement, and a rounded-away remainder closed through the use case | `api/src/modules/capacity/application/release-capacity.use-case.test.ts` |
+| S-05 | extra | Several reads inside `readSnapshot` see one instant: a committed write from another connection between them is not seen, while the row really did change | `api/src/modules/capacity/infrastructure/persistence/prisma-capacity.integration-test.ts` |
+| S-05 | extra | The Prisma adapters save and read back `released_invoice_amount`, the partial unique index refuses a repeated `(reservation_id, release_id)` while allowing the same id on another invoice, and `findByReservation` returns rows in append order | `api/src/modules/capacity/infrastructure/persistence/prisma-capacity.integration-test.ts` |
+| S-05 | extra | The three storage constraints refuse what no writer of ours can produce: a non-positive rate, an unknown release reason, and a reservation that released more than its invoice | `api/src/modules/capacity/infrastructure/persistence/prisma-capacity.integration-test.ts` |
+| S-05 | extra | A malformed release body answers `400` naming the field, including an explicit `null` amount or reason, which `@IsOptional` would have let through to a `500` | `api/test/releases.e2e-test.ts` |
