@@ -3442,3 +3442,44 @@ Findings, most severe first:
 - VERIFY S-07: PASS, at 7a3181b. `npm run gate` green: unit 200, web 4, integration 50, e2e 66,
   cold start 3. Coverage unchanged, 2/2 AC. The diff since round 1 is one consumer function and
   one integration test; prose check clean, no layer import moved. Findings: none new.
+
+## 2026-09-25, review S-07 (round 2), Opus
+- REVIEW S-07: 9 findings (0/1/8), at 7489555 against base 5033a33, fresh context. Not a pass.
+  Run on Opus, Fable out of credits (Marcin's decision: the skill asks for Fable).
+- The round 1 major is closed as reported: a 5 000-deep message is dead-lettered once, recorded
+  `rejected` with a `null` payload (Prisma stores JS `null` as JSON null in the `NOT NULL` jsonb
+  column), and the next message applies. Redelivery reads nothing but `message_id`
+  (`wasProcessed`, `recordDuplicate`), so a null payload changes no duplicate count. Probed
+  through the real consumer on the real store at depths 1 000 to 3 100: no stall.
+- Findings, most severe first:
+  - (major, spec) `treasury-capacity.consumer.ts:228-253` with `reject-treasury-message.use-case.ts:35-38`:
+    the round 1 major's class is still open for any message the store cannot write. A string
+    holding `\u0000` (valid JSON) anywhere in the payload, e.g. an unknown field
+    `"note":"a\u0000b"` or `"creditLimit":"\u0000"`, is refused by the DTO without the
+    `unparseable` mark, so the payload is kept; Postgres refuses `\u0000` in jsonb (and in
+    varchar, so a NUL in `programId` or `messageId` fails the same way), `recordOutcome` throws
+    after the dead letter went out, the offset stays uncommitted and the message is delivered
+    again forever. Reproduced through the real consumer, broker and database: the next message
+    on the partition never applied, 53 dead letters of the same message in 10 s (A-13 clause 4,
+    "one bad message must not stall"). Predates S-07, but it is the stall the carried major
+    set out to close, and `POST /dev/treasury` (`dev.dto.ts:73-81`) publishes such a
+    `programId` or `currency` unchecked.
+  - (minor, spec) `treasury-capacity.consumer.ts:312-317`: `storablePayload` rests on "what broke
+    the parser breaks Prisma's JSON serialiser too", a coincidence of two stack depths, not a
+    rule. Called from the same stack with both functions warm, `parseCapacityUpdate` refuses
+    without throwing at depths 2 840 to 2 856 while `recordOutcome` overflows on the same payload
+    (reproduced twice). Through the consumer the parse runs on the deeper Kafka handler stack and
+    no gap was found, so it holds today by call-stack geometry.
+  - Carried from round 1, unchanged since (no `web` file changed after 6624ac6):
+  - (minor, spec) `web/src/generator.tsx:34,58`: reserved invoices not scoped to the program;
+    after a program change their releases answer `404` forever.
+  - (minor, standards) `web/src/app.tsx:41-48`: no stale-answer guard on the poll.
+  - (minor, standards) `web/src/api.ts:68`: a non-JSON body logged as `0`/`API_UNREACHABLE`;
+    `bearer` (line 48) caches an empty token.
+  - (minor, standards) `web/src/app.tsx:22,46`: unnarrowed `as Movement[]`, `as Availability`.
+  - (minor, spec) `web/src/treasury-panel.tsx:5`: the "Stale" comment is wrong for a new program.
+  - (minor, spec) `web/src/generator.tsx:79`: the once-a-second timer has no test.
+  - (minor, spec) `wiki/slices/S-07-demo-and-operations.md:31`: Scope still places
+    `DevTreasuryProducer` in `CapacityModule`; the code provides it in `CapacityDevModule`.
+- Scratch probes were written under `api/src/` and deleted; the working tree holds only this
+  entry and the slice log row.
