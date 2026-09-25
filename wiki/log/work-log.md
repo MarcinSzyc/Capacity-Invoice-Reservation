@@ -3386,3 +3386,41 @@ Findings, most severe first:
 - Findings:
   - (minor) `README.md` table row for `web` still says "the demo lands in S-07"; the
     "See it working" section is `/ship`'s definition of done.
+
+## 2026-09-25, review S-07 (round 1), Opus
+- REVIEW S-07: 8 findings (0/1/7), at 6624ac6 against base 5033a33, fresh context. Not a pass.
+  Run on Opus, Fable out of credits (Marcin's decision: the skill asks for Fable).
+- Carried from S-06, finding by finding: the `sumOfDeltas` pass, the port comments and the
+  `findLastByReservations` comment are closed. The major is closed only against the in-memory
+  store (first finding below).
+- Findings, most severe first:
+  - (major, spec) `treasury-capacity.consumer.ts:119,143` with `reject-treasury-message.use-case.ts:35-37`:
+    a parse that throws now becomes a rejection, but the rejection writes the parsed payload to
+    `treasury_messages.payload` through Prisma, and Prisma 7 overflows the stack serialising JSON
+    nested deeper than about 2 000 to 3 000 levels (reproduced with the generated client on
+    Postgres 17: depth 2 000 stored, 3 000 and 5 000 `RangeError`; Postgres itself accepts 5 000).
+    For the test's own 5 000-deep message the dead letter goes out, `recordOutcome` throws,
+    `handle` rejects, the offset is not committed and the message is delivered again forever, one
+    more dead letter each time since no record exists for `countIfKnown` to find (A-13 clause 4).
+    The supporting test at `treasury-capacity.consumer.test.ts:245` uses the in-memory store,
+    which never serialises, so it cannot fail on this.
+  - (minor, spec) `web/src/generator.tsx:34,58`: the reserved invoices are not scoped to the
+    program; after the program field changes, releases of the old program's invoices go to the new
+    program's path, answer `404`, return early and are never dropped, so a share of every later
+    tick is a permanent `404`.
+  - (minor, standards) `web/src/app.tsx:41-48`: a poll for the previous program id that resolves
+    after one for the new id overwrites the ledger with the other program's rows; no stale guard.
+  - (minor, standards) `web/src/api.ts:68`: a response that is not JSON (or a failed `JSON.parse`)
+    is logged as status `0` with `API_UNREACHABLE`, a code `api` never sent, in a log that says it
+    shows what `api` answered; and `bearer` (line 48) caches an empty token forever when
+    `/dev/token` answers without one.
+  - (minor, standards) `web/src/app.tsx:22,46`: `as Movement[]` and `as Availability` cast
+    untrusted `unknown` bodies without narrowing (`CLAUDE.md §3`).
+  - (minor, spec) `web/src/treasury-panel.tsx:5`: the comment promises the consumer records the
+    message as stale; for a program with no earlier capacity update (any new id typed in the
+    program field) it is applied and announces the program.
+  - (minor, spec) `web/src/generator.tsx:79`: the once-a-second timer, which already failed once
+    (restarted on every render), has no test; the render test clicks "One request" only.
+  - (minor, spec) `wiki/slices/S-07-demo-and-operations.md:34`: Scope still says
+    `DevTreasuryProducer` becomes a provider exported by `CapacityModule`; the code provides it in
+    `CapacityDevModule` (`capacity-dev.module.ts:14`). The plan correction is only in the work-log.
