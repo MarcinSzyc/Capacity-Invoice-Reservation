@@ -3337,3 +3337,165 @@ Findings, most severe first:
   match the plan rows word for word.
 - Goal set by Marcin for this session: plan, implement, verify, review and ship S-07 with the PRs
   opened and merged without a separate approval each, verify passing and review without a blocker.
+
+## 2026-09-25, implement S-07, Fable
+- Carried from S-06 first (commit 38780e6): a throw while parsing a treasury message is now a
+  rejection, dead-lettered and recorded, so the 5 000-deep nested field no longer stalls the
+  partition (supporting test for both types, red on the real `RangeError` first); the sum of
+  client movements after `asOf` is one pass; the ledger port comments are back above their
+  methods; the last-row read says what Prisma's `distinct` really sends.
+- `api` (0f491ba): `CapacityDevModule` with `DevController`, three `@Public()` routes under the
+  `dev` Swagger tag; `AppModule.forProfile` leaves it out in production (local decision 1), so
+  `main.ts` reads the profile once before creating the app and the e2e harness passes its own.
+  `ListProgramMovements` reads program and rows in one `readSnapshot`; `CapacityReads` gains
+  `findLatestByProgram`. Deviation from the slice text, small: `DevTreasuryProducer` is a provider
+  of the dev module rather than exported by `CapacityModule`, so production never constructs it.
+- AC-39's test passed the first time it ran, as the slice predicted: durability was built by
+  S-02 to S-06, and the test proves it rather than drives it.
+- `web` (ce12815): four panels, a small client that fetches the dev token once and logs only the
+  calls a person caused (the one-second polls are not logged, or the log would be nothing else).
+  The generator gained a "One request" button besides start and stop, which is what the render
+  test clicks. Found by reading the code before the hand check: the generator's timer restarted on
+  every render, and the page re-renders on every poll, so it could never fire; it now reaches the
+  latest step through a ref. No test covers that timer; the hand check does not either (see below).
+- Tests beyond the plan, for `/ship`: `ListProgramMovements` unit tests (two), in
+  `api/src/modules/capacity/application/list-program-movements.query.test.ts`.
+- `npm run gate` green: unit 200, web 4, integration 49, e2e 66, cold start 3.
+- Hand check on a compose stack of its own (ports 3200/8280): dev token, CORS preflight from the
+  web origin, three reservations and a partial release as `demo-web`, a limit change applied, a
+  stale update ignored, a snapshot correcting one reservation by -1 000, creating one of 700 and
+  keeping two inside the keep window. Headless Chrome rendered the page with all four panels, the
+  limit from the api and nine ledger rows. Not checked by hand: clicking the buttons in a browser
+  (no browser driver in the repo); the render tests and the curl run cover the same calls.
+
+## 2026-09-25, verify S-07, Sonnet then Opus
+- VERIFY S-07: PASS, at 84cf460.
+- gate: `npm run gate` green. Unit 200, web 4, integration 49, e2e 66, cold start 3.
+- coverage: 2/2 AC, 0 INV. AC-38 has three tagged tests: one e2e over HTTP in
+  `api/test/demo.e2e-test.ts` (dev endpoints through the real topic, and `404` in production),
+  two render tests in `web/src/app.test.tsx`. AC-39 has one e2e test over HTTP in
+  `api/test/restart.e2e-test.ts`. All names match the plan rows word for word. No skipped or
+  focused tests.
+- Style and layers: prose check clean; no nested ternary and no braced one-line `if` in the
+  diff; no `@nestjs` in `domain/`, no ORM or Kafka import in `domain/` or `application/`.
+- Cold start on the default stack, after checking none of it existed: ready, `401` without a
+  token, `200` with one, `web` `200`, `/dev/token` answers. The README followed literally
+  answered as written every time (reserve, EUR reserve, R-1, R-2, R-1 again `409`, the reservation
+  read, the snapshot: INV-A at 100 000 000 with -20 000 000, INV-X from reconciliation). Stack
+  taken down.
+- Findings:
+  - (minor) `README.md` table row for `web` still says "the demo lands in S-07"; the
+    "See it working" section is `/ship`'s definition of done.
+
+## 2026-09-25, review S-07 (round 1), Opus
+- REVIEW S-07: 8 findings (0/1/7), at 6624ac6 against base 5033a33, fresh context. Not a pass.
+  Run on Opus, Fable out of credits (Marcin's decision: the skill asks for Fable).
+- Carried from S-06, finding by finding: the `sumOfDeltas` pass, the port comments and the
+  `findLastByReservations` comment are closed. The major is closed only against the in-memory
+  store (first finding below).
+- Findings, most severe first:
+  - (major, spec) `treasury-capacity.consumer.ts:119,143` with `reject-treasury-message.use-case.ts:35-37`:
+    a parse that throws now becomes a rejection, but the rejection writes the parsed payload to
+    `treasury_messages.payload` through Prisma, and Prisma 7 overflows the stack serialising JSON
+    nested deeper than about 2 000 to 3 000 levels (reproduced with the generated client on
+    Postgres 17: depth 2 000 stored, 3 000 and 5 000 `RangeError`; Postgres itself accepts 5 000).
+    For the test's own 5 000-deep message the dead letter goes out, `recordOutcome` throws,
+    `handle` rejects, the offset is not committed and the message is delivered again forever, one
+    more dead letter each time since no record exists for `countIfKnown` to find (A-13 clause 4).
+    The supporting test at `treasury-capacity.consumer.test.ts:245` uses the in-memory store,
+    which never serialises, so it cannot fail on this.
+  - (minor, spec) `web/src/generator.tsx:34,58`: the reserved invoices are not scoped to the
+    program; after the program field changes, releases of the old program's invoices go to the new
+    program's path, answer `404`, return early and are never dropped, so a share of every later
+    tick is a permanent `404`.
+  - (minor, standards) `web/src/app.tsx:41-48`: a poll for the previous program id that resolves
+    after one for the new id overwrites the ledger with the other program's rows; no stale guard.
+  - (minor, standards) `web/src/api.ts:68`: a response that is not JSON (or a failed `JSON.parse`)
+    is logged as status `0` with `API_UNREACHABLE`, a code `api` never sent, in a log that says it
+    shows what `api` answered; and `bearer` (line 48) caches an empty token forever when
+    `/dev/token` answers without one.
+  - (minor, standards) `web/src/app.tsx:22,46`: `as Movement[]` and `as Availability` cast
+    untrusted `unknown` bodies without narrowing (`CLAUDE.md §3`).
+  - (minor, spec) `web/src/treasury-panel.tsx:5`: the comment promises the consumer records the
+    message as stale; for a program with no earlier capacity update (any new id typed in the
+    program field) it is applied and announces the program.
+  - (minor, spec) `web/src/generator.tsx:79`: the once-a-second timer, which already failed once
+    (restarted on every render), has no test; the render test clicks "One request" only.
+  - (minor, spec) `wiki/slices/S-07-demo-and-operations.md:34`: Scope still says
+    `DevTreasuryProducer` becomes a provider exported by `CapacityModule`; the code provides it in
+    `CapacityDevModule` (`capacity-dev.module.ts:14`). The plan correction is only in the work-log.
+
+## 2026-09-25, implement S-07 (review round 1 fixes), Opus
+- The major: a message that made the parser throw was rejected, but its record kept the payload
+  and Prisma overflows serialising the same nesting into jsonb, so the partition still stalled on
+  the real store. The record now keeps no payload for such a message (the dead letter still holds
+  the original bytes). New integration test on the real database and broker, red first (the next
+  valid message never applied), then green:
+  `should dead-letter and record a message whose parsing throws, and apply the next one on the real store`.
+- The seven minors are carried to `/ship` as known limitations, per the goal Marcin set (a
+  review without blockers ships): generator invoices not tied to a program, no stale-answer
+  guard on the poll, a non-JSON body logged as `API_UNREACHABLE` and an empty token cached, two
+  unnarrowed casts in `app.tsx`, the "Stale" comment, no test of the generator timer, and the
+  slice Scope line on where `DevTreasuryProducer` is provided.
+
+## 2026-09-25, verify S-07 (round 2), Opus
+- VERIFY S-07: PASS, at 7a3181b. `npm run gate` green: unit 200, web 4, integration 50, e2e 66,
+  cold start 3. Coverage unchanged, 2/2 AC. The diff since round 1 is one consumer function and
+  one integration test; prose check clean, no layer import moved. Findings: none new.
+
+## 2026-09-25, review S-07 (round 2), Opus
+- REVIEW S-07: 9 findings (0/1/8), at 7489555 against base 5033a33, fresh context. Not a pass.
+  Run on Opus, Fable out of credits (Marcin's decision: the skill asks for Fable).
+- The round 1 major is closed as reported: a 5 000-deep message is dead-lettered once, recorded
+  `rejected` with a `null` payload (Prisma stores JS `null` as JSON null in the `NOT NULL` jsonb
+  column), and the next message applies. Redelivery reads nothing but `message_id`
+  (`wasProcessed`, `recordDuplicate`), so a null payload changes no duplicate count. Probed
+  through the real consumer on the real store at depths 1 000 to 3 100: no stall.
+- Findings, most severe first:
+  - (major, spec) `treasury-capacity.consumer.ts:228-253` with `reject-treasury-message.use-case.ts:35-38`:
+    the round 1 major's class is still open for any message the store cannot write. A string
+    holding `\u0000` (valid JSON) anywhere in the payload, e.g. an unknown field
+    `"note":"a\u0000b"` or `"creditLimit":"\u0000"`, is refused by the DTO without the
+    `unparseable` mark, so the payload is kept; Postgres refuses `\u0000` in jsonb (and in
+    varchar, so a NUL in `programId` or `messageId` fails the same way), `recordOutcome` throws
+    after the dead letter went out, the offset stays uncommitted and the message is delivered
+    again forever. Reproduced through the real consumer, broker and database: the next message
+    on the partition never applied, 53 dead letters of the same message in 10 s (A-13 clause 4,
+    "one bad message must not stall"). Predates S-07, but it is the stall the carried major
+    set out to close, and `POST /dev/treasury` (`dev.dto.ts:73-81`) publishes such a
+    `programId` or `currency` unchecked.
+  - (minor, spec) `treasury-capacity.consumer.ts:312-317`: `storablePayload` rests on "what broke
+    the parser breaks Prisma's JSON serialiser too", a coincidence of two stack depths, not a
+    rule. Called from the same stack with both functions warm, `parseCapacityUpdate` refuses
+    without throwing at depths 2 840 to 2 856 while `recordOutcome` overflows on the same payload
+    (reproduced twice). Through the consumer the parse runs on the deeper Kafka handler stack and
+    no gap was found, so it holds today by call-stack geometry.
+  - Carried from round 1, unchanged since (no `web` file changed after 6624ac6):
+  - (minor, spec) `web/src/generator.tsx:34,58`: reserved invoices not scoped to the program;
+    after a program change their releases answer `404` forever.
+  - (minor, standards) `web/src/app.tsx:41-48`: no stale-answer guard on the poll.
+  - (minor, standards) `web/src/api.ts:68`: a non-JSON body logged as `0`/`API_UNREACHABLE`;
+    `bearer` (line 48) caches an empty token.
+  - (minor, standards) `web/src/app.tsx:22,46`: unnarrowed `as Movement[]`, `as Availability`.
+  - (minor, spec) `web/src/treasury-panel.tsx:5`: the "Stale" comment is wrong for a new program.
+  - (minor, spec) `web/src/generator.tsx:79`: the once-a-second timer has no test.
+  - (minor, spec) `wiki/slices/S-07-demo-and-operations.md:31`: Scope still places
+    `DevTreasuryProducer` in `CapacityModule`; the code provides it in `CapacityDevModule`.
+- Scratch probes were written under `api/src/` and deleted; the working tree holds only this
+  entry and the slice log row.
+
+## 2026-09-25, ship S-07, Sonnet then Opus
+- Precondition not met, and shipped anyway by Marcin's standing decision for this session: verify
+  round 2 is PASS at 7a3181b and newer than the last code commit, but review round 2 has one
+  major. Marcin's goal for the session: "verify must pass and review must have no blockers,
+  major can go in", with PRs opened and merged without asking. The major (a `\u0000` in a message
+  string makes the rejection record unwritable, so the message stalls its partition) is older
+  than S-07 and recorded as a known limitation, not presented as fixed.
+- `wiki/plan/plan.md`: AC-38 and AC-39 `done` with their test files; four `extra` rows. The
+  commit column stays empty, as for S-04 to S-06, until the merge commit is backfilled.
+- No ADR touched. No assumption missing from the register.
+- README: the `web` row no longer promises the demo for S-07; new "See it working" section with
+  the four panels and the three dev endpoints.
+- Slice file: status `done`; its Scope line on where `DevTreasuryProducer` is provided corrected
+  to match the code (review minor, a factual correction of the plan text).
+- Changelog row, slice index and Home updated: every slice done, the plan complete.

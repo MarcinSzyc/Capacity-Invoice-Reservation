@@ -118,6 +118,11 @@ export class InMemoryLedger implements LedgerRepository {
       ),
     );
   }
+
+  findLatestByProgram(programId: string, limit: number): Promise<CapacityMovement[]> {
+    const own = this.movements.filter((m) => m.programId === programId);
+    return Promise.resolve(own.reverse().slice(0, limit));
+  }
 }
 
 export interface StoredTreasuryMessage extends TreasuryMessageRecord {

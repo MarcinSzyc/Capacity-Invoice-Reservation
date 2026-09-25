@@ -52,6 +52,8 @@ const inbound = (payload: unknown): InboundMessage => ({
 });
 
 const KEEP_WINDOW_MS = 30_000;
+// Deep enough to overflow the stack of class-transformer, found by review round 3 of S-06.
+const NESTING = 5_000;
 
 const consumerFor = (
   capacity: InMemoryUnitOfWork,
@@ -238,6 +240,31 @@ describe('TreasuryCapacityConsumer', () => {
 
     expect(capacity.repositories.treasuryMessages.byId.get('m-snapshot')?.outcome).toBe('rejected');
     expect(source.published).toHaveLength(1);
+  });
+
+  it('should dead-letter a treasury message whose parsing throws and keep consuming', async () => {
+    const capacity = inMemoryCapacity();
+    const source = new FakeMessageSource();
+    const consumer = consumerFor(capacity, source);
+    const deeplyNested = (payload: object): InboundMessage => ({
+      ...inbound(payload),
+      value: Buffer.from(
+        `${JSON.stringify(payload).slice(0, -1)},"extra":${'['.repeat(NESTING)}${']'.repeat(NESTING)}}`,
+      ),
+    });
+
+    await consumer.handle(deeplyNested({...UPDATE, messageId: 'm-nested-update'}));
+    await consumer.handle(deeplyNested({...SNAPSHOT, messageId: 'm-nested-snapshot'}));
+    await consumer.handle(inbound(UPDATE));
+
+    const {byId} = capacity.repositories.treasuryMessages;
+    expect(byId.get('m-nested-update')?.outcome).toBe('rejected');
+    expect(byId.get('m-nested-snapshot')?.outcome).toBe('rejected');
+    expect(source.published.map(({topic}) => topic)).toEqual([
+      TREASURY_DEAD_LETTER_TOPIC,
+      TREASURY_DEAD_LETTER_TOPIC,
+    ]);
+    expect(byId.get('m-limit')?.outcome).toBe('applied');
   });
 
   describe('a message whose handling fails (ADR-0013)', () => {

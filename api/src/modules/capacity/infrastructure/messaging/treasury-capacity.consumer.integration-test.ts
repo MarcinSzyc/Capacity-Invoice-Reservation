@@ -37,6 +37,8 @@ const TEN_MILLION = 1_000_000_000n;
 const FIVE_MILLION_EUR = Money.of(FIVE_MILLION, EUR);
 const WAIT_MS = 30_000;
 const KEEP_WINDOW_MS = 30_000;
+// Deep enough to overflow class-transformer and Prisma's JSON serialiser (reviews of S-06, S-07).
+const NESTING = 5_000;
 
 const uniqueId = (prefix: string): string => `${prefix}-${randomUUID().slice(0, 8)}`;
 
@@ -349,6 +351,27 @@ describe('TreasuryCapacityConsumer', () => {
     expect(await outcomeOf(validId)).toMatchObject({outcome: 'applied'});
     const deadLetter = await deadLetterOf(marker);
     expect(deadLetter.headers.error).toMatch(/JSON/);
+  });
+
+  it('should dead-letter and record a message whose parsing throws, and apply the next one on the real store', async () => {
+    const programId = uniqueId('PRG');
+    const nestedId = uniqueId('m-nested');
+    const validId = uniqueId('m');
+    const update = {messageId: nestedId, type: 'capacity_update', programId, currency: EUR};
+    const nested = `${JSON.stringify(update).slice(0, -1)},"extra":${'['.repeat(NESTING)}${']'.repeat(NESTING)}}`;
+
+    await kafka.publish(TREASURY_TOPIC, [{key: programId, value: nested}]);
+    await producer.publishCapacityUpdate({
+      messageId: validId,
+      programId,
+      currency: EUR,
+      creditLimit: FIVE_MILLION,
+      eventTime: AT_10_00,
+    });
+
+    expect(await outcomeOf(validId)).toMatchObject({outcome: 'applied'});
+    expect(await outcomeOf(nestedId)).toMatchObject({outcome: 'rejected'});
+    expect((await deadLetterOf(nestedId)).headers.error).toMatch(/could not be parsed/);
   });
 
   describe('reconciliation snapshots', () => {

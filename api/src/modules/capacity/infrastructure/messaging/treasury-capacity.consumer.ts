@@ -116,9 +116,10 @@ export class TreasuryCapacityConsumer implements OnApplicationBootstrap, OnModul
       return this.processSnapshot(message, parsed.payload, messageId, receivedAt);
     }
 
-    const update = await parseCapacityUpdate(parsed.payload, receivedAt);
+    const update = await parsedOrRefused(() => parseCapacityUpdate(parsed.payload, receivedAt));
     if (!update.ok) {
-      return this.reject(message, {messageId, payload: parsed.payload}, update.error, receivedAt);
+      const payload = storablePayload(update, parsed.payload);
+      return this.reject(message, {messageId, payload}, update.error, receivedAt);
     }
 
     const readable = {messageId, payload: parsed.payload};
@@ -140,8 +141,11 @@ export class TreasuryCapacityConsumer implements OnApplicationBootstrap, OnModul
     messageId: string | null,
     receivedAt: Date,
   ): Promise<void> {
-    const snapshot = await parseReconciliationSnapshot(payload, receivedAt);
-    if (!snapshot.ok) return this.reject(message, {messageId, payload}, snapshot.error, receivedAt);
+    const snapshot = await parsedOrRefused(() => parseReconciliationSnapshot(payload, receivedAt));
+    if (!snapshot.ok) {
+      const kept = storablePayload(snapshot, payload);
+      return this.reject(message, {messageId, payload: kept}, snapshot.error, receivedAt);
+    }
 
     const {programId} = snapshot.command;
     const attempted = await this.attempted(snapshot.command.messageId, () =>
@@ -288,6 +292,29 @@ const parseJson = (value: Buffer | null): ParsedJson => {
     return {ok: false, error: `message is not valid JSON: ${detail}`};
   }
 };
+
+/**
+ * A-13 clause 4: a message that makes the parser itself throw, such as an unknown field nested
+ * thousands of arrays deep overflowing class-transformer's stack, is malformed like any other.
+ * Left to propagate it would keep the offset uncommitted and stall the partition for good.
+ */
+const parsedOrRefused = async <T extends {readonly ok: boolean}>(
+  parse: () => Promise<T>,
+): Promise<T | {readonly ok: false; readonly error: string; readonly unparseable: true}> => {
+  try {
+    return await parse();
+  } catch (reason: unknown) {
+    const detail = reason instanceof Error ? reason.message : String(reason);
+    return {ok: false, error: `message could not be parsed: ${detail}`, unparseable: true};
+  }
+};
+
+/**
+ * What broke the parser breaks Prisma's JSON serialiser too, so such a message is recorded
+ * without its payload; the dead letter still carries the original bytes (ADR-0003).
+ */
+const storablePayload = (refused: object, payload: unknown): unknown =>
+  'unparseable' in refused ? null : payload;
 
 const readableMessageId = (payload: unknown): string | null =>
   readableString(payload, 'messageId', MESSAGE_ID_MAX_LENGTH);
