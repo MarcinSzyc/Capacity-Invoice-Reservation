@@ -3022,3 +3022,16 @@ Findings, most severe first:
   one PR for S-06 carries the requirement change next to the code it allows.
 - The declined option was capping a snapshot's figure at `reservedAmount`: it keeps the old
   wording but throws away what the treasury said, against A-12 and ADR-0012 as accepted.
+
+## 2026-09-25, implement S-06 (INV-02 as amended), Opus
+- The storage side of the amendment, test first. The new integration case saving a correction
+  above `reservedAmount` failed on `reservations_held_within_reserved`, the reason expected.
+  Migration `20260925130000_held_not_negative` replaces that CHECK with `held >= 0`, in a
+  migration of its own so no applied one changes its checksum. An untagged e2e case lists
+  `INV-B` at 2 000 000 against 1 925 000 reserved and gets `held` 2 000 000 with an adjustment of
+  +75 000 through the real consumer, the path that used to stall the partition.
+- INV-02's tagged test, a unit property over client releases, is unchanged: that is still what the
+  upper bound covers. The finding that a permanent failure stalls a partition stays open as an ADR
+  candidate; with this constraint gone no path found so far reaches it with valid input.
+- Tests beyond the plan, added to the previous entry's list: the persistence case and the e2e case
+  above.

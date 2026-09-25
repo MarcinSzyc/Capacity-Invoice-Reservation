@@ -544,5 +544,19 @@ describe('Prisma capacity adapters', () => {
       expect(read?.clientId).toBeNull();
       expect(read?.createdAt).toEqual(AT_12_00);
     });
+
+    it('should store a snapshot correction above reservedAmount (INV-02, amended)', async () => {
+      const programId = uniqueId('PRG');
+      await announcedProgram(programId);
+      const reservation = openReservation(programId, 'INV-B');
+      await unitOfWork.run(({reservations}) => reservations.add(reservation));
+
+      reservation.correctTo(Money.of(107_500_000n, EUR));
+      await unitOfWork.run(({reservations}) => reservations.save(reservation));
+
+      const read = await new PrismaReservationRepository(prisma).findByInvoice(programId, 'INV-B');
+      expect(read?.held).toEqual(Money.of(107_500_000n, EUR));
+      expect(read?.reservedAmount).toEqual(ONE_MILLION_EUR);
+    });
   });
 });
