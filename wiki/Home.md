@@ -17,7 +17,7 @@ Obsidian vault root is this folder. Working rules: `../CLAUDE.md`.
 | Gate | State |
 |---|---|
 | spec | done 2026-09-19: 28 questions answered, A-01..A-19, AC-01..AC-41, INV-01..INV-11; revised 2026-09-25: A-12 amended, AC-42..AC-44 added for S-06 |
-| plan | done 2026-09-19: 7 slices S-01..S-07, 53 requirement rows, 11 ADRs; ADR-0001 to ADR-0008 accepted; S-03 revised 2026-09-22 against the shipped S-02 code; S-04 revised 2026-09-22 against the shipped S-03 code; A-10 amended twice for S-04; S-05 revised 2026-09-23 against the shipped S-04 code and ADR-0009; AC-15, AC-27, A-08 and A-09 amended during S-05; S-06 revised 2026-09-25 against the shipped S-05 code; ADR-0010, ADR-0011 and ADR-0012 accepted 2026-09-25; AC-42 to AC-44 planned into S-06 |
+| plan | done 2026-09-19: 7 slices S-01..S-07, 53 requirement rows, 11 ADRs; ADR-0001 to ADR-0008 accepted; S-03 revised 2026-09-22 against the shipped S-02 code; S-04 revised 2026-09-22 against the shipped S-03 code; A-10 amended twice for S-04; S-05 revised 2026-09-23 against the shipped S-04 code and ADR-0009; AC-15, AC-27, A-08 and A-09 amended during S-05; S-06 revised 2026-09-25 against the shipped S-05 code; ADR-0010, ADR-0011 and ADR-0012 accepted 2026-09-25; AC-42 to AC-44 planned into S-06; S-07 revised 2026-09-25 against the shipped S-06 code, with the S-06 carried findings in its scope; A-11 amended with the snapshot bounds |
 
 | Slice | State |
 |---|---|
@@ -29,9 +29,8 @@ Obsidian vault root is this folder. Working rules: `../CLAUDE.md`.
 | S-06 Reconciliation snapshots | done 2026-09-25: AC-26 to AC-31, AC-42 to AC-44, INV-02 (amended), INV-05 to INV-07 |
 | S-07 Demo page and operations | planned, next |
 
-Next: `/plan` revision of S-07 against the shipped S-06 code, then `/implement S-07` on branch
-`slice/S-07-demo-and-operations`. S-07 is `risk: low` (AC-38, AC-39) and runs on Opus per
-`CLAUDE.md §8`. Carried from S-06, for its first commit or its plan: the deeply nested message that
-overflows the parser outside the three attempts (the one open major, shipped as an edge case), the
-five minors of review round 3, and A-11 wording for the snapshot's list bound and listed-total
-bound (`/spec`).
+Next: `/implement S-07` on branch `slice/S-07-demo-and-operations`. S-07 is `risk: low`
+(AC-38, AC-39) and runs on Opus per `CLAUDE.md §8`. Its first commits close what S-06 carried:
+the parser overflow (the open major), the quadratic sum, the two ledger comments; the glossary's
+`Snapshot moment` and A-11's bounds were corrected in the plan PR. Still a known limitation: a
+program with more active reservations than the 10 000 list bound has no bound test.

@@ -47,7 +47,7 @@ Status: `planned`, `in progress`, `done`, `superseded by <id>`.
 | AC-35 | S-02 | done | `[AC-35] should serve liveness, readiness and the API documentation without a token and without business data` | e2e | `api/test/authentication.e2e-test.ts` | `3090d8b` (tag `S-02`) |
 | AC-36 | S-02 | done | `[AC-36] should start from a clean checkout and answer an authenticated availability request for the sample program` | cold start | `api/test/cold-start/programs.smoke-test.ts` | `3090d8b` (tag `S-02`) |
 | AC-37 | S-02 | done | `[AC-37] should mint a dev token that the availability request accepts` | cold start | `api/test/cold-start/programs.smoke-test.ts` | `3090d8b` (tag `S-02`) |
-| AC-38 | S-07 | planned | `[AC-38] should serve the demo page in the dev profile with generator, request log, ledger and treasury panel, and not in production` | e2e | | |
+| AC-38 | S-07 | planned | `[AC-38] should answer the dev endpoints the demo page relies on through the real api and topic in development and none of them in production` (e2e); `[AC-38] should show the request generator, the request log, the live ledger and the treasury panel` and `[AC-38] should log each call with its method, path, status and error code` (render) | e2e + render | | |
 | AC-39 | S-07 | planned | `[AC-39] should read the same availability and reservations after a restart` | e2e | | |
 | AC-40 | S-02 | done | `[AC-40] should write JSON log lines sharing one correlation id per request and per message` | e2e | `api/test/programs.e2e-test.ts` | `3090d8b` (tag `S-02`) |
 | AC-41 | S-01 | done | `[AC-41] should link the README to the assumptions register, the decision records and the run instructions` | unit | `api/test/readme.test.ts` | `4215d1c` (tag `S-01`) |
