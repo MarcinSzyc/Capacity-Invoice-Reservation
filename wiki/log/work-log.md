@@ -2819,3 +2819,30 @@ Findings, most severe first:
   asking for too much. Without it the suite could quietly cover less and stay green, which is
   the same defect class as the AC-16 tests round 1 found.
 - `npm run gate` green: unit 132, integration 32, e2e 53, cold start 3.
+
+## 2026-09-25, ship S-05, Sonnet
+- Precondition with one caveat, stated rather than glossed. `CLAUDE.md` wants the latest review
+  to have zero majors; review round 4 had one, AC-27, and that major is fixed and merged in #35
+  rather than closed by a fifth review round. Marcin decided to ship on that basis: the round 4
+  report says in as many words that the code would pass and that nothing in `api/`, `api/test/`
+  or the migrations would go back to `/implement`, and the one finding was a requirement of
+  S-06 whose meaning this slice's own AC-15 amendment changed.
+- `wiki/plan/plan.md`: the twelve S-05 rows are `done` with their test files, and eight `extra`
+  rows cover the supporting tests, including the three storage constraints and the snapshot
+  read. Commit column waits for the merge commit.
+- README gains the release route, the full release, the repeated `releaseId` and the reservation
+  read, plus the four new codes, and loses the stale line saying cross-currency arrives in S-04.
+  Every new example run literally on a fresh stack: the partial release left `held` 192 500 000
+  and status `active`, the full one 0 and `closed`, the repeat answered
+  `RELEASE_ALREADY_PROCESSED` with `heldAfter` 192 500 000, and the read showed the three
+  movements.
+- ADR-0009 was accepted before the slice; no ADR to finalise. No assumption is missing from the
+  register: A-08 and A-09 were amended in #34 during the slice.
+- Changelog row, slice status `done`, slice index and Home updated; Home names S-06 next and
+  records that ADR-0010 and ADR-0011 are both still `proposed`, and that ADR-0011 now also owes
+  the rule S-05 put on it.
+- Four review rounds, 39 findings. Worth carrying forward rather than filing away: two of them
+  were ordinary client input answering `500`, one was a regression a fix round introduced that
+  only a live check caught, and the last three majors were in the wiki rather than the code. No
+  round had the model independence `CLAUDE.md §8` asks for, because the Fable credits were
+  exhausted from the second round of S-04 onwards.

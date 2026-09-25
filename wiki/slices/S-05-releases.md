@@ -1,7 +1,7 @@
 # S-05 Releases
 
 - Outcome: a client releases a reservation in full or in instalments, in invoice currency, idempotently by `releaseId`, and reads a reservation with its movements.
-- Status: in progress
+- Status: done 2026-09-25
 - AC: AC-10, AC-11, AC-12, AC-13, AC-14, AC-15, AC-16, AC-17, AC-18, AC-19, AC-34
 - INV: INV-02
 - Risk: high. Money again, and harder than S-04: a release converts with the stored rate, three instalments must close at exactly zero, and a repeated `releaseId` must answer the original outcome without touching state. Per `CLAUDE.md §8` this is Fable work.
@@ -226,3 +226,4 @@ Beyond `CLAUDE.md §9`:
 | 2026-09-24 | review | FAIL (round 3), 8 findings (0 blockers / 3 majors / 5 minors): round 2's AC-15 major is genuinely closed, but its read major is not, because `PrismaUnitOfWork` opens the transaction at read committed, where one transaction is not one snapshot; and the assumptions register, which no round has read, still states the superseded AC-15 rule in A-09 and the superseded AC-13 rule in A-08. Ran on Opus a third time: no pass of this slice, implementation or review, has had the model independence `CLAUDE.md §8` asks for |
 | 2026-09-25 | verify | PASS (fifth pass), gate green after the rebase on #34, 12/12 AC and INV covered; AC-19's body is internally consistent live and both routes answer alike for an unknown program; no statement of the replaced AC-15 rule left anywhere |
 | 2026-09-25 | review | FAIL (round 4), 6 findings (0 blockers / 1 major / 5 minors): all three round 3 majors are genuinely closed, `readSnapshot` cannot deadlock or fail to serialise, the migration split leaves schema and migrations in agreement, and no defect was found in the release path. The major is one file further out again: the AC-15 amendment split `held` 0 from status `closed`, and AC-27 in the criteria still reads them as one statement with no Changes row, which is `/spec` work. Ran on Opus a fourth time: no pass of this slice has had the model independence `CLAUDE.md §8` asks for |
+| 2026-09-25 | ship | changelog, requirement checklist (12 rows done, 8 extra rows), slice index, Home and README (release, full release, repeat and the reservation read, all run literally on a fresh stack); ADR-0009 already accepted; shipped after four review rounds with the last major closed in #35 rather than a fifth round |
