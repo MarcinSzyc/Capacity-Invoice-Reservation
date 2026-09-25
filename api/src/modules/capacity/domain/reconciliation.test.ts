@@ -291,6 +291,43 @@ describe('reconcile', () => {
     expect(invoiceX.held).toEqual(THREE_HUNDRED_THOUSAND_USD);
   });
 
+  it('should release a reservation it created when a snapshot of the same moment omits it, with no keep window (ADR-0010, amended)', () => {
+    const program = programWith(TEN_MILLION_USD);
+    const [invoiceX] = applied(
+      run(program, {
+        snapshot: {activeReservations: [{invoiceId: 'INV-X', held: SEVEN_HUNDRED_THOUSAND_USD}]},
+      }),
+    ).created;
+    if (invoiceX === undefined) throw new Error('INV-X was not created');
+
+    const result = applied(
+      run(program, {snapshot: {messageId: 'm-again'}, local: [local(invoiceX)]}),
+    );
+
+    expect(invoiceX.status).toBe('closed');
+    expect(result.notes).toEqual([]);
+    expect(program.reserved).toEqual(Money.zero(USD));
+  });
+
+  it('should release a reservation it created when a snapshot seconds later omits it, since both times are the treasury clock (ADR-0010, amended)', () => {
+    const program = programWith(TEN_MILLION_USD);
+    const [invoiceX] = applied(
+      run(program, {
+        snapshot: {activeReservations: [{invoiceId: 'INV-X', held: SEVEN_HUNDRED_THOUSAND_USD}]},
+      }),
+    ).created;
+    if (invoiceX === undefined) throw new Error('INV-X was not created');
+
+    applied(
+      run(program, {
+        snapshot: {messageId: 'm-later', asOf: new Date(AT_18_00.getTime() + 10_000)},
+        local: [local(invoiceX)],
+      }),
+    );
+
+    expect(invoiceX.status).toBe('closed');
+  });
+
   it('should change nothing for a snapshot older than the last applied one (AC-30)', () => {
     const program = programWith(TEN_MILLION_USD);
     applied(run(program, {snapshot: {asOf: AT_18_00}}));

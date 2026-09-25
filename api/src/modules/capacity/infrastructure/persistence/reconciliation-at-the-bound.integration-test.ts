@@ -107,4 +107,49 @@ describe('ApplyReconciliationSnapshot against PostgreSQL', () => {
     },
     TEST_TIMEOUT_MS,
   );
+
+  it(
+    'should reopen every reservation of a snapshot at the list bound in one transaction',
+    async () => {
+      const programId = `PRG-${randomUUID().slice(0, 8)}`;
+      const useCase = new ApplyReconciliationSnapshot(
+        new PrismaUnitOfWork(prisma),
+        new SystemClock(),
+        KEEP_WINDOW_MS,
+      );
+      const hour = (offset: number): Date => new Date(AS_OF.getTime() + offset * 3_600_000);
+      const snapshot = (
+        asOf: Date,
+        listed: {invoiceId: string; heldAmount: bigint}[],
+      ): Parameters<typeof useCase.execute>[0] => ({
+        messageId: `m-${randomUUID()}`,
+        programId,
+        currency: USD,
+        creditLimit: 1_000_000_000n,
+        asOf,
+        activeReservations: listed,
+        payload: {},
+        receivedAt: new Date(),
+      });
+      const all = Array.from({length: SNAPSHOT_RESERVATIONS_MAX}, (_, index) => ({
+        invoiceId: `INV-${index}`,
+        heldAmount: HELD_EACH,
+      }));
+      await useCase.execute(snapshot(hour(0), all));
+      await useCase.execute(snapshot(hour(1), []));
+
+      const started = Date.now();
+      const result = await useCase.execute(snapshot(hour(2), all));
+      process.stdout.write(
+        `reopen of ${SNAPSHOT_RESERVATIONS_MAX} applied in ${Date.now() - started} ms\n`,
+      );
+
+      expect(result).toMatchObject({outcome: 'applied'});
+      const program = await new PrismaProgramRepository(prisma).findById(programId);
+      expect(program?.reserved).toEqual(
+        Money.of(HELD_EACH * BigInt(SNAPSHOT_RESERVATIONS_MAX), USD),
+      );
+    },
+    TEST_TIMEOUT_MS,
+  );
 });

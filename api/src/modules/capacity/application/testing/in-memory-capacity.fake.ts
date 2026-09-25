@@ -96,6 +96,18 @@ export class InMemoryLedger implements LedgerRepository {
     return Promise.resolve(this.movements.filter((m) => m.reservationId === reservationId));
   }
 
+  findLastByReservations(
+    reservationIds: readonly string[],
+  ): Promise<Map<string, CapacityMovement>> {
+    const last = new Map<string, CapacityMovement>();
+    for (const movement of this.movements) {
+      if (movement.reservationId !== null && reservationIds.includes(movement.reservationId)) {
+        last.set(movement.reservationId, movement);
+      }
+    }
+    return Promise.resolve(last);
+  }
+
   findClientMovementsSince(programId: string, since: Date): Promise<CapacityMovement[]> {
     return Promise.resolve(
       this.movements.filter(

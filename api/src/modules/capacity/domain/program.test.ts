@@ -316,6 +316,26 @@ describe('Program', () => {
       expect(program.reserved).toEqual(Money.zero(EUR));
     });
 
+    it('should refuse an adjustment that would take reserved past one exact JSON integer (ADR-0006)', () => {
+      const program = announcedWith(FIVE_MILLION_EUR);
+      program.adjust({
+        deltaHeld: BigInt(Number.MAX_SAFE_INTEGER),
+        reservationId: RESERVATION_ID,
+        messageId: SNAPSHOT,
+        occurredAt: AT_18_10,
+      });
+
+      expect(() =>
+        program.adjust({
+          deltaHeld: 1n,
+          reservationId: RESERVATION_ID,
+          messageId: SNAPSHOT,
+          occurredAt: AT_18_10,
+        }),
+      ).toThrow(RangeError);
+      expect(program.reserved.amount).toBe(BigInt(Number.MAX_SAFE_INTEGER));
+    });
+
     it('should call a snapshot stale only when it is older than the last applied one (A-12)', () => {
       const program = announcedWith(FIVE_MILLION_EUR);
       expect(program.isStaleSnapshot(AT_10_00)).toBe(false);

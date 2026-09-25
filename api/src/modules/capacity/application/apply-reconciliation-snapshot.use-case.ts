@@ -12,7 +12,6 @@ import {
   ReconciliationNote,
   ReconciliationSnapshot,
 } from '../domain/reconciliation';
-import {Reservation} from '../domain/reservation';
 
 export const RECONCILIATION_SNAPSHOT_TYPE = 'reconciliation_snapshot';
 
@@ -108,8 +107,8 @@ export class ApplyReconciliationSnapshot {
 
   /**
    * Every active reservation and every listed one we know, each with what the client did after
-   * `asOf` (ADR-0012). The closing movement of a closed one is read on its own, since only a few
-   * listed reservations are ever closed.
+   * `asOf` (ADR-0012). The closing movement of every closed one comes from one read, since a
+   * snapshot may reopen thousands (review round 2).
    */
   private async localReservations(
     command: ReconciliationSnapshotCommand,
@@ -121,14 +120,19 @@ export class ApplyReconciliationSnapshot {
     const byId = new Map([...active, ...listed].map((r) => [r.reservationId, r]));
     const after = await ledger.findClientMovementsSince(command.programId, command.asOf);
 
-    const local: LocalReservation[] = [];
-    for (const reservation of byId.values()) {
-      local.push({
-        reservation,
-        deltaHeldAfterAsOf: sumOfDeltas(after, reservation.reservationId),
-        closedByClientAfterAsOf: await closedByClientAfter(reservation, command.asOf, ledger),
-      });
-    }
+    const closedIds = [...byId.values()]
+      .filter((reservation) => reservation.status === 'closed')
+      .map((reservation) => reservation.reservationId);
+    const closing = await ledger.findLastByReservations(closedIds);
+
+    const local = [...byId.values()].map((reservation) => ({
+      reservation,
+      deltaHeldAfterAsOf: sumOfDeltas(after, reservation.reservationId),
+      closedByClientAfterAsOf: closedByClientAfter(
+        closing.get(reservation.reservationId),
+        command.asOf,
+      ),
+    }));
     return local;
   }
 }
@@ -138,15 +142,9 @@ const sumOfDeltas = (movements: readonly CapacityMovement[], reservationId: stri
     .filter((movement) => movement.reservationId === reservationId)
     .reduce((sum, movement) => sum + movement.deltaHeld, 0n);
 
-const closedByClientAfter = async (
-  reservation: Reservation,
-  asOf: Date,
-  ledger: CapacityRepositories['ledger'],
-): Promise<boolean> => {
-  if (reservation.status === 'active') return false;
-  const closing = (await ledger.findByReservation(reservation.reservationId)).at(-1);
-  return closing?.kind === 'release' && closing.occurredAt > asOf;
-};
+/** ADR-0012, 3A: a closed reservation whose closing row is a client release after `asOf`. */
+const closedByClientAfter = (closing: CapacityMovement | undefined, asOf: Date): boolean =>
+  closing?.kind === 'release' && closing.occurredAt > asOf;
 
 const toSnapshot = (command: ReconciliationSnapshotCommand): ReconciliationSnapshot => ({
   messageId: command.messageId,

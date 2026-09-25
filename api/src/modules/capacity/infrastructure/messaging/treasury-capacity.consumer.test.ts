@@ -15,6 +15,7 @@ import {
   InMemoryUnitOfWork,
 } from '../../application/testing/in-memory-capacity.fake';
 import {Money} from '../../domain/money';
+import {CapacityReads, CapacityRepositories, UnitOfWork} from '../../domain/ports/unit-of-work';
 import {Program} from '../../domain/program';
 import {TreasuryCapacityConsumer} from './treasury-capacity.consumer';
 import {TREASURY_DEAD_LETTER_TOPIC, TREASURY_TOPIC} from './treasury-topics';
@@ -66,26 +67,37 @@ const consumerFor = (
     new JsonLogger(logs),
   );
 
-/** A use case that throws a set number of times before it works, as a failing handler would. */
-class FailingCapacityUpdate extends ApplyCapacityUpdate {
+/**
+ * A unit of work whose transactions fail a set number of times before they run, as a database
+ * error would make them: a fake of the port, so the use case under it is the real one.
+ */
+class FailingUnitOfWork implements UnitOfWork {
   attempts = 0;
 
   constructor(
-    capacity: InMemoryUnitOfWork,
+    private readonly inner: InMemoryUnitOfWork,
     private failuresLeft: number,
-  ) {
-    super(capacity);
-  }
+  ) {}
 
-  override execute(
-    command: Parameters<ApplyCapacityUpdate['execute']>[0],
-  ): ReturnType<ApplyCapacityUpdate['execute']> {
+  run<T>(work: (repositories: CapacityRepositories) => Promise<T>): Promise<T> {
     this.attempts += 1;
-    if (this.failuresLeft === 0) return super.execute(command);
+    if (this.failuresLeft === 0) return this.inner.run(work);
     this.failuresLeft -= 1;
     return Promise.reject(new Error('value out of range for type bigint'));
   }
+
+  readSnapshot<T>(work: (reads: CapacityReads) => Promise<T>): Promise<T> {
+    return this.inner.readSnapshot(work);
+  }
 }
+
+const failingUpdate = (
+  capacity: InMemoryUnitOfWork,
+  failures: number,
+): {useCase: ApplyCapacityUpdate; unitOfWork: FailingUnitOfWork} => {
+  const unitOfWork = new FailingUnitOfWork(capacity, failures);
+  return {useCase: new ApplyCapacityUpdate(unitOfWork), unitOfWork};
+};
 
 const UPDATE = {
   messageId: 'm-limit',
@@ -232,11 +244,13 @@ describe('TreasuryCapacityConsumer', () => {
     it('should try again and apply the message when a later attempt succeeds', async () => {
       const capacity = inMemoryCapacity();
       const source = new FakeMessageSource();
-      const failing = new FailingCapacityUpdate(capacity, 2);
+      const failing = failingUpdate(capacity, 2);
 
-      await consumerFor(capacity, source, new MemoryStream(), failing).handle(inbound(UPDATE));
+      await consumerFor(capacity, source, new MemoryStream(), failing.useCase).handle(
+        inbound(UPDATE),
+      );
 
-      expect(failing.attempts).toBe(3);
+      expect(failing.unitOfWork.attempts).toBe(3);
       expect(capacity.repositories.treasuryMessages.byId.get('m-limit')?.outcome).toBe('applied');
       expect(source.published).toHaveLength(0);
     });
@@ -245,13 +259,13 @@ describe('TreasuryCapacityConsumer', () => {
       const capacity = inMemoryCapacity();
       const source = new FakeMessageSource();
       const logs = new MemoryStream();
-      const failing = new FailingCapacityUpdate(capacity, 3);
-      const consumer = consumerFor(capacity, source, logs, failing);
+      const failing = failingUpdate(capacity, 3);
+      const consumer = consumerFor(capacity, source, logs, failing.useCase);
 
       await consumer.handle(inbound(UPDATE));
       await consumer.handle(inbound({...UPDATE, messageId: 'm-next'}));
 
-      expect(failing.attempts).toBe(4);
+      expect(failing.unitOfWork.attempts).toBe(4);
       expect(capacity.repositories.treasuryMessages.byId.get('m-limit')).toMatchObject({
         outcome: 'rejected',
         error: expect.stringContaining('value out of range for type bigint') as string,
@@ -285,7 +299,7 @@ describe('TreasuryCapacityConsumer', () => {
         capacity,
         source,
         new MemoryStream(),
-        new FailingCapacityUpdate(capacity, 3),
+        failingUpdate(capacity, 3).useCase,
       );
 
       await expect(consumer.handle(inbound(UPDATE))).rejects.toThrow('broker is away');

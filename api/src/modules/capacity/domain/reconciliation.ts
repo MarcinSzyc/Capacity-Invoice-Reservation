@@ -175,11 +175,15 @@ const stepForLocal = (
   return stepForListed(entry, held);
 };
 
-/** AC-27 and ADR-0010: omitted means gone at `asOf`, unless it is too close to `asOf` to be sure. */
+/**
+ * AC-27 and ADR-0010: omitted means gone at `asOf`, unless it is too close to `asOf` to be sure.
+ * The window exists because two clocks are compared; a reservation a snapshot created carries the
+ * treasury's own moment, so there is nothing to allow for (ADR-0010, amended 2026-09-25).
+ */
 // Only active reservations reach here unlisted: `local` is the active ones plus the listed ones.
 const stepForOmitted = (reservation: Reservation, input: ReconciliationInput): Step => {
   const releasableBefore = input.snapshot.asOf.getTime() - input.keepWindowMs;
-  if (reservation.createdAt.getTime() >= releasableBefore) {
+  if (reservation.source === 'client' && reservation.createdAt.getTime() >= releasableBefore) {
     return {kind: 'note', note: {kind: 'kept_within_window', invoiceId: reservation.invoiceId}};
   }
   return {kind: 'changed', reservation, deltaHeld: reservation.releaseByAdjustment()};
@@ -213,8 +217,9 @@ const stepForListed = (entry: LocalReservation, held: Money): Step => {
 };
 
 /**
- * Created before `asOf`, or created by a snapshot of exactly that moment: the treasury knew it
- * then (ADR-0011), so a second snapshot of the same moment may still correct it.
+ * Created before `asOf`, or created by a snapshot at or before it. A snapshot's reservation is
+ * dated by the treasury's clock (ADR-0011), so a later statement of the same moment supersedes it,
+ * as A-13 clause 7 says for the rest of the snapshot (ADR-0010, amended 2026-09-25).
  */
 const describedBy = (reservation: Reservation, asOf: Date): boolean => {
   const createdAt = reservation.createdAt.getTime();
