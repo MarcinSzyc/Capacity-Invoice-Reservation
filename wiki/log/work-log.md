@@ -2162,3 +2162,19 @@ correct with a new one. Format:
 - I first made this edit on the slice branch, which `/implement` may not do, and took it back
   out. It belongs here, the way #32 did.
 - Branch `docs/release-glossary-over-release` from `main` at 49c34c0. Wiki only, no code.
+## 2026-09-24, spec: A-08 and A-09 catch up with ADR-0009 and the amended AC-15, Opus
+- Review round 3 of S-05 found both. AC-15 was amended in #32 and the glossary in #33, but the
+  assumptions those criteria reference were never touched, so the register still described a
+  service that no longer exists. Worth naming plainly: three rounds of review and four of my own
+  fix rounds all read the code, the OpenAPI document and the glossary, and none of us opened
+  `wiki/spec/assumptions.md`.
+- A-08 amended: releases run until the whole invoice has been released, not until `held` is
+  zero; `held` is derived from what the invoice still has to give back rather than decremented
+  per release (ADR-0009); and over-release is judged in invoice currency, because judging it
+  against `held` would let a release that is legal in invoice terms fail on a rounding boundary.
+- A-09 amended: a new `releaseId` is refused once nothing is left to release, and that is not
+  the same as `held` reaching zero, since a remainder worth less than half a minor unit of the
+  program currency rounds `held` away while the invoice still owes.
+- Both have Changes rows. No AC or INV changed: AC-13 names the code and the no-state-change
+  rule without saying which quantity the comparison uses, and AC-15 was already amended.
+- Branch `docs/release-assumptions` from `main`. Wiki only, no code.
