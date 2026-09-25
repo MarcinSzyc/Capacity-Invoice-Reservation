@@ -2178,3 +2178,17 @@ correct with a new one. Format:
 - Both have Changes rows. No AC or INV changed: AC-13 names the code and the no-state-change
   rule without saying which quantity the comparison uses, and AC-15 was already amended.
 - Branch `docs/release-assumptions` from `main`. Wiki only, no code.
+## 2026-09-25, spec: AC-27 says what closing means after the AC-15 amendment, Opus
+- Review round 4 of S-05 found it, and it is the third round running whose miss was in the wiki
+  rather than in the code. AC-15 was amended so that a reservation is closed when the whole
+  invoice has been released rather than when `held` reaches zero, which split two things AC-27
+  states as one thing: "`held` 0, status closed".
+- Marcin decided: a snapshot that drops a reservation counts the whole invoice as released, so
+  the two coincide again. That is what a snapshot saying "this reservation is gone" means, and
+  it keeps one status rule rather than one per source. AC-27 clarified with a Changes row.
+- ADR-0011, still `proposed`, carries the consequence: whatever `invoiceAmount` it settles on
+  for a snapshot-created reservation, an omitted reservation has to end with
+  `releasedInvoiceAmount` equal to it. Recorded there rather than left for S-06 to rediscover.
+- No other AC or INV is affected: AC-26 and AC-28 to AC-31 speak of `held`, adjustments and
+  `asOf`, none of them of status.
+- Branch `docs/ac-27-adjustment-closes` from `main`. Wiki only, no code.
