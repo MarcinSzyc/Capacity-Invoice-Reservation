@@ -13,7 +13,9 @@ const row = (overrides: Partial<CapacityMovement>): CapacityMovement => ({
   kind: 'limit_set',
   programId: PROGRAM_ID,
   reservationId: null,
-  deltaHeld: usd(0n),
+  deltaHeld: 0n,
+  releaseId: null,
+  reason: null,
   limitAfter: usd(0n),
   reservedAfter: usd(0n),
   availableAfter: usd(0n),
@@ -29,7 +31,7 @@ const LIMIT_TEN_MILLION = row({
 const RESERVE_A = row({
   kind: 'reserve',
   reservationId: RESERVATION_A,
-  deltaHeld: usd(400_000_000n),
+  deltaHeld: 400_000_000n,
   limitAfter: usd(1_000_000_000n),
   reservedAfter: usd(400_000_000n),
   availableAfter: usd(600_000_000n),
@@ -38,7 +40,7 @@ const RESERVE_A = row({
 const RESERVE_B = row({
   kind: 'reserve',
   reservationId: RESERVATION_B,
-  deltaHeld: usd(200_000_000n),
+  deltaHeld: 200_000_000n,
   limitAfter: usd(1_000_000_000n),
   reservedAfter: usd(600_000_000n),
   availableAfter: usd(400_000_000n),
@@ -125,7 +127,7 @@ describe('Ledger', () => {
       limitAfter: Money.of(500_000_000n, 'EUR'),
       reservedAfter: Money.zero('EUR'),
       availableAfter: Money.of(500_000_000n, 'EUR'),
-      deltaHeld: Money.zero('EUR'),
+      deltaHeld: 0n,
       attribution: {messageId: 'm-2'},
     });
     const result = Ledger.recompute([LIMIT_TEN_MILLION, eurLimit]);

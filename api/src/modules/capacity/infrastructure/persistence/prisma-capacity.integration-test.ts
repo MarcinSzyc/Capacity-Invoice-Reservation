@@ -2,6 +2,7 @@ import {randomUUID} from 'node:crypto';
 import {JsonLogger} from '../../../../common/logging/json-logger';
 import {loadConfig} from '../../../../config/configuration';
 import {PrismaService} from '../../../../persistence/prisma.service';
+import {CapacityMovement} from '../../domain/capacity-movement';
 import {Money} from '../../domain/money';
 import {Rate} from '../../domain/rate';
 import {Program} from '../../domain/program';
@@ -266,5 +267,174 @@ describe('Prisma capacity adapters', () => {
           VALUES (${programId}, 'reserve'::capacity_movement_kind, ${EUR}, 1, 1, 1, 0, ${AT_10_10})`,
       ),
     ).rejects.toThrow(/capacity_movements_attributable/);
+  });
+
+  it('should refuse a rate that is not positive, so no row can be written that cannot be read back', async () => {
+    const programId = uniqueId('PRG');
+    await announcedProgram(programId);
+
+    // The mapper cannot produce such a row (`Rate.parse` refuses it), so the constraint is hit
+    // directly: `Rate.parse` would throw on the way out, making every later read a 500, which
+    // is the failure review round 1 of S-04 found for a rate it could not parse.
+    await expect(
+      prisma.withClient(
+        (client) => client.$executeRaw`
+          INSERT INTO reservations
+            (id, program_id, invoice_id, invoice_amount, invoice_currency, currency,
+             reserved_amount, held, released_invoice_amount, rate, source, client_id,
+             created_at, updated_at)
+          VALUES (gen_random_uuid(), ${programId}, 'INV-ZERO', 1, ${EUR}, ${EUR}, 1, 1, 0, 0,
+                  'client'::reservation_source, ${CLIENT}, ${AT_10_10}, ${AT_10_10})`,
+      ),
+    ).rejects.toThrow(/reservations_rate_positive/);
+  });
+
+  it('should save what a release moved and read it back', async () => {
+    const programId = uniqueId('PRG');
+    await announcedProgram(programId);
+    const reservation = openReservation(programId, 'INV-SAVE');
+    await unitOfWork.run(({reservations}) => reservations.add(reservation));
+
+    reservation.release({
+      amount: Money.of(400_000n, EUR),
+    });
+    await unitOfWork.run(({reservations}) => reservations.save(reservation));
+
+    const read = await new PrismaReservationRepository(prisma).findByInvoice(programId, 'INV-SAVE');
+    expect(read?.held).toEqual(reservation.held);
+    expect(read?.releasedInvoiceAmount).toEqual(Money.of(400_000n, EUR));
+    expect(read?.remainingInvoiceAmount).toEqual(Money.of(99_600_000n, EUR));
+  });
+
+  it('should refuse the same releaseId twice on one reservation and allow it on another (ADR-0009)', async () => {
+    const programId = uniqueId('PRG');
+    const program = await announcedProgram(programId);
+    const first = openReservation(programId, 'INV-ONE');
+    const second = openReservation(programId, 'INV-TWO');
+    await unitOfWork.run(async ({reservations}) => {
+      await reservations.add(first);
+      await reservations.add(second);
+    });
+    await unitOfWork.run(({ledger}) =>
+      ledger.append(program.reserve(first.held, CLIENT, first.reservationId, AT_10_00)),
+    );
+    const releaseMovement = (reservation: Reservation): CapacityMovement =>
+      program.release({
+        deltaHeld: -1n,
+        clientId: CLIENT,
+        reservationId: reservation.reservationId,
+        releaseId: 'R-1',
+        reason: 'repaid',
+        occurredAt: AT_10_10,
+      });
+
+    await unitOfWork.run(({ledger}) => ledger.append(releaseMovement(first)));
+
+    // The same id on another invoice is a different repayment, so the index must allow it.
+    await unitOfWork.run(({ledger}) => ledger.append(releaseMovement(second)));
+    // The same id on the same reservation is the same repayment, and the index says so.
+    await expect(
+      unitOfWork.run(({ledger}) => ledger.append(releaseMovement(first))),
+    ).rejects.toThrow(/reservation_id_release_id/);
+  });
+
+  it('should return a reservation movements in the order they were appended', async () => {
+    const programId = uniqueId('PRG');
+    const program = await announcedProgram(programId);
+    const reservation = openReservation(programId, 'INV-ORDER');
+    await unitOfWork.run(({reservations}) => reservations.add(reservation));
+    const reserveMovement = program.reserve(
+      reservation.held,
+      CLIENT,
+      reservation.reservationId,
+      AT_10_00,
+    );
+    const releaseMovement = program.release({
+      deltaHeld: -1n,
+      clientId: CLIENT,
+      reservationId: reservation.reservationId,
+      releaseId: 'R-9',
+      reason: 'cancelled',
+      occurredAt: AT_10_10,
+    });
+
+    // Appended newest first, so a query without an order would hand them back that way and the
+    // assertion below would catch it. AC-16's prefix sum over these rows depends on the order.
+    await unitOfWork.run(async ({ledger}) => {
+      await ledger.append(releaseMovement);
+      await ledger.append(reserveMovement);
+    });
+
+    const rows = await new PrismaLedgerRepository(prisma).findByReservation(
+      reservation.reservationId,
+    );
+    expect(rows.map((row) => [row.kind, row.releaseId, row.reason])).toEqual([
+      ['release', 'R-9', 'cancelled'],
+      ['reserve', null, null],
+    ]);
+  });
+
+  it('should hold one instant across several reads, so a writer between them cannot split the view', async () => {
+    // AC-19 reads the reservation and then its movements. One transaction is not enough: at
+    // read committed each statement takes its own snapshot, so a release committing in between
+    // would be invisible to the first read and visible to the second, and the body would
+    // contradict itself. This proves the property rather than the setting: a committed write
+    // from another connection, made between two reads inside the snapshot, is not seen.
+    const programId = uniqueId('PRG');
+    await announcedProgram(programId);
+    const reservation = openReservation(programId, 'INV-SNAP');
+    await unitOfWork.run(({reservations}) => reservations.add(reservation));
+
+    const seen = await unitOfWork.readSnapshot(async ({reservations}) => {
+      const before = await reservations.findByInvoice(programId, 'INV-SNAP');
+      await prisma.withClient((client) =>
+        client.reservation.update({
+          where: {id: reservation.reservationId},
+          data: {held: 1n},
+        }),
+      );
+      const after = await reservations.findByInvoice(programId, 'INV-SNAP');
+      return {before: before?.held.amount, after: after?.held.amount};
+    });
+
+    expect(seen.after).toBe(seen.before);
+    // and the write really did land, so the test is not passing because nothing happened
+    const now = await new PrismaReservationRepository(prisma).findByInvoice(programId, 'INV-SNAP');
+    expect(now?.held.amount).toBe(1n);
+  });
+
+  it('should refuse a release recorded with an unknown reason', async () => {
+    const programId = uniqueId('PRG');
+    await announcedProgram(programId);
+
+    // The mapper refuses an unknown reason on the way out; this is what makes that claim true,
+    // because nothing else stops another writer putting one in.
+    await expect(
+      prisma.withClient(
+        (client) => client.$executeRaw`
+          INSERT INTO capacity_movements
+            (program_id, kind, currency, delta_held, limit_after, reserved_after,
+             available_after, client_id, reason, occurred_at)
+          VALUES (${programId}, 'release'::capacity_movement_kind, ${EUR}, 0, 0, 0, 0,
+                  ${CLIENT}, 'refunded', ${AT_10_10})`,
+      ),
+    ).rejects.toThrow(/capacity_movements_reason_known/);
+  });
+
+  it('should refuse a reservation that has released more than its invoice', async () => {
+    const programId = uniqueId('PRG');
+    await announcedProgram(programId);
+
+    await expect(
+      prisma.withClient(
+        (client) => client.$executeRaw`
+          INSERT INTO reservations
+            (id, program_id, invoice_id, invoice_amount, invoice_currency, currency,
+             reserved_amount, held, released_invoice_amount, rate, source, client_id,
+             created_at, updated_at)
+          VALUES (gen_random_uuid(), ${programId}, 'INV-OVER', 100, ${EUR}, ${EUR}, 100, 0, 101,
+                  1, 'client'::reservation_source, ${CLIENT}, ${AT_10_10}, ${AT_10_10})`,
+      ),
+    ).rejects.toThrow(/reservations_released_within_invoice/);
   });
 });

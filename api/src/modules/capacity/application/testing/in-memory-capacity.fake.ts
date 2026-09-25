@@ -7,7 +7,7 @@ import {
   TreasuryMessageRecord,
   TreasuryMessageStore,
 } from '../../domain/ports/treasury-message-store';
-import {CapacityRepositories, UnitOfWork} from '../../domain/ports/unit-of-work';
+import {CapacityReads, CapacityRepositories, UnitOfWork} from '../../domain/ports/unit-of-work';
 import {Program} from '../../domain/program';
 import {Reservation} from '../../domain/reservation';
 
@@ -41,6 +41,12 @@ export class InMemoryReservations implements ReservationRepository {
     this.all.push(reservation);
     return Promise.resolve();
   }
+
+  /** The aggregate is held by reference here, so a release has already changed it in place. */
+  save(reservation: Reservation): Promise<void> {
+    if (!this.all.includes(reservation)) this.all.push(reservation);
+    return Promise.resolve();
+  }
 }
 
 /** A clock that answers the moment it was given, so `createdAt` can be asserted exactly. */
@@ -58,6 +64,10 @@ export class InMemoryLedger implements LedgerRepository {
   append(movement: CapacityMovement): Promise<void> {
     this.movements.push(movement);
     return Promise.resolve();
+  }
+
+  findByReservation(reservationId: string): Promise<CapacityMovement[]> {
+    return Promise.resolve(this.movements.filter((m) => m.reservationId === reservationId));
   }
 }
 
@@ -86,7 +96,10 @@ export class InMemoryTreasuryMessages implements TreasuryMessageStore {
 
 /**
  * Runs the work against the shared fakes. Rollback is simulated by snapshotting and restoring,
- * so a use case that throws leaves the fakes as they were, like a real transaction would.
+ * so a use case that throws leaves the collections as they were. It is not a real
+ * rollback: the aggregates handed out are the same objects, and one that mutated in place
+ * (as `Reservation.release` does) stays mutated, so a "wrote nothing" assertion against this
+ * fake is weaker than the same assertion against the database.
  */
 export class InMemoryUnitOfWork implements UnitOfWork {
   private depth = 0;
@@ -96,6 +109,11 @@ export class InMemoryUnitOfWork implements UnitOfWork {
   /** Whether some work is running right now, so a test can see what happens inside one. */
   get inTransaction(): boolean {
     return this.depth > 0;
+  }
+
+  /** In memory there is nothing to isolate from: the reads are already one instant. */
+  readSnapshot<T>(work: (reads: CapacityReads) => Promise<T>): Promise<T> {
+    return work(this.repositories);
   }
 
   async run<T>(work: (repositories: CapacityRepositories) => Promise<T>): Promise<T> {

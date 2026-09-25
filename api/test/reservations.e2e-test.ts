@@ -84,6 +84,7 @@ describe('Reservations', () => {
       invoiceCurrency: USD,
       reservedAmount: ONE_POINT_TWO_MILLION_USD,
       held: ONE_POINT_TWO_MILLION_USD,
+      releasedInvoiceAmount: 0,
       rate: '1',
       status: 'active',
       source: 'client',

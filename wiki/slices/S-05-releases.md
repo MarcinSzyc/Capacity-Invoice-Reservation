@@ -1,7 +1,7 @@
 # S-05 Releases
 
 - Outcome: a client releases a reservation in full or in instalments, in invoice currency, idempotently by `releaseId`, and reads a reservation with its movements.
-- Status: planned
+- Status: done 2026-09-25
 - AC: AC-10, AC-11, AC-12, AC-13, AC-14, AC-15, AC-16, AC-17, AC-18, AC-19, AC-34
 - INV: INV-02
 - Risk: high. Money again, and harder than S-04: a release converts with the stored rate, three instalments must close at exactly zero, and a repeated `releaseId` must answer the original outcome without touching state. Per `CLAUDE.md §8` this is Fable work.
@@ -53,8 +53,9 @@ Module `src/modules/capacity/`, as in S-03 and S-04. Nothing in `web` changes in
 Domain (`domain/`):
 - `Reservation.release({amount, releaseId, reason, clientId, occurredAt})` per ADR-0009:
   `remaining = invoiceAmount - releasedInvoiceAmount`; an absent amount means `amount = remaining`;
-  `amount > remaining` throws `ReleaseExceedsHeld`; `held.isZero()` before the call throws
-  `ReservationAlreadyReleased`. Otherwise
+  `amount > remaining` throws `ReleaseExceedsHeld`; nothing left to release before the call throws
+  `ReservationAlreadyReleased` (AC-15, amended 2026-09-24: `held` can round to zero while the
+  invoice still owes, and such a reservation is still active). Otherwise
   `heldAfter = (remaining - amount).convert(rate, programCurrency)` and the reservation moves to
   `releasedInvoiceAmount + amount` and `heldAfter`. Returns what the caller needs to build the
   movement: the new `held` and `deltaHeld = heldAfter - heldBefore`, a negative `Money`
@@ -135,9 +136,11 @@ already decided the two that did. Recorded so review can hold the code to them.
    handful of releases, bounded by how many instalments an invoice has. Alternative: a page
    parameter now. Declined as a shape no requirement asks for; S-06's adjustments do not change
    the order of magnitude.
-8. **A release of zero is refused by the DTO** (`@Min(1)`), like `invoiceAmount` on reserve. A
-   zero release would append a movement with `deltaHeld` zero, which is a ledger row that says
-   nothing happened.
+8. **A release of zero is refused by the DTO** (`@Min(1)`), like `invoiceAmount` on reserve, so
+   a client cannot ask for one. A movement with `deltaHeld` zero is legitimate all the same and
+   the amended AC-15 makes it necessary: closing a remainder whose `held` has already rounded to
+   zero gives nothing back and still has to be recorded as the repayment it is. What the DTO
+   refuses is an empty request, not a release that happens to move no capacity.
 9. **`RELEASE_ALREADY_PROCESSED` is `409`, not `200` with the original body.** A-09 and AC-16
    say the duplicate is answered with the original outcome in the body, and S-03 set the
    precedent for exactly this shape with `RESERVATION_ALREADY_EXISTS`. Answering `200` would
@@ -155,7 +158,7 @@ already decided the two that did. Recorded so review can hold the code to them.
 | `it('[AC-11] should close the reservation when the release carries no amount')` | e2e | continues from the AC-10 state: release with no amount and `releaseId` `R-2`; `held` 0, `releasedInvoiceAmount` 275 000 000, status `closed`, availability up by 192 500 000 |
 | `it('[AC-12] should close exactly at zero when the final instalment does not divide evenly by the rate')` | e2e | invoice 100 000 000 EUR minor at `1.13`, so `held` 113 000 000 USD minor. Three releases of 33 333 333, 33 333 333 and 33 333 334 EUR minor: `held` is exactly 0 and availability is back to the limit. These numbers discriminate: rounding each release on its own (the declined Option 1) leaves 37 666 666 + 37 666 666 + 37 666 667, one minor unit short of 113 000 000, so `held` would end at 1 |
 | `it('[AC-13] should reject a release beyond held with RELEASE_EXCEEDS_HELD and change nothing')` | e2e | `INV-A` 50 000 000 USD minor, same currency, rate 1. Release 50 000 001: `422`, code `RELEASE_EXCEEDS_HELD`, `held` 50 000 000 and `remainingInvoiceAmount` 50 000 000 at the top level of the body; `held` and availability unchanged, no movement appended |
-| `it('[AC-14] should answer 404 RESERVATION_NOT_FOUND for a release on an unknown invoice')` | e2e | known program, unknown invoice id; and, as the same criterion, a known invoice id on a program that does not exist |
+| `it('[AC-14] should answer 404 RESERVATION_NOT_FOUND for a release on an unknown invoice')` | e2e | known program, unknown invoice id is `RESERVATION_NOT_FOUND`; a program that does not exist is `PROGRAM_NOT_FOUND`, as on reserve (AC-04), decided by Marcin on 2026-09-24 when review round 1 found the file and the code disagreeing. AC-14 is silent on the second case |
 | `it('[AC-15] should answer 409 RESERVATION_ALREADY_RELEASED for a new releaseId on a closed reservation')` | e2e | fully release, then release again with a new id; `409`, ledger unchanged |
 | `it('[AC-16] should answer 409 RELEASE_ALREADY_PROCESSED with the original outcome for a repeated releaseId')` | e2e | `R-1` again with the same amount, and again with a different amount: both `409` with `appliedAt` and `heldAfter` at the top level equal to the first release's outcome; `held`, availability and the movement count unchanged |
 | `it('[AC-17] should record the release reason on the movement, defaulting to repaid, without changing the effect')` | e2e | one release with `reason` `cancelled`, one without; the reservation read shows `cancelled` and `repaid`; the two `deltaHeld` values and the availability change are the same for both |
@@ -213,3 +216,14 @@ Beyond `CLAUDE.md §9`:
 |---|---|---|
 | 2026-09-19 | plan | slice written |
 | 2026-09-23 | plan | revised against the shipped S-04 code and ADR-0009 as accepted; ten local decisions, no new ADR |
+| 2026-09-23 | implement | started on Opus; `risk: high` would put this on Fable per `CLAUDE.md §8`, the Fable credits are exhausted and Marcin decided to run it here |
+| 2026-09-24 | verify | PASS, gate green on 1aeeda8, 12/12 AC and INV covered at the planned level, AC-12 confirmed live on a cold started stack (75 333 334, 37 666 667, exactly 0 at `1.13`); 1 finding owed to `/ship` (README documents no release route) |
+| 2026-09-24 | review | FAIL, 15 findings (0 blockers / 7 majors / 8 minors): a null `amount` answers 500, AC-14 answers PROGRAM_NOT_FOUND against its own Then clause, `held` can round to zero while the invoice still owes, AC-16 and the partial unique index have no test that can fail, and the glossary owes `releasedInvoiceAmount` and C2. Ran on Opus, not Fable: the model independence `CLAUDE.md §8` asks for did not hold |
+| 2026-09-24 | verify | FAIL (second pass), gate green on 079107a but a regression the fix round introduced: `Program.release`'s new guard refuses the `deltaHeld` 0 that closing a rounded-away remainder produces, so that release answers `500`. Found live, not by the gate; no test walks that path through the use case |
+| 2026-09-24 | verify | PASS (third pass), gate green on 2026dc3, 12/12 AC and INV covered; the round 2 regression confirmed gone live, with the rounded-away remainder now releasing to the end and only then answering RESERVATION_ALREADY_RELEASED |
+| 2026-09-24 | review | FAIL (round 2), 10 findings (0 blockers / 2 majors / 8 minors): all seven round 1 majors are genuinely closed and the round 2 regression is fixed at the root, but the reservation read is two unsynchronised queries so AC-19 can answer a body whose movements contradict its `held`, and the amended AC-15 rule is contradicted by four stale statements, two of them published (the OpenAPI `status` description and the `RESERVATION_ALREADY_RELEASED` message). Ran on Opus again: no pass of this slice has had the model independence `CLAUDE.md §8` asks for |
+| 2026-09-24 | verify | PASS (fourth pass), gate green after the rebase, 12/12 AC and INV covered; both round 2 majors confirmed live (AC-19's movements sum to the held beside them, the published status description states the amended rule) |
+| 2026-09-24 | review | FAIL (round 3), 8 findings (0 blockers / 3 majors / 5 minors): round 2's AC-15 major is genuinely closed, but its read major is not, because `PrismaUnitOfWork` opens the transaction at read committed, where one transaction is not one snapshot; and the assumptions register, which no round has read, still states the superseded AC-15 rule in A-09 and the superseded AC-13 rule in A-08. Ran on Opus a third time: no pass of this slice, implementation or review, has had the model independence `CLAUDE.md §8` asks for |
+| 2026-09-25 | verify | PASS (fifth pass), gate green after the rebase on #34, 12/12 AC and INV covered; AC-19's body is internally consistent live and both routes answer alike for an unknown program; no statement of the replaced AC-15 rule left anywhere |
+| 2026-09-25 | review | FAIL (round 4), 6 findings (0 blockers / 1 major / 5 minors): all three round 3 majors are genuinely closed, `readSnapshot` cannot deadlock or fail to serialise, the migration split leaves schema and migrations in agreement, and no defect was found in the release path. The major is one file further out again: the AC-15 amendment split `held` 0 from status `closed`, and AC-27 in the criteria still reads them as one statement with no Changes row, which is `/spec` work. Ran on Opus a fourth time: no pass of this slice has had the model independence `CLAUDE.md §8` asks for |
+| 2026-09-25 | ship | changelog, requirement checklist (12 rows done, 8 extra rows), slice index, Home and README (release, full release, repeat and the reservation read, all run literally on a fresh stack); ADR-0009 already accepted; shipped after four review rounds with the last major closed in #35 rather than a fifth round |
