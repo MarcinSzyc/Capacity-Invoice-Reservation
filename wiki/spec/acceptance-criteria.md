@@ -143,8 +143,8 @@ kind `adjustment` referencing the snapshot's `messageId` exists. [A-12]
 
 **AC-27 Snapshot releases a reservation created before asOf.** Given `INV-A` was created
 at 09:00 and is active. When a snapshot with `asOf` 18:00 does not list `INV-A`. Then
-`INV-A` has `held` 0, status closed, and an `adjustment` movement records the release.
-[A-12]
+`INV-A` has `held` 0, the whole invoice counts as released so the status is closed, and an
+`adjustment` movement records the release. [A-12]
 
 **AC-28 Snapshot keeps a reservation created after asOf.** Given `INV-C` was created at
 18:00:30. When a snapshot with `asOf` 18:00 does not list `INV-C`. Then `INV-C` is
@@ -216,3 +216,4 @@ Every addition, amendment or supersession of an AC, newest last. Ids never chang
 | 2026-09-19 | AC-38 | amended: the demo page is the `web` container, `api` keeps only dev-only endpoints (ADR-0001) | docs/adr-renumber-and-deployment |
 | 2026-09-19 | AC-00 | amended: four containers, `web` is a React UI in its own folder (ADR-0001) | docs/adr-renumber-and-deployment |
 | 2026-09-24 | AC-15 | amended: a reservation is closed when the whole invoice has been released, not when `held` reaches zero; `held` can round to zero while the invoice still owes, and the old wording stranded that remainder. Found by review round 1 of S-05 | docs/closed-reservation-and-glossary |
+| 2026-09-25 | AC-27 | clarified: a snapshot that drops a reservation counts the whole invoice as released, so `held` 0 and status closed still coincide after the AC-15 amendment split them. Found by review round 4 of S-05 | docs/ac-27-adjustment-closes |
