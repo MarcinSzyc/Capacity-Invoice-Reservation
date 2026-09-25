@@ -56,14 +56,45 @@ const consumerFor = (
   capacity: InMemoryUnitOfWork,
   source: MessageSource,
   logs: MemoryStream = new MemoryStream(),
+  applyCapacityUpdate: ApplyCapacityUpdate = new ApplyCapacityUpdate(capacity),
 ): TreasuryCapacityConsumer =>
   new TreasuryCapacityConsumer(
     source,
-    new ApplyCapacityUpdate(capacity),
+    applyCapacityUpdate,
     new ApplyReconciliationSnapshot(capacity, new FixedClock(AT_10_00), KEEP_WINDOW_MS),
     new RejectTreasuryMessage(capacity),
     new JsonLogger(logs),
   );
+
+/** A use case that throws a set number of times before it works, as a failing handler would. */
+class FailingCapacityUpdate extends ApplyCapacityUpdate {
+  attempts = 0;
+
+  constructor(
+    capacity: InMemoryUnitOfWork,
+    private failuresLeft: number,
+  ) {
+    super(capacity);
+  }
+
+  override execute(
+    command: Parameters<ApplyCapacityUpdate['execute']>[0],
+  ): ReturnType<ApplyCapacityUpdate['execute']> {
+    this.attempts += 1;
+    if (this.failuresLeft === 0) return super.execute(command);
+    this.failuresLeft -= 1;
+    return Promise.reject(new Error('value out of range for type bigint'));
+  }
+}
+
+const UPDATE = {
+  messageId: 'm-limit',
+  type: 'capacity_update',
+  programId: PROGRAM_ID,
+  currency: 'EUR',
+  creditLimit: 500_000_000,
+  eventTime: '2026-09-21T10:00:00.000Z',
+};
 
 const SNAPSHOT = {
   messageId: 'm-snapshot',
@@ -195,5 +226,63 @@ describe('TreasuryCapacityConsumer', () => {
 
     expect(capacity.repositories.treasuryMessages.byId.get('m-snapshot')?.outcome).toBe('rejected');
     expect(source.published).toHaveLength(1);
+  });
+
+  describe('a message whose handling fails (ADR-0013)', () => {
+    it('should try again and apply the message when a later attempt succeeds', async () => {
+      const capacity = inMemoryCapacity();
+      const source = new FakeMessageSource();
+      const failing = new FailingCapacityUpdate(capacity, 2);
+
+      await consumerFor(capacity, source, new MemoryStream(), failing).handle(inbound(UPDATE));
+
+      expect(failing.attempts).toBe(3);
+      expect(capacity.repositories.treasuryMessages.byId.get('m-limit')?.outcome).toBe('applied');
+      expect(source.published).toHaveLength(0);
+    });
+
+    it('should set a message aside after three failed attempts, keep the error and carry on with the next one', async () => {
+      const capacity = inMemoryCapacity();
+      const source = new FakeMessageSource();
+      const logs = new MemoryStream();
+      const failing = new FailingCapacityUpdate(capacity, 3);
+      const consumer = consumerFor(capacity, source, logs, failing);
+
+      await consumer.handle(inbound(UPDATE));
+      await consumer.handle(inbound({...UPDATE, messageId: 'm-next'}));
+
+      expect(failing.attempts).toBe(4);
+      expect(capacity.repositories.treasuryMessages.byId.get('m-limit')).toMatchObject({
+        outcome: 'rejected',
+        error: expect.stringContaining('value out of range for type bigint') as string,
+      });
+      expect(source.published).toHaveLength(1);
+      expect(source.published[0]?.messages[0]?.headers).toMatchObject({
+        error: expect.stringContaining('value out of range') as string,
+      });
+      expect(capacity.repositories.treasuryMessages.byId.get('m-next')?.outcome).toBe('applied');
+      expect(logs.lines()).toContainEqual(
+        expect.objectContaining({
+          level: 'error',
+          message: expect.stringContaining('m-limit') as string,
+        }),
+      );
+    });
+
+    it('should leave the message for redelivery when setting it aside fails too, so an outage loses nothing', async () => {
+      const capacity = inMemoryCapacity();
+      const source = new FakeMessageSource();
+      source.failNextPublish = true;
+      const consumer = consumerFor(
+        capacity,
+        source,
+        new MemoryStream(),
+        new FailingCapacityUpdate(capacity, 3),
+      );
+
+      await expect(consumer.handle(inbound(UPDATE))).rejects.toThrow('broker is away');
+
+      expect(capacity.repositories.treasuryMessages.byId.has('m-limit')).toBe(false);
+    });
   });
 });
