@@ -3013,3 +3013,12 @@ Findings, most severe first:
   unknown type test).
 - Deferred: the README's snapshot contract (`/ship`); a hand run of `dev:treasury snapshot`
   against a live stack (`/verify`); everything that depends on the INV-02 decision.
+
+## 2026-09-25, spec (revision: INV-02), Opus
+- Marcin decided the conflict the previous entry stopped on, as recommended: INV-02 is amended so
+  that `held` stays at or above zero always, and above `reservedAmount` only through a snapshot's
+  adjustment, never through a client operation. A Changes row is in the invariants file; the
+  glossary's `Held` entry says the same. Done on the slice branch, as A-06 was during S-02, so the
+  one PR for S-06 carries the requirement change next to the code it allows.
+- The declined option was capping a snapshot's figure at `reservedAmount`: it keeps the old
+  wording but throws away what the treasury said, against A-12 and ADR-0012 as accepted.
