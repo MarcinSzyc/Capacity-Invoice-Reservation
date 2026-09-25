@@ -258,7 +258,7 @@ export class Reservation {
    * AC-27: the treasury says the reservation was gone at its moment, so the whole invoice counts
    * as released and `held` and status agree again (AC-15, amended).
    */
-  drop(): bigint {
+  releaseByAdjustment(): bigint {
     if (this.status === 'closed') {
       throw new RangeError(`Reservation ${this.invoiceId} is already closed`);
     }

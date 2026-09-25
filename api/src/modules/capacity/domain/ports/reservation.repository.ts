@@ -11,6 +11,10 @@ export interface ReservationRepository {
   /** The listed invoices of a snapshot that we know, whatever their status (ADR-0012, 3A). */
   findByInvoices(programId: string, invoiceIds: readonly string[]): Promise<Reservation[]>;
   add(reservation: Reservation): Promise<void>;
+  /** A snapshot's new reservations in one statement, so one at the list bound fits a transaction. */
+  addAll(reservations: readonly Reservation[]): Promise<void>;
   /** A release moves `held` and `releasedInvoiceAmount` on a reservation that already exists. */
   save(reservation: Reservation): Promise<void>;
+  /** A snapshot's changed reservations in one statement, for the same reason as `addAll`. */
+  saveAll(reservations: readonly Reservation[]): Promise<void>;
 }

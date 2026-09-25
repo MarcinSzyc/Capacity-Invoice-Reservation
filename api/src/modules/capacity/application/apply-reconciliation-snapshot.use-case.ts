@@ -99,9 +99,9 @@ export class ApplyReconciliationSnapshot {
 
     // Foreign keys: the program before its reservations, both before the rows that name them.
     await programs.save(program);
-    for (const reservation of result.created) await reservations.add(reservation);
-    for (const reservation of result.changed) await reservations.save(reservation);
-    for (const movement of result.movements) await ledger.append(movement);
+    await reservations.addAll(result.created);
+    await reservations.saveAll(result.changed);
+    await ledger.appendAll(result.movements);
     await treasuryMessages.recordOutcome(record(command, 'applied'));
     return {outcome: 'applied', notes: result.notes};
   }

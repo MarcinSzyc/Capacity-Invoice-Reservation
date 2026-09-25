@@ -545,6 +545,50 @@ describe('Prisma capacity adapters', () => {
       expect(read?.createdAt).toEqual(AT_12_00);
     });
 
+    it('should write many reservations, their changes and their movements in one statement each, in the order given', async () => {
+      const programId = uniqueId('PRG');
+      const program = await announcedProgram(programId);
+      const born = ['INV-1', 'INV-2', 'INV-3'].map((invoiceId) =>
+        Reservation.fromSnapshot({programId, invoiceId, held: ONE_MILLION_EUR, asOf: AT_12_00}),
+      );
+      const movements = born.map((reservation) =>
+        program.adjust({
+          deltaHeld: reservation.held.amount,
+          reservationId: reservation.reservationId,
+          messageId: uniqueId('m'),
+          occurredAt: AT_12_00,
+        }),
+      );
+
+      await unitOfWork.run(async ({programs, reservations, ledger}) => {
+        await programs.save(program);
+        await reservations.addAll(born);
+        await ledger.appendAll(movements);
+      });
+      born[0]?.correctTo(Money.of(90_000_000n, EUR));
+      born[2]?.releaseByAdjustment();
+      await unitOfWork.run(({reservations}) =>
+        reservations.saveAll([born[0], born[2]].flatMap((r) => (r ? [r] : []))),
+      );
+
+      const read = await new PrismaReservationRepository(prisma).findByInvoices(programId, [
+        'INV-1',
+        'INV-2',
+        'INV-3',
+      ]);
+      expect(read).toEqual(born);
+      const ledgerRows = await new PrismaLedgerRepository(prisma).findByProgram(programId);
+      expect(ledgerRows.map((m) => m.reservationId)).toEqual(born.map((r) => r.reservationId));
+      expect(ledgerRows.at(-1)?.reservedAfter).toEqual(Money.of(300_000_000n, EUR));
+      await expect(
+        unitOfWork.run(async ({reservations, ledger}) => {
+          await reservations.addAll([]);
+          await reservations.saveAll([]);
+          await ledger.appendAll([]);
+        }),
+      ).resolves.toBeUndefined();
+    });
+
     it('should store a snapshot correction above reservedAmount (INV-02, amended)', async () => {
       const programId = uniqueId('PRG');
       await announcedProgram(programId);

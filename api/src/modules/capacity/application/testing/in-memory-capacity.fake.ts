@@ -54,6 +54,14 @@ export class InMemoryReservations implements ReservationRepository {
     return Promise.resolve();
   }
 
+  async addAll(reservations: readonly Reservation[]): Promise<void> {
+    for (const reservation of reservations) await this.add(reservation);
+  }
+
+  async saveAll(reservations: readonly Reservation[]): Promise<void> {
+    for (const reservation of reservations) await this.save(reservation);
+  }
+
   /** The aggregate is held by reference here, so a release has already changed it in place. */
   save(reservation: Reservation): Promise<void> {
     if (!this.all.includes(reservation)) this.all.push(reservation);
@@ -75,6 +83,11 @@ export class InMemoryLedger implements LedgerRepository {
 
   append(movement: CapacityMovement): Promise<void> {
     this.movements.push(movement);
+    return Promise.resolve();
+  }
+
+  appendAll(movements: readonly CapacityMovement[]): Promise<void> {
+    this.movements.push(...movements);
     return Promise.resolve();
   }
 

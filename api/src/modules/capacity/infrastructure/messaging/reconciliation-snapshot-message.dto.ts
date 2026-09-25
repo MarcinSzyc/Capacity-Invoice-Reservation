@@ -6,6 +6,7 @@ import {
   IsArray,
   IsInt,
   IsISO8601,
+  IsObject,
   IsString,
   Length,
   Matches,
@@ -26,6 +27,13 @@ import {
   SNAPSHOT_RESERVATIONS_MAX,
 } from '../../domain/identifier-limits';
 import {IsCurrencyCode} from '../currency-code';
+
+/**
+ * ADR-0006: every amount is an exact JSON integer. Each entry is held to it by its validator; the
+ * total is held to it here, since it becomes the program's `reserved`, which availability returns
+ * as one JSON number (review round 1 of S-06).
+ */
+const MAX_EXACT_JSON_INTEGER = BigInt(Number.MAX_SAFE_INTEGER);
 
 /** One entry of the list: an invoice the treasury holds capacity for, in program currency. */
 export class ListedReservationMessageDto {
@@ -71,6 +79,9 @@ export class ReconciliationSnapshotMessageDto {
   asOf!: string;
 
   @IsArray()
+  // Without this an entry that is an array, a string or null has no fields to fail, passes
+  // validation and reaches the mapping as nothing (review round 1 of S-06).
+  @IsObject({each: true, message: 'activeReservations must list objects'})
   @ArrayMaxSize(SNAPSHOT_RESERVATIONS_MAX)
   @ArrayUnique((entry: ListedReservationMessageDto) => entry.invoiceId, {
     message: 'activeReservations must not list one invoiceId twice',
@@ -97,6 +108,14 @@ export const parseReconciliationSnapshot = async (
   if (problems.length > 0) {
     const error = messagesOf(problems).join('; ');
     return {ok: false, error: error === '' ? 'message is not an object' : error};
+  }
+
+  const listedTotal = dto.activeReservations.reduce((sum, e) => sum + BigInt(e.heldAmount), 0n);
+  if (listedTotal > MAX_EXACT_JSON_INTEGER) {
+    return {
+      ok: false,
+      error: `activeReservations add up to ${listedTotal}, more than the ${MAX_EXACT_JSON_INTEGER} minor units one amount may carry`,
+    };
   }
 
   return {

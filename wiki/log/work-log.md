@@ -3094,3 +3094,31 @@ Findings, most severe first:
     glossary word; the glossary says "released by adjustment".
   - (minor, standards) `reconciliation.ts:177`: the closed guard in `stepForOmitted` handles a case
     the input contract excludes (only active reservations are unlisted locals).
+
+## 2026-09-25, implement S-06 (review fixes, round 1, part one), Opus
+- The findings that needed no decision, each test first and seen red where a test could fail.
+- Blocker, a list entry that is not an object: `activeReservations: [[]]` (and `null`, a string, a
+  number) passed validation and `BigInt(undefined)` threw in the mapping. The red test showed that
+  exact error; `@IsObject({each: true})` makes it a rejection, dead-lettered like any malformed
+  message.
+- Major, the listed total overflowing: the entries' sum is now refused above the largest exact
+  JSON integer, the bound ADR-0006 already puts on every single amount, since the sum becomes the
+  program's `reserved` and availability returns it as one JSON number.
+- Major, the list bound not proven: measured first against PostgreSQL. A snapshot of 10 000
+  unknown invoices took 12.2 to 12.9 s and one correcting 10 000 known reservations 12.5 s, inside
+  the 15 s transaction timeout on this machine but not safely. The writes are now batched:
+  `addAll` and `appendAll` are one `createMany` each, keeping the ledger's order, and `saveAll`
+  is one `UPDATE ... FROM unnest`. The same two cases now take 4.7 s and 2.5 s, and stay as
+  integration tests in `reconciliation-at-the-bound.integration-test.ts`, so a regression fails the
+  transaction rather than a stopwatch.
+- Minor, dead code: the closed check for an omitted reservation is gone; `local` passes only active
+  reservations unlisted, and a comment says so.
+- Minor, INV-02 after the amendment: a second property test mixes random snapshot corrections, up
+  to twice `reservedAmount`, among random releases, and asserts `held` never below zero and no
+  release ever raising it, and that both a correction and one above `reservedAmount` occurred. The
+  tagged INV-02 test and its name in `plan.md` are unchanged; its name still states the old bound,
+  which is a `/plan` correction to make, not one `/implement` may.
+- Minor, the glossary: `Reservation.drop` is renamed `releaseByAdjustment`, the glossary's own
+  phrase. The note kinds still need an entry, which is `/spec` work.
+- Open, waiting on Marcin: the ADR for a message that will always fail, and the currency and tie
+  wording for A-12 and INV-07.
