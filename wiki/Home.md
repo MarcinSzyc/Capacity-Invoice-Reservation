@@ -17,7 +17,7 @@ Obsidian vault root is this folder. Working rules: `../CLAUDE.md`.
 | Gate | State |
 |---|---|
 | spec | done 2026-09-19: 28 questions answered, A-01..A-19, AC-01..AC-41, INV-01..INV-11; revised 2026-09-25: A-12 amended, AC-42..AC-44 added for S-06 |
-| plan | done 2026-09-19: 7 slices S-01..S-07, 53 requirement rows, 11 ADRs; ADR-0001 to ADR-0008 accepted; S-03 revised 2026-09-22 against the shipped S-02 code; S-04 revised 2026-09-22 against the shipped S-03 code; A-10 amended twice for S-04; S-05 revised 2026-09-23 against the shipped S-04 code and ADR-0009; AC-15, AC-27, A-08 and A-09 amended during S-05; S-06 revised 2026-09-25 against the shipped S-05 code; ADR-0010, ADR-0011 and ADR-0012 accepted 2026-09-25; AC-42 to AC-44 planned into S-06; S-07 revised 2026-09-25 against the shipped S-06 code, with the S-06 carried findings in its scope; A-11 amended with the snapshot bounds |
+| plan | done 2026-09-19: 7 slices S-01..S-07, 53 requirement rows, 11 ADRs; ADR-0001 to ADR-0008 accepted; S-03 revised 2026-09-22 against the shipped S-02 code; S-04 revised 2026-09-22 against the shipped S-03 code; A-10 amended twice for S-04; S-05 revised 2026-09-23 against the shipped S-04 code and ADR-0009; AC-15, AC-27, A-08 and A-09 amended during S-05; S-06 revised 2026-09-25 against the shipped S-05 code; ADR-0010, ADR-0011 and ADR-0012 accepted 2026-09-25; AC-42 to AC-44 planned into S-06; S-07 revised 2026-09-25 against the shipped S-06 code, with the S-06 carried findings in its scope; A-11 amended with the snapshot bounds; S-08 planned 2026-09-25 for the carried review findings, no new requirement |
 
 | Slice | State |
 |---|---|
@@ -28,8 +28,12 @@ Obsidian vault root is this folder. Working rules: `../CLAUDE.md`.
 | S-05 Releases | done 2026-09-25: AC-10 to AC-19, AC-34, INV-02 |
 | S-06 Reconciliation snapshots | done 2026-09-25: AC-26 to AC-31, AC-42 to AC-44, INV-02 (amended), INV-05 to INV-07 |
 | S-07 Demo page and operations | done 2026-09-25: AC-38, AC-39 |
+| S-08 Hardening: the carried review findings | planned, next |
 
 Every slice is done and the plan is complete: every AC and INV in [[plan/plan]] is `done`.
 Known limitations, carried as they stand in [[log/changelog]]: a treasury message with `\u0000`
 in a string stalls its partition (the one open major, older than S-07), eight minors of the S-07
 review, and no bound test for a program past 10 000 active reservations.
+
+Next: `/implement S-08` on branch `slice/S-08-hardening-carried-findings`, which closes all of
+them. `risk: medium`, runs on Opus per `CLAUDE.md §8`.

@@ -3499,3 +3499,16 @@ Findings, most severe first:
 - Slice file: status `done`; its Scope line on where `DevTreasuryProducer` is provided corrected
   to match the code (review minor, a factual correction of the plan text).
 - Changelog row, slice index and Home updated: every slice done, the plan complete.
+
+## 2026-09-25, plan S-08 (hardening), Opus
+- Marcin asked to fix the open major of S-07 and every carried minor. No requirement changes, so
+  no `/spec` step and no row in the requirement table: S-08 plans twelve items as one slice with
+  ten supporting tests, untagged, because AC-25 and AC-38 are already closed.
+- The major is planned as a property of what gets stored rather than of how parsing ended: a
+  payload nested deeper than 32 or carrying NUL is recorded as null, an id with NUL is unreadable,
+  the error text loses NUL, and the DTOs refuse NUL in identifiers. That also removes the
+  depth coupling review round 2 found. No catch-all around the insert: a database that is away
+  must still redeliver (ADR-0013).
+- The S-06 minor becomes a bound test of 20 000 active reservations released by omission; if it
+  does not fit one transaction, making it fit is implement's job.
+- Commit column backfill for S-04 to S-07 goes to `/ship`. No ADR.
