@@ -50,7 +50,7 @@ export const toMovementColumns = (
   occurredAt: movement.occurredAt,
 });
 
-/** The column is constrained to these two (migration `releases`), so anything else is a row
+/** The column is constrained to these two (migration `release_constraints`), so anything else is a row
  * no writer of ours could have made and the mapper says so rather than casting blindly. */
 const toReleaseReason = (reason: string | null): ReleaseReason | null => {
   if (reason === null) return null;

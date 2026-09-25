@@ -111,7 +111,10 @@ export class ProgramsController {
     type: ReservationWithMovementsDto,
     description: 'The reservation and the movements that explain it (AC-19).',
   })
-  @ApiNotFoundResponse({description: 'RESERVATION_NOT_FOUND (AC-14).'})
+  @ApiNotFoundResponse({
+    description:
+      'RESERVATION_NOT_FOUND when the program holds no reservation for that invoice; PROGRAM_NOT_FOUND when the treasury never announced the program, the same pair the release route answers.',
+  })
   async readReservation(
     @Param() {programId, invoiceId}: ReservationParams,
   ): Promise<ReservationWithMovementsDto> {

@@ -49,6 +49,7 @@ const step = (reservation: Reservation, random: SeededRandom): string => {
 
 describe('Reservation invariants', () => {
   it('[INV-02] should keep held between 0 and reservedAmount over random release sequences', () => {
+    let refused = 0;
     for (let seed = 1; seed <= SEQUENCES; seed += 1) {
       const random = new SeededRandom(seed);
       const rate = Rate.parse(RATES[seed % RATES.length] ?? RATES[0]);
@@ -57,7 +58,9 @@ describe('Reservation invariants', () => {
       const history: string[] = [`rate ${rate.toString()}`];
 
       for (let index = 0; index < STEPS; index += 1) {
-        history.push(step(reservation, random));
+        const outcome = step(reservation, random);
+        history.push(outcome);
+        refused += outcome.endsWith('exceeded') || outcome.endsWith('closed') ? 1 : 0;
         const held = reservation.held.amount;
         const inBounds = held >= 0n && held <= reservedAmount.amount;
         const where = `seed ${seed} (${history.join(', ')})`;
@@ -76,5 +79,9 @@ describe('Reservation invariants', () => {
         expect(`seed ${seed}: held ${reservation.held.amount}`).toBe(`seed ${seed}: held 0`);
       }
     }
+
+    // The sequences are meant to reach the boundary, not only to stay inside it. Without this
+    // the test would still pass if the random amounts stopped ever asking for too much.
+    expect(refused > 0 ? 'boundary reached' : 'boundary never reached').toBe('boundary reached');
   });
 });

@@ -2752,3 +2752,70 @@ Findings, most severe first:
 - A-08 and A-09 landed in #34, so the register, the glossary and the criteria now agree with
   ADR-0009 and with each other.
 - Result: PASS.
+
+## 2026-09-25, review S-05 (round 4), Opus
+- Ran on Opus again, for the same reason as every other pass of this slice: the Fable credits
+  are exhausted. Four rounds of review and five of implementation have now all run on one model,
+  so a shared blind spot has had nothing to catch it.
+- REVIEW S-05: 6 findings (0 blockers / 1 major / 5 minors).
+- Round 3's three majors are genuinely closed. `readSnapshot` runs at `RepeatableRead` and `run`
+  stays at read committed, which is the right split: the write path keeps blocking on
+  `SELECT ... FOR UPDATE` (INV-01) and the read path gets one instant. The integration case at
+  `prisma-capacity.integration-test.ts:374` proves the property rather than the setting, with a
+  committed write from another connection landing between two reads inside the snapshot, and it
+  checks that the write really happened so it cannot pass for the wrong reason. A-08 and A-09 in
+  the assumptions register now state the rules ADR-0009 and the amended AC-15 actually hold, with
+  their Changes rows.
+- Asked of the newest code specifically. `readSnapshot` cannot deadlock or fail to serialise:
+  it takes no lock and writes nothing, and a read-only `RepeatableRead` transaction in Postgres
+  has no conflict to lose. The migration split is sound: `20260923120000_releases` is byte
+  identical to its creating commit (checked against de6e10f) and `20260924120000_release_constraints`
+  adds only CHECK constraints, which the Prisma schema cannot express in either file, so schema
+  and migrations still agree and both apply in order on an empty database. The extra
+  `programs.findById` in `GetReservation` is one primary key lookup inside the same snapshot and
+  introduces no new failure: it can answer `PROGRAM_NOT_FOUND` (404) or the mapper errors every
+  other program read already carries.
+- The major is the shape the last round found, one file further out. The AC-15 amendment of
+  2026-09-24 changed what `closed` means, and AC-27 in the criteria still reads `held` 0 and
+  status closed as one statement. With `status` derived from the remaining invoice amount they
+  are now two, and nothing records how a reconciliation adjustment is meant to reach the second.
+  The criteria carry a Changes row for AC-15 and none for AC-27, and this slice's hand-off note
+  to S-06 talks about `releasedInvoiceAmount` on snapshot created reservations but not about a
+  snapshot closing one that exists. It is `/spec` work, like A-08 and A-09 were, not a defect in
+  the code.
+- Minors: the read route publishes only `RESERVATION_NOT_FOUND` on its 404 although the round 3
+  fix deliberately made it answer `PROGRAM_NOT_FOUND` too, and the work-log entry for that fix
+  claims the controller publishes it; the mapper's comment still points at the `releases`
+  migration for a constraint that now lives in `release_constraints`; the in-memory unit of work
+  claims a rollback it does not perform on aggregate state, which matters from this slice on
+  because `ReleaseCapacity` is the first use case to mutate a loaded aggregate; `readSnapshot`
+  hands out the full write repositories, which is the one way the isolation split could be
+  turned back into the bug it was created to remove; and the INV-02 property test catches
+  over-release attempts without ever asserting that any occurred.
+- No code defect was found in the release path itself. The critical section for INV-02 and INV-03
+  is the program row lock, taken before the reservation and the ledger are read, and a release
+  only lowers `reserved`, so two parallel releases on one program are ordered and neither can
+  double apply: the duplicate check reads the same ledger rows behind that lock, with the partial
+  unique index as the backstop.
+
+## 2026-09-25, implement S-05 (review fixes, round 5), Opus
+- Review round 4 passed the code and would not send anything back to `/implement`; its one major
+  is AC-27, a requirement of S-06 whose meaning our own AC-15 amendment changed. That is `/spec`
+  work and goes in its own PR. Marcin decided it: a reconciliation adjustment that drops a
+  reservation also takes `releasedInvoiceAmount` to the whole invoice, so `held` 0 and status
+  closed coincide again, which is what a snapshot saying "this reservation is gone" means.
+- The five minors are closed here. The read route publishes both codes it can answer, not just
+  one. The `toReleaseReason` comment cites `release_constraints`, which is where the CHECK
+  actually went after the migration split. The in-memory `run` no longer claims to be a
+  rollback: it restores the collections but hands back the same aggregates, and S-05 is the
+  first slice whose use case mutates a loaded one in place, so a "wrote nothing" assertion
+  against the fake is weaker than the same assertion against the database, and the comment now
+  says so.
+- `readSnapshot` is narrowed to a `CapacityReads` of exactly the three reads it needs, instead of
+  taking the full repositories and warning in prose that the write path must not run there. The
+  type now prevents what the comment used to ask for.
+- INV-02's property test asserts it reached the boundary at all: over-release and
+  already-released outcomes are counted, and the test fails if the random amounts stop ever
+  asking for too much. Without it the suite could quietly cover less and stay green, which is
+  the same defect class as the AC-16 tests round 1 found.
+- `npm run gate` green: unit 132, integration 32, e2e 53, cold start 3.
