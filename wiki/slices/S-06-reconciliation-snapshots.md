@@ -2,7 +2,7 @@
 
 - Outcome: a treasury snapshot brings a program's limit and reservations up to date as of one moment, every difference is an explicit adjustment in the ledger, and nothing a client was already told is undone by an older snapshot.
 - Status: planned
-- AC: AC-26, AC-27, AC-28, AC-29, AC-30, AC-31
+- AC: AC-26, AC-27, AC-28, AC-29, AC-30, AC-31, AC-42, AC-43, AC-44 (the last three added 2026-09-25 with the A-12 amendment)
 - INV: INV-05, INV-06, INV-07
 - Risk: high. Reconciliation: comparing two systems' clocks, set differences between local and remote reservations, a correction that has to live alongside a `held` derived from the invoice (ADR-0009), monotonic application under shuffled delivery, replay of everything. Implemented on Fable per `CLAUDE.md §8`.
 - Depends on: S-05. ADRs, all accepted 2026-09-25: [[../decisions/ADR-0010-reconciliation-created-at-versus-as-of]], [[../decisions/ADR-0011-reconciliation-created-reservations]], [[../decisions/ADR-0012-snapshot-corrections-on-a-derived-held]]. ADR-0007 (accepted in S-02) governs the currency field.
@@ -114,6 +114,9 @@ touches a spec word is listed under "Owed to `/spec`".
 | `it('[AC-29] should correct held to the snapshot value with an adjustment for the difference')` | e2e | `INV-B` at 1 925 000, snapshot says 1 900 000; `held` 1 900 000, `adjustment` of minus 25 000. Then a partial release of 900 000 leaves `held` 1 000 000, not 1 025 000, which proves the correction survived (ADR-0012 question 1) |
 | `it('[AC-30] should ignore a snapshot older than the last applied one and record it as stale')` | contract | 18:00 applied, then 12:00 arrives; ledger unchanged, `treasury_messages` outcome `stale` |
 | `it('[AC-31] should set limit and currency from the snapshot and expose its asOf in availability')` | e2e | limit 7 000 000, `asOf` echoed in availability; same currency as the program (the mismatch cases are ADR-0007's untagged contract tests below) |
+| `it('[AC-42] should keep a reservation created within the keep window before asOf that the snapshot omits')` | e2e | default window of 30 s; settable clock at 17:59:45, reserve `INV-D`; snapshot `asOf` 18:00:00 omits it; reservation unchanged, no movement after the reserve (ADR-0010) |
+| `it('[AC-43] should keep a release made after asOf when a snapshot corrects held')` | e2e | settable clock at 17:00, reserve `INV-B` for 1 925 000; clock to 18:05, release 500 000; snapshot `asOf` 18:00 lists 1 900 000; `held` 1 400 000, one `adjustment` of minus 25 000, the release movement still there (ADR-0012, 2A) |
+| `it('[AC-44] should reopen a reservation closed by an earlier snapshot when a later snapshot lists it')` | e2e | snapshot `asOf` 12:00 omits `INV-F` (reserved earlier by the client), so it is closed; snapshot `asOf` 18:00 lists it at 300 000; status `active`, `held` 300 000, an `adjustment` of +300 000 with the second snapshot's `messageId` (ADR-0012, 3A) |
 | `it('[INV-05] should leave every balance and ledger row unchanged when every message and request of a scenario is replayed')` | invariant (e2e) | scenario: capacity update, two reservations, a partial release, a snapshot, a limit change; record the ledger and balances; replay every Kafka message and every HTTP request with the same ids; ledger and balances identical, HTTP replays answer `409`, each message's duplicate count up by one (local decision 13) |
 | `it('[INV-06] should never alter a reservation by a snapshot whose asOf precedes its creation')` | invariant (e2e) | settable clock; interleavings: a snapshot arriving after the reservation but describing a moment before it, listed and not listed, and a snapshot describing a moment after it; only the last may touch it |
 | `it('[INV-07] should reach the same final state for shuffled and reversed message order as for in-order delivery')` | invariant (contract) | five capacity updates and three snapshots for one program, including one invoice listed, then omitted, then listed again, delivered in order, reversed and in three seeded shuffles into fresh programs; final state compared as local decision 12 defines it |
@@ -122,10 +125,7 @@ Supporting tests, untagged because they prove a decision rather than close a req
 
 | Test | Level | Proves |
 |---|---|---|
-| `it('should judge a listed reservation against its held at asOf, not after a later release')` | unit | ADR-0012 question 2 |
 | `it('should leave closed a reservation the client fully released after asOf')` | unit | ADR-0012 question 3, the boundary |
-| `it('should reopen a reservation closed before asOf that a later snapshot lists')` | unit | ADR-0012, 3A |
-| `it('should keep an omitted reservation created within the keep window before asOf')` | unit | ADR-0010, the keep window |
 | `it('should apply the reservations and skip the limit of a snapshot older than the last capacity update')` | unit | local decision 2 |
 | `it('should create nothing for an unknown invoice listed with a held of zero')` | unit | local decision 4 |
 | `it('should dead-letter a snapshot whose currency differs while a reservation is active')` | contract | ADR-0007 |
@@ -161,3 +161,4 @@ Beyond `CLAUDE.md §9`:
 | 2026-09-19 | plan | slice written |
 | 2026-09-25 | plan | revised against the shipped S-05 code: ADR-0012 proposed, ADR-0010 recommendation revised, ADR-0011 addendum, thirteen local decisions, test names unchanged |
 | 2026-09-25 | plan | ADR-0010, ADR-0011 and ADR-0012 accepted as recommended |
+| 2026-09-25 | plan | AC-42, AC-43, AC-44 added from the A-12 amendment (#38); their three untagged tests become the tagged ones |
