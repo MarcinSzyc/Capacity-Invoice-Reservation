@@ -2738,3 +2738,17 @@ Findings, most severe first:
   appends no movement, which its slice row always claimed. Four more statements of the removed
   AC-15 rule, in test names and the slice's Scope, now say the rule that holds.
 - `npm run gate` green: unit 132, integration 32, e2e 53, cold start 3.
+
+## 2026-09-25, verify S-05 (fifth pass, after review fixes round 4), Sonnet
+- `npm run gate` green on the rebased branch: prose clean, unit 132/132, integration 32/32,
+  e2e 53/53, cold start 3/3. Coverage 12/12 at the planned level, no skipped or focused tests.
+- Swept the whole tree for statements of the rule AC-15 replaced, in `api/src`, `wiki/spec` and
+  the slice file: none left. That sweep is what the last three rounds kept finding one more of,
+  so it is worth doing as a check rather than as a fix.
+- Both round 3 majors confirmed live on a cold started stack: AC-19's movements sum exactly to
+  the `held` on the same body, and the release route and the read route now answer the same code
+  for the same state (`PROGRAM_NOT_FOUND` for an unannounced program), rather than telling a
+  client two different things.
+- A-08 and A-09 landed in #34, so the register, the glossary and the criteria now agree with
+  ADR-0009 and with each other.
+- Result: PASS.
