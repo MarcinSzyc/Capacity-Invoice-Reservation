@@ -374,6 +374,32 @@ describe('TreasuryCapacityConsumer', () => {
     expect((await deadLetterOf(nestedId)).headers.error).toMatch(/could not be parsed/);
   });
 
+  it('should dead-letter and record a message with NUL in a string, and apply the next one on the real store', async () => {
+    const programId = uniqueId('PRG');
+    const noteId = uniqueId('m-nul-note');
+    const programNulId = uniqueId('m-nul-program');
+    const validId = uniqueId('m');
+    const base = {type: 'capacity_update', currency: EUR, creditLimit: 1, eventTime: AT_10_00};
+    const withNote = {...base, messageId: noteId, programId, note: 'a\u0000b'};
+    const withNulProgram = {...base, messageId: programNulId, programId: `${programId}\u0000`};
+
+    await kafka.publish(TREASURY_TOPIC, [
+      {key: programId, value: JSON.stringify(withNote)},
+      {key: programId, value: JSON.stringify(withNulProgram)},
+    ]);
+    await producer.publishCapacityUpdate({
+      messageId: validId,
+      programId,
+      currency: EUR,
+      creditLimit: FIVE_MILLION,
+      eventTime: AT_10_00,
+    });
+
+    expect(await outcomeOf(validId)).toMatchObject({outcome: 'applied'});
+    expect(await outcomeOf(noteId)).toMatchObject({outcome: 'rejected', payload: null});
+    expect(await outcomeOf(programNulId)).toMatchObject({outcome: 'rejected', programId: null});
+  });
+
   describe('reconciliation snapshots', () => {
     const AT = (hour: number): Date => new Date(Date.UTC(2026, 8, 21, hour));
     const SEVEN_MILLION = 700_000_000n;
