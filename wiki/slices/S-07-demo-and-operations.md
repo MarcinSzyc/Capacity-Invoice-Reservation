@@ -1,7 +1,7 @@
 # S-07 Demo page and operations
 
 - Outcome: a reviewer opens the `web` container's page in the dev profile and watches reservations, releases and treasury messages flow through the real `api` endpoints and the real topic; state survives a restart.
-- Status: in progress
+- Status: done 2026-09-25
 - AC: AC-38, AC-39
 - INV: none
 - Risk: low. No business rule; a small React UI, three dev-only endpoints and a durability check. A-17 budgets half a day. The fixes carried from S-06 are local and each has a test. Runs on Opus per `CLAUDE.md §8`.
@@ -28,7 +28,7 @@ Checked against `main` at 844a7b0, after S-06, rather than assumed:
   - `GET /dev/token`: `{token}` minted with the running api's JWT config, subject `demo-web`, 8 h. The page asks for it once on load.
   - `GET /dev/programs/:programId/movements`: the latest 100 movements of the program, newest first, as `CapacityMovementDto` plus `reservedAfter` and `availableAfter` in minor units, and the program's `currency`. `PROGRAM_NOT_FOUND` for an unannounced program, like every read.
   - `POST /dev/treasury`: body `{type: 'capacity_update' | 'reconciliation_snapshot', programId, currency, creditLimit, messageId?, eventTime?, asOf?, activeReservations?: [{invoiceId, heldAmount}]}`, amounts JSON integers in minor units. Publishes with `DevTreasuryProducer` on the real topic and answers `202` with the published message, `messageId` and time filled in when absent. It does not validate business rules: whatever it publishes is judged by the real consumer, which is the point of the panel.
-- A query `ListProgramMovements` in `application/`, reading through a new `LedgerRepository.findLatestByProgram(programId, limit)` inside `readSnapshot` with the program; the Prisma adapter, its integration test and the in-memory fake get it. Exported by `CapacityModule` together with `DevTreasuryProducer`, which becomes a provider.
+- A query `ListProgramMovements` in `application/`, reading through a new `LedgerRepository.findLatestByProgram(programId, limit)` inside `readSnapshot` with the program; the Prisma adapter, its integration test and the in-memory fake get it. Exported by `CapacityModule`. `DevTreasuryProducer` becomes a provider of `CapacityDevModule`, so production never constructs it (corrected at ship, review round 1).
 - `AppModule.forProfile(profile)`: imports `CapacityDevModule` unless the profile is `production`. `main.ts` reads the profile once before creating the app; the e2e harness passes the profile of the config it builds.
 
 `web`:
@@ -96,3 +96,4 @@ Beyond `CLAUDE.md §9`:
 | 2026-09-25 | implement (round 2) | review round 1 major fixed: an unparseable message is recorded without its payload; seven minors carried |
 | 2026-09-25 | verify (round 2) | PASS: gate green at 7a3181b, coverage unchanged |
 | 2026-09-25 | review (round 2) | 9 findings (0/1/8): round 1 major closed; a NUL in any string still stalls the partition on the real store |
+| 2026-09-25 | ship | done, over review round 2's one major by Marcin's standing decision (a review without blockers ships); eight minors carried |
