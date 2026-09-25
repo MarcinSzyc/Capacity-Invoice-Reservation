@@ -11,9 +11,13 @@ interface GeneratorProps {
 }
 
 interface Reserved {
+  readonly programId: string;
   readonly invoiceId: string;
   readonly invoiceAmount: number;
 }
+
+// Answers after which api holds nothing more to release for that invoice on that program.
+const NOTHING_LEFT = new Set([404, 409]);
 
 const randomInteger = (from: number, to: number): number =>
   from + Math.floor(Math.random() * (to - from + 1));
@@ -31,15 +35,18 @@ const statusOf = (body: unknown): string | null =>
  */
 export const Generator = ({api, programId, currency}: GeneratorProps): React.JSX.Element => {
   const [running, setRunning] = useState(false);
+  // Every invoice with the program that holds it, so a release never goes to another program.
   const reserved = useRef<Reserved[]>([]);
 
   const reserve = async (): Promise<void> => {
     const invoice = {
+      programId,
       invoiceId: `INV-${randomSuffix()}`,
       invoiceAmount: randomInteger(1, LARGEST_AMOUNT),
     };
     const answer = await api.send('POST', `/programs/${programId}/reservations`, {
-      ...invoice,
+      invoiceId: invoice.invoiceId,
+      invoiceAmount: invoice.invoiceAmount,
       invoiceCurrency: currency,
     });
     if (answer.status === 201) reserved.current.push(invoice);
@@ -49,20 +56,19 @@ export const Generator = ({api, programId, currency}: GeneratorProps): React.JSX
     const inFull = Math.random() < 0.5;
     const answer = await api.send(
       'POST',
-      `/programs/${programId}/reservations/${invoice.invoiceId}/releases`,
+      `/programs/${invoice.programId}/reservations/${invoice.invoiceId}/releases`,
       {
         releaseId: `R-${randomSuffix()}`,
         ...(inFull ? {} : {amount: randomInteger(1, invoice.invoiceAmount)}),
       },
     );
-    if (answer.status !== 200 && answer.status !== 409) return;
-    if (answer.status === 409 || statusOf(answer.body) === 'closed') {
-      reserved.current = reserved.current.filter((held) => held !== invoice);
-    }
+    const closed = answer.status === 200 && statusOf(answer.body) === 'closed';
+    if (!closed && !NOTHING_LEFT.has(answer.status)) return;
+    reserved.current = reserved.current.filter((held) => held !== invoice);
   };
 
   const step = (): Promise<void> => {
-    const candidates = reserved.current;
+    const candidates = reserved.current.filter((held) => held.programId === programId);
     const invoice = candidates[randomInteger(0, candidates.length - 1)];
     if (invoice === undefined || Math.random() < 0.5) return reserve();
     return release(invoice);
