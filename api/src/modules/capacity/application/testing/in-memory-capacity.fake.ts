@@ -4,6 +4,7 @@ import {Clock} from '../../domain/ports/clock';
 import {ProgramRepository} from '../../domain/ports/program.repository';
 import {ReservationRepository} from '../../domain/ports/reservation.repository';
 import {
+  TreasuryMessageFailure,
   TreasuryMessageRecord,
   TreasuryMessageStore,
 } from '../../domain/ports/treasury-message-store';
@@ -113,6 +114,12 @@ export interface StoredTreasuryMessage extends TreasuryMessageRecord {
 
 export class InMemoryTreasuryMessages implements TreasuryMessageStore {
   readonly byId = new Map<string, StoredTreasuryMessage>();
+  readonly failures: TreasuryMessageFailure[] = [];
+
+  recordFailure(failure: TreasuryMessageFailure): Promise<void> {
+    this.failures.push(failure);
+    return Promise.resolve();
+  }
 
   wasProcessed(messageId: string): Promise<boolean> {
     return Promise.resolve(this.byId.has(messageId));

@@ -3122,3 +3122,20 @@ Findings, most severe first:
   phrase. The note kinds still need an entry, which is `/spec` work.
 - Open, waiting on Marcin: the ADR for a message that will always fail, and the currency and tie
   wording for A-12 and INV-07.
+
+## 2026-09-25, implement S-06 (review fixes, round 1, part two), Opus
+- ADR-0013 accepted as Marcin decided, not as recommended: three attempts inside one delivery, then
+  the message is set aside as a rejection (dead letter with the error, record `rejected` with the
+  error text) and consumption continues. The counting stays in the handler so a restart cannot loop
+  it and an outage cannot trip it: giving up needs the broker and the database, so while either is
+  away the error propagates and Kafka redelivers. Three consumer tests, seen red first: a failure
+  that recovers on the third attempt, a message set aside after three while the next one applies,
+  and a message left for redelivery when the dead letter cannot be published.
+- Marcin then asked for a table for these errors, and to keep it short since it is an edge case.
+  `treasury_message_failures`: one row per failed attempt, best effort, its own transaction, no
+  API, no foreign key. One unit expectation (three rows after three failures, seen red) and one
+  integration case.
+- The review's blocker and major about messages redelivered forever are closed by this for any
+  cause, not only the two found; their specific causes were already fixed in part one.
+- Still owed: the currency questions (blocker 2 and the major about unwritten rules), the tie on
+  `asOf`, and the `/spec` wording for A-13 clause 4, the note kinds and the new table.

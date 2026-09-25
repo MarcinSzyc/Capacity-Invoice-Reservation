@@ -173,10 +173,26 @@ export class TreasuryCapacityConsumer implements OnApplicationBootstrap, OnModul
       } catch (reason: unknown) {
         failure = reason instanceof Error ? reason.message : String(reason);
         this.logger.warn(`message ${messageId} failed attempt ${attempt}: ${failure}`, CONTEXT);
+        await this.keepFailure(messageId, attempt, failure);
       }
       if (attempt < ATTEMPTS) await new Promise((resolve) => setTimeout(resolve, RETRY_PAUSE_MS));
     }
     return {ok: false, error: failure};
+  }
+
+  /** Best effort: when the database is what is failing, the log line above is all there is. */
+  private async keepFailure(messageId: string, attempt: number, error: string): Promise<void> {
+    try {
+      await this.rejectTreasuryMessage.recordFailure({
+        messageId,
+        attempt,
+        error,
+        failedAt: new Date(),
+      });
+    } catch (reason: unknown) {
+      const detail = reason instanceof Error ? reason.message : String(reason);
+      this.logger.warn(`could not keep failure of ${messageId}: ${detail}`, CONTEXT);
+    }
   }
 
   /**

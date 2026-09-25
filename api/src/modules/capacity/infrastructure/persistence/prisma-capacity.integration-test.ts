@@ -98,6 +98,24 @@ describe('Prisma capacity adapters', () => {
     expect(await store.findById(messageId)).toMatchObject({...record, duplicateCount: 2});
   });
 
+  it('should keep a failed attempt in its own table, even for a message that has no record yet (ADR-0013)', async () => {
+    const messageId = uniqueId('m-failing');
+
+    await unitOfWork.run(({treasuryMessages}) =>
+      treasuryMessages.recordFailure({messageId, attempt: 1, error: 'boom', failedAt: AT_10_10}),
+    );
+
+    const rows = await prisma.withClient((client) =>
+      client.treasuryMessageFailure.findMany({where: {messageId}}),
+    );
+    expect(rows).toEqual([
+      expect.objectContaining({messageId, attempt: 1, error: 'boom', failedAt: AT_10_10}),
+    ]);
+    await expect(new PrismaTreasuryMessageStore(prisma).wasProcessed(messageId)).resolves.toBe(
+      false,
+    );
+  });
+
   it('should roll back everything the work wrote when it throws', async () => {
     const programId = uniqueId('PRG');
     const program = Program.announce(programId, EUR);
