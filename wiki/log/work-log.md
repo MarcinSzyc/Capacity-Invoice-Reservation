@@ -3437,3 +3437,8 @@ Findings, most severe first:
   guard on the poll, a non-JSON body logged as `API_UNREACHABLE` and an empty token cached, two
   unnarrowed casts in `app.tsx`, the "Stale" comment, no test of the generator timer, and the
   slice Scope line on where `DevTreasuryProducer` is provided.
+
+## 2026-09-25, verify S-07 (round 2), Opus
+- VERIFY S-07: PASS, at 7a3181b. `npm run gate` green: unit 200, web 4, integration 50, e2e 66,
+  cold start 3. Coverage unchanged, 2/2 AC. The diff since round 1 is one consumer function and
+  one integration test; prose check clean, no layer import moved. Findings: none new.
