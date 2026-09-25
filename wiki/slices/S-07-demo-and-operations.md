@@ -90,3 +90,4 @@ Beyond `CLAUDE.md §9`:
 | 2026-09-19 | plan (revision) | compose shape per ADR-0001: api, web, db, kafka; demo in the web container |
 | 2026-09-25 | plan (revision) | reconciled with the shipped S-06 code: dev module chosen by profile, the ledger read, the treasury endpoint body, panels proved by render tests, the S-06 carried findings |
 | 2026-09-25 | implement | started on Fable; carried S-06 findings first |
+| 2026-09-25 | implement | done: carried S-06 findings closed, dev endpoints, demo page, AC-38 and AC-39 tests green, npm run gate green |

@@ -3337,3 +3337,33 @@ Findings, most severe first:
   match the plan rows word for word.
 - Goal set by Marcin for this session: plan, implement, verify, review and ship S-07 with the PRs
   opened and merged without a separate approval each, verify passing and review without a blocker.
+
+## 2026-09-25, implement S-07, Fable
+- Carried from S-06 first (commit 38780e6): a throw while parsing a treasury message is now a
+  rejection, dead-lettered and recorded, so the 5 000-deep nested field no longer stalls the
+  partition (supporting test for both types, red on the real `RangeError` first); the sum of
+  client movements after `asOf` is one pass; the ledger port comments are back above their
+  methods; the last-row read says what Prisma's `distinct` really sends.
+- `api` (0f491ba): `CapacityDevModule` with `DevController`, three `@Public()` routes under the
+  `dev` Swagger tag; `AppModule.forProfile` leaves it out in production (local decision 1), so
+  `main.ts` reads the profile once before creating the app and the e2e harness passes its own.
+  `ListProgramMovements` reads program and rows in one `readSnapshot`; `CapacityReads` gains
+  `findLatestByProgram`. Deviation from the slice text, small: `DevTreasuryProducer` is a provider
+  of the dev module rather than exported by `CapacityModule`, so production never constructs it.
+- AC-39's test passed the first time it ran, as the slice predicted: durability was built by
+  S-02 to S-06, and the test proves it rather than drives it.
+- `web` (ce12815): four panels, a small client that fetches the dev token once and logs only the
+  calls a person caused (the one-second polls are not logged, or the log would be nothing else).
+  The generator gained a "One request" button besides start and stop, which is what the render
+  test clicks. Found by reading the code before the hand check: the generator's timer restarted on
+  every render, and the page re-renders on every poll, so it could never fire; it now reaches the
+  latest step through a ref. No test covers that timer; the hand check does not either (see below).
+- Tests beyond the plan, for `/ship`: `ListProgramMovements` unit tests (two), in
+  `api/src/modules/capacity/application/list-program-movements.query.test.ts`.
+- `npm run gate` green: unit 200, web 4, integration 49, e2e 66, cold start 3.
+- Hand check on a compose stack of its own (ports 3200/8280): dev token, CORS preflight from the
+  web origin, three reservations and a partial release as `demo-web`, a limit change applied, a
+  stale update ignored, a snapshot correcting one reservation by -1 000, creating one of 700 and
+  keeping two inside the keep window. Headless Chrome rendered the page with all four panels, the
+  limit from the api and nine ledger rows. Not checked by hand: clicking the buttons in a browser
+  (no browser driver in the repo); the render tests and the curl run cover the same calls.
