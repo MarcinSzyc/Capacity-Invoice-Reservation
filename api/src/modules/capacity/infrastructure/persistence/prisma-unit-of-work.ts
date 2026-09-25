@@ -1,7 +1,7 @@
 import type {Prisma} from '../../../../generated/prisma/client';
 import {Injectable} from '@nestjs/common';
 import {PrismaService} from '../../../../persistence/prisma.service';
-import {CapacityRepositories, UnitOfWork} from '../../domain/ports/unit-of-work';
+import {CapacityReads, CapacityRepositories, UnitOfWork} from '../../domain/ports/unit-of-work';
 import {TransactionScope} from './client-access';
 import {PrismaLedgerRepository} from './prisma-ledger.repository';
 import {PrismaProgramRepository} from './prisma-program.repository';
@@ -23,7 +23,7 @@ export class PrismaUnitOfWork implements UnitOfWork {
     return this.transaction(work, {timeout: TRANSACTION_TIMEOUT_MS});
   }
 
-  readSnapshot<T>(work: (repositories: CapacityRepositories) => Promise<T>): Promise<T> {
+  readSnapshot<T>(work: (reads: CapacityReads) => Promise<T>): Promise<T> {
     return this.transaction(work, {
       timeout: TRANSACTION_TIMEOUT_MS,
       isolationLevel: 'RepeatableRead',

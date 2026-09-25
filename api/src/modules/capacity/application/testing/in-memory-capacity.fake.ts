@@ -7,7 +7,7 @@ import {
   TreasuryMessageRecord,
   TreasuryMessageStore,
 } from '../../domain/ports/treasury-message-store';
-import {CapacityRepositories, UnitOfWork} from '../../domain/ports/unit-of-work';
+import {CapacityReads, CapacityRepositories, UnitOfWork} from '../../domain/ports/unit-of-work';
 import {Program} from '../../domain/program';
 import {Reservation} from '../../domain/reservation';
 
@@ -96,7 +96,10 @@ export class InMemoryTreasuryMessages implements TreasuryMessageStore {
 
 /**
  * Runs the work against the shared fakes. Rollback is simulated by snapshotting and restoring,
- * so a use case that throws leaves the fakes as they were, like a real transaction would.
+ * so a use case that throws leaves the collections as they were. It is not a real
+ * rollback: the aggregates handed out are the same objects, and one that mutated in place
+ * (as `Reservation.release` does) stays mutated, so a "wrote nothing" assertion against this
+ * fake is weaker than the same assertion against the database.
  */
 export class InMemoryUnitOfWork implements UnitOfWork {
   private depth = 0;
@@ -109,7 +112,7 @@ export class InMemoryUnitOfWork implements UnitOfWork {
   }
 
   /** In memory there is nothing to isolate from: the reads are already one instant. */
-  readSnapshot<T>(work: (repositories: CapacityRepositories) => Promise<T>): Promise<T> {
+  readSnapshot<T>(work: (reads: CapacityReads) => Promise<T>): Promise<T> {
     return work(this.repositories);
   }
 
