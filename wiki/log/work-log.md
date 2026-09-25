@@ -3312,3 +3312,28 @@ Findings, most severe first:
   `messageId`, and availability reported `asOf`.
 - Changelog row, slice status `done`, slice index and Home updated; Home names S-07 next and lists
   what S-06 carries into it.
+
+## 2026-09-25, plan S-07 (revision before implement), Fable
+- Targeted run for a slice that already existed: S-07 was written on 2026-09-19 and revised the
+  same day for ADR-0001. Reconciled with the shipped S-06 code at 844a7b0 rather than rewritten.
+  AC-39's row is unchanged. AC-38's row now names three tagged tests, one e2e and two render
+  tests, because the first version's single test could not pass: the served page is an empty
+  `#root` until the bundle runs, so panel ids are not in the HTML a cold start check reads.
+- Scope made concrete where the first version left a design conversation open: the dev module is
+  chosen when the module graph is built (`AppModule.forProfile`), not hidden behind a guard; it
+  lives in the capacity area because two of its routes name business words; `POST /dev/treasury`
+  has a body and does not pre-judge what the consumer will do; the live ledger needs a new port
+  read, `findLatestByProgram`. Five local decisions, no ADR: each follows from ADR-0001, A-17 or
+  `CLAUDE.md §2`.
+- The S-06 carried findings are scope of S-07's first commits: the parser overflow (the major,
+  with a supporting consumer test for both message types), the quadratic `sumOfDeltas`, the two
+  ledger comments. The bound test for a program past 10 000 active reservations stays a known
+  limitation.
+- Spec corrections carried with this plan, since both were owed to `/spec` by the S-06 ship and
+  touch no requirement id: the glossary's `Snapshot moment` no longer says a reservation created at
+  `asOf` is never changed (review round 3 of S-06), and A-11 carries the two snapshot bounds, with
+  a Changes row. Glossary gains `Dev endpoint` and `Demo page`, the words the slice puts into code.
+- Every AC and INV appears exactly once in `wiki/plan/plan.md`; the slice file's tagged test names
+  match the plan rows word for word.
+- Goal set by Marcin for this session: plan, implement, verify, review and ship S-07 with the PRs
+  opened and merged without a separate approval each, verify passing and review without a blocker.
