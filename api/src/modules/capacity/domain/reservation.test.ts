@@ -61,6 +61,7 @@ describe('Reservation', () => {
       held: Money.zero(USD),
       releasedInvoiceAmount: ONE_POINT_TWO_MILLION_USD,
       rate: Rate.one(),
+      heldCorrection: 0n,
       source: 'reconciliation',
       clientId: null,
       createdAt: AT_10_00,
@@ -251,6 +252,150 @@ describe('Reservation', () => {
       expect(reservation.remainingInvoiceAmount).toEqual(Money.zero('IDR'));
       expect(reservation.releasedInvoiceAmount).toEqual(Money.of(1_000_000n, 'IDR'));
       expect(reservation.status).toBe('closed');
+    });
+  });
+
+  describe('reconciliation', () => {
+    const AT_18_00 = new Date('2026-09-21T18:00:00.000Z');
+    const INVOICE_B = 'INV-B';
+    const INVOICE_X = 'INV-X';
+    const ONE_POINT_NINE_TWO_FIVE_MILLION_USD = Money.of(192_500_000n, USD);
+    const ONE_POINT_NINE_MILLION_USD = Money.of(190_000_000n, USD);
+    const NINE_HUNDRED_THOUSAND_USD = Money.of(90_000_000n, USD);
+    const SEVEN_HUNDRED_THOUSAND_USD = Money.of(70_000_000n, USD);
+    const THREE_HUNDRED_THOUSAND_USD = Money.of(30_000_000n, USD);
+
+    const holdingInvoiceB = (): Reservation =>
+      Reservation.open({
+        programId: PROGRAM_ID,
+        invoiceId: INVOICE_B,
+        invoiceAmount: ONE_POINT_NINE_TWO_FIVE_MILLION_USD,
+        reservedAmount: ONE_POINT_NINE_TWO_FIVE_MILLION_USD,
+        rate: Rate.one(),
+        clientId: CLIENT,
+        createdAt: AT_10_00,
+      });
+
+    it('should be born from a snapshot holding what the treasury listed, in program currency at rate one, created at asOf (ADR-0011)', () => {
+      const reservation = Reservation.fromSnapshot({
+        programId: PROGRAM_ID,
+        invoiceId: INVOICE_X,
+        held: SEVEN_HUNDRED_THOUSAND_USD,
+        asOf: AT_18_00,
+      });
+
+      expect(reservation.describe()).toMatchObject({
+        invoiceId: INVOICE_X,
+        invoiceAmount: 70_000_000n,
+        invoiceCurrency: USD,
+        reservedAmount: 70_000_000n,
+        held: 70_000_000n,
+        releasedInvoiceAmount: 0n,
+        rate: '1',
+        status: 'active',
+        source: 'reconciliation',
+        createdAt: AT_18_00,
+      });
+      expect(reservation.clientId).toBeNull();
+      expect(reservation.heldCorrection).toBe(0n);
+    });
+
+    it('should correct held to the snapshot figure and keep the correction through a later release (ADR-0012, 1A)', () => {
+      const reservation = holdingInvoiceB();
+
+      const deltaHeld = reservation.correctTo(ONE_POINT_NINE_MILLION_USD);
+
+      expect(deltaHeld).toBe(-2_500_000n);
+      expect(reservation.held).toEqual(ONE_POINT_NINE_MILLION_USD);
+      expect(reservation.heldCorrection).toBe(-2_500_000n);
+
+      const outcome = reservation.release({amount: NINE_HUNDRED_THOUSAND_USD});
+
+      // 1 925 000 less 900 000 leaves 1 025 000 of the invoice; the correction takes 25 000 off.
+      expect(outcome.heldAfter).toEqual(Money.of(100_000_000n, USD));
+      expect(outcome.deltaHeld).toBe(-90_000_000n);
+    });
+
+    it('should set the correction rather than add to it, so the same snapshot twice changes nothing', () => {
+      const reservation = holdingInvoiceB();
+      reservation.correctTo(ONE_POINT_NINE_MILLION_USD);
+
+      expect(reservation.correctTo(ONE_POINT_NINE_MILLION_USD)).toBe(0n);
+      expect(reservation.heldCorrection).toBe(-2_500_000n);
+    });
+
+    it('should hold zero once the whole invoice is released, whatever the correction', () => {
+      const reservation = holdingInvoiceB();
+      reservation.correctTo(Money.of(200_000_000n, USD));
+
+      const outcome = reservation.release({amount: null});
+
+      expect(outcome.heldAfter).toEqual(Money.zero(USD));
+      expect(reservation.status).toBe('closed');
+    });
+
+    it('should close when released by adjustment, the whole invoice counted as released (AC-27)', () => {
+      const reservation = holdingInvoiceB();
+
+      const deltaHeld = reservation.releaseByAdjustment();
+
+      expect(deltaHeld).toBe(-192_500_000n);
+      expect(reservation.held).toEqual(Money.zero(USD));
+      expect(reservation.releasedInvoiceAmount).toEqual(ONE_POINT_NINE_TWO_FIVE_MILLION_USD);
+      expect(reservation.status).toBe('closed');
+    });
+
+    it('should reopen a closed reservation to the listed held, finding what the invoice has left at the stored rate (ADR-0012, 3A)', () => {
+      const reservation = Reservation.open({
+        programId: PROGRAM_ID,
+        invoiceId: INVOICE_A,
+        invoiceAmount: Money.of(100_000_000n, EUR),
+        reservedAmount: Money.of(113_000_000n, USD),
+        rate: Rate.parse('1.13'),
+        clientId: CLIENT,
+        createdAt: AT_10_00,
+      });
+      reservation.releaseByAdjustment();
+
+      const deltaHeld = reservation.reopenTo(THREE_HUNDRED_THOUSAND_USD);
+
+      expect(deltaHeld).toBe(30_000_000n);
+      expect(reservation.status).toBe('active');
+      expect(reservation.held).toEqual(THREE_HUNDRED_THOUSAND_USD);
+      // 300 000.00 USD at 1.13 is 265 486.73 EUR; that is what the invoice has left again.
+      expect(reservation.remainingInvoiceAmount).toEqual(Money.of(26_548_673n, EUR));
+      // Forwards again, 26 548 673 EUR cents are 30 000 000.49 USD cents, so exactly the listed
+      // held: the round trip needs no correction here.
+      expect(reservation.heldCorrection).toBe(0n);
+    });
+
+    it('should make held exact on a reopen even when the round trip loses a minor unit', () => {
+      const reservation = Reservation.open({
+        programId: PROGRAM_ID,
+        invoiceId: INVOICE_A,
+        invoiceAmount: Money.of(1_000n, EUR),
+        reservedAmount: Money.of(3_000n, USD),
+        rate: Rate.parse('3'),
+        clientId: CLIENT,
+        createdAt: AT_10_00,
+      });
+      reservation.releaseByAdjustment();
+
+      reservation.reopenTo(Money.of(100n, USD));
+
+      // 100 USD cents at 3 are 33.33 EUR cents, so 33; forwards that is 99, one short.
+      expect(reservation.remainingInvoiceAmount).toEqual(Money.of(33n, EUR));
+      expect(reservation.heldCorrection).toBe(1n);
+      expect(reservation.held).toEqual(Money.of(100n, USD));
+    });
+
+    it('should refuse to correct a closed reservation and to reopen an active one', () => {
+      const active = holdingInvoiceB();
+      const closed = holdingInvoiceB();
+      closed.releaseByAdjustment();
+
+      expect(() => active.reopenTo(THREE_HUNDRED_THOUSAND_USD)).toThrow(RangeError);
+      expect(() => closed.correctTo(THREE_HUNDRED_THOUSAND_USD)).toThrow(RangeError);
     });
   });
 });

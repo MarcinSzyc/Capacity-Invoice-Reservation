@@ -144,6 +144,48 @@ Without a token, or with an expired or wrongly signed one, every business route 
 The token command signs with `JWT_SECRET`, or with the development secret compose starts the
 api with when the variable is not set; that value is refused in the production profile.
 
+### Reconcile it
+
+Now and then the treasury sends a snapshot: the program's whole state as of one moment, its
+limit, currency and every reservation it considers active with what each holds. Play the
+treasury again and tell the service that `INV-A` holds 1 000 000.00 USD rather than 1 200 000.00,
+and that there is an `INV-X` it never heard of:
+
+```bash
+npm run dev:treasury -- snapshot --program PRG-1 --currency USD --limit 1000000000 \
+  --reservations INV-A:100000000,INV-X:5000000
+curl -H "Authorization: Bearer $TOKEN" http://localhost:3000/programs/PRG-1/reservations/INV-X
+```
+
+`INV-A` now holds 100 000 000 with an `adjustment` movement of -20 000 000, and `INV-X` exists
+with `source` `reconciliation`, `held` 5 000 000 and one `adjustment` carrying the snapshot's
+`messageId`. Availability reports the snapshot's moment as `asOf`. The message on the
+`treasury.capacity` topic, keyed by `programId`, amounts in minor units of the program currency:
+
+```json
+{"messageId":"m-81","type":"reconciliation_snapshot","programId":"PRG-1","currency":"USD",
+ "creditLimit":1000000000,"asOf":"2026-09-21T18:00:00Z",
+ "activeReservations":[{"invoiceId":"INV-A","heldAmount":100000000},{"invoiceId":"INV-X","heldAmount":5000000}]}
+```
+
+The snapshot is compared against its own moment, never applied as a wholesale replace
+([A-12](wiki/spec/assumptions.md)):
+
+| The snapshot says | The service does |
+|---|---|
+| an invoice we do not know | creates it with `source` `reconciliation` |
+| nothing about a reservation created before `asOf` | releases it by adjustment and closes it, unless a client reservation was created within 30 s of `asOf` (`RECONCILIATION_KEEP_WINDOW_SECONDS`) |
+| nothing, or anything, about a reservation created after `asOf` | leaves it alone, and a client's release after `asOf` stands |
+| a different `held` | corrects it by adjustment; a later release keeps the correction |
+| an invoice whose reservation is closed | reopens it, unless the client closed it after `asOf` |
+| an `asOf` older than the last one applied | records it `stale` and changes nothing |
+
+One snapshot lists at most 10 000 reservations, whose amounts may add up to at most
+9 007 199 254 740 991 minor units; a larger one is rejected and dead-lettered. A message that
+fails to apply is tried three times, then dead-lettered with its error and consumption moves on;
+every failed attempt is a row in `treasury_message_failures`, readable in pgweb
+([ADR-0013](wiki/decisions/ADR-0013-treasury-messages-that-always-fail.md)).
+
 ## Working on it
 
 Node 24 LTS and npm, two workspaces: `api/` (NestJS) and `web/` (React with Vite).

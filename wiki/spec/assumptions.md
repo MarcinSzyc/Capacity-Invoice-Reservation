@@ -391,7 +391,10 @@ nothing of how. Four rules fill that in; the example program is `PRG-1` in USD.
 - **A reservation the snapshot creates** (ADR-0011) has `invoiceAmount` equal to the listed
   held amount, in program currency, at rate 1, and `createdAt` equal to the snapshot's `asOf`,
   since that is when the treasury knew it. A listed held amount of 0 for an unknown invoice
-  creates nothing.
+  creates nothing. Its `createdAt` is on the treasury's clock, so a later snapshot judges it with
+  no keep window: created at or before that snapshot's `asOf`, it is corrected when listed and
+  released when omitted, also by a second snapshot of the same moment (amended 2026-09-25, from
+  review round 2 of S-06, ADR-0010).
 - **A listed reservation is compared as of `asOf`** (ADR-0012). The snapshot says nothing about
   what happened after its moment, so a client's releases after `asOf` stand. Example: `INV-B`
   held 1 925 000 at 18:00, the client released 500 000 at 18:05, and a snapshot of 18:00 lists
@@ -402,9 +405,22 @@ nothing of how. Four rules fill that in; the example program is `PRG-1` in USD.
   `asOf`, with `held` set to the listed amount. When the client's release that closed it came
   after `asOf`, it stays closed: that repayment is newer than the snapshot.
 
+Amended again 2026-09-25, from review round 1 of S-06, for two currency cases the rules above
+left open. Both follow ADR-0007: nothing in one currency is ever turned into another without a
+rate.
+
+- **A snapshot in another currency whose limit is stale is refused** with `CURRENCY_MISMATCH`,
+  even on a program with no active reservation: its limit is older than the last capacity update,
+  so it cannot be applied, and the stored limit would stay in the old currency.
+- **A listed reservation in another currency than the snapshot is skipped** and logged. That is a
+  closed reservation from before a re-denomination, in the old currency; reopening it would mix
+  two currencies in one program. The rest of the snapshot applies. Such a listing no longer stops
+  a re-denomination either, since only an active reservation holds anything in the old currency.
+
 ## A-13 Kafka messages are deduplicated, staleness-checked, ordered per program, dead-lettered on failure
 
-- Status: accepted 2026-09-19, amended 2026-09-21 (order of the checks)
+- Status: accepted 2026-09-19, amended 2026-09-21 (order of the checks), amended 2026-09-25
+  (three attempts, equal `asOf`)
 - Source: Q17, Q18
 
 **Statement.** (1) A `messageId` already processed is a silent no-op. (2) A fact whose
@@ -416,7 +432,13 @@ resulting movements are written in one transaction. (5) The checks run in the or
 written: a known `messageId` is a duplicate first, whatever its body says, so a repeat that
 is malformed or would be refused is counted and not dead-lettered; a stale fact is stale
 before anything in it is judged, so a stale update carrying another currency is recorded
-`stale`, not `rejected` (amended 2026-09-21, after review rounds 3 and 4 of S-02).
+`stale`, not `rejected` (amended 2026-09-21, after review rounds 3 and 4 of S-02). (6) A message
+whose application fails for any other reason is tried up to three times in one delivery; after the
+third it is unprocessable in the sense of (4), and each failed try is kept with its error. While
+the database or the broker is down that cannot be recorded, so the message is delivered again
+instead (ADR-0013). (7) Two snapshots of the same program with the same `asOf` describe the same
+moment; the treasury is expected not to send two that differ, and if it does, the later one
+delivered is applied (amended 2026-09-25, from review round 1 of S-06).
 
 **Rationale.** Kafka does not promise exactly-once or cross-partition order; the
 treasury may republish. One bad message must not stall other programs.
@@ -526,3 +548,6 @@ program is not an acceptance criterion.
 | 2026-09-24 | A-08 | amended: `held` is derived from what the invoice has left rather than decremented per release, and over-release is judged in invoice currency (ADR-0009); found by review round 3 of S-05 | docs/release-assumptions |
 | 2026-09-24 | A-09 | amended: a release is refused once nothing is left to release, which is not the same as `held` reaching zero (AC-15, amended); found by review round 3 of S-05 | docs/release-assumptions |
 | 2026-09-25 | A-12 | amended: a 30 s keep window before `asOf` for omitted reservations, the shape and `createdAt` of a snapshot-created reservation, a listed reservation compared as of `asOf`, and a reopen of one closed at or before `asOf` (ADR-0010, ADR-0011, ADR-0012) | docs/s-06-reconciliation-wording |
+| 2026-09-25 | A-12 | amended: a snapshot in another currency with a stale limit is refused; a listed reservation in another currency is skipped and logged, and no longer stops a re-denomination; found by review round 1 of S-06 | slice/S-06-reconciliation-snapshots |
+| 2026-09-25 | A-13 | amended: clause (6), three attempts then unprocessable, each failure kept (ADR-0013); clause (7), on an equal `asOf` the later snapshot delivered is applied; found by review round 1 of S-06 | slice/S-06-reconciliation-snapshots |
+| 2026-09-25 | A-12 | amended: a reservation a snapshot created is judged on the treasury's clock with no keep window, and a snapshot of the same moment may correct or release it (ADR-0010, amended); found by review round 2 of S-06 | slice/S-06-reconciliation-snapshots |

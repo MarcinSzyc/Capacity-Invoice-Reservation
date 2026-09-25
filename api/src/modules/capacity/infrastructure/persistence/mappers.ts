@@ -94,6 +94,7 @@ export const toReservation = (row: ReservationColumns): Reservation =>
     // the contract allows eight places, so `0.00000001` would come back as `1e-8` and be
     // unreadable by `Rate` on every later read of the row.
     rate: Rate.parse(row.rate.toFixed()),
+    heldCorrection: row.heldCorrection,
     source: row.source,
     clientId: row.clientId,
     createdAt: row.createdAt,
@@ -110,6 +111,7 @@ export const toReservationColumns = (reservation: Reservation): ReservationColum
   held: reservation.held.amount,
   releasedInvoiceAmount: reservation.releasedInvoiceAmount.amount,
   rate: new PrismaRuntime.Decimal(reservation.rate.toString()),
+  heldCorrection: reservation.heldCorrection,
   source: reservation.source,
   clientId: reservation.clientId,
   createdAt: reservation.createdAt,

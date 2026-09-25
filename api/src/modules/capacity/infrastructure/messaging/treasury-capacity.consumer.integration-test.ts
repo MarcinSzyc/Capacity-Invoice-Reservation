@@ -6,8 +6,12 @@ import {KafkaService} from '../../../../messaging/kafka.service';
 import {InboundMessage} from '../../../../messaging/message-source';
 import {PrismaService} from '../../../../persistence/prisma.service';
 import {ApplyCapacityUpdate} from '../../application/apply-capacity-update.use-case';
+import {ApplyReconciliationSnapshot} from '../../application/apply-reconciliation-snapshot.use-case';
 import {RejectTreasuryMessage} from '../../application/reject-treasury-message.use-case';
 import {Money} from '../../domain/money';
+import {ReserveCapacity} from '../../application/reserve-capacity.use-case';
+import {SeededRandom} from '../../domain/testing/seeded-random';
+import {PrismaReservationRepository} from '../persistence/prisma-reservation.repository';
 import {Program} from '../../domain/program';
 import {PrismaLedgerRepository} from '../persistence/prisma-ledger.repository';
 import {PrismaProgramRepository} from '../persistence/prisma-program.repository';
@@ -16,6 +20,7 @@ import {
   StoredTreasuryMessage,
 } from '../persistence/prisma-treasury-message.store';
 import {PrismaUnitOfWork} from '../persistence/prisma-unit-of-work';
+import {SystemClock} from '../system-clock';
 import {DevTreasuryProducer} from './dev-treasury-producer';
 import {TreasuryCapacityConsumer} from './treasury-capacity.consumer';
 import {TREASURY_DEAD_LETTER_TOPIC, TREASURY_TOPIC} from './treasury-topics';
@@ -29,7 +34,9 @@ const NINE_MILLION = 900_000_000n;
 const EIGHT_MILLION = 800_000_000n;
 const FIVE_MILLION = 500_000_000n;
 const TEN_MILLION = 1_000_000_000n;
+const FIVE_MILLION_EUR = Money.of(FIVE_MILLION, EUR);
 const WAIT_MS = 30_000;
+const KEEP_WINDOW_MS = 30_000;
 
 const uniqueId = (prefix: string): string => `${prefix}-${randomUUID().slice(0, 8)}`;
 
@@ -51,6 +58,8 @@ describe('TreasuryCapacityConsumer', () => {
   let programs: PrismaProgramRepository;
   let ledger: PrismaLedgerRepository;
   let messages: PrismaTreasuryMessageStore;
+  let reservations: PrismaReservationRepository;
+  let reserve: ReserveCapacity;
   const deadLetters: InboundMessage[] = [];
 
   beforeAll(async () => {
@@ -64,11 +73,14 @@ describe('TreasuryCapacityConsumer', () => {
     programs = new PrismaProgramRepository(prisma);
     ledger = new PrismaLedgerRepository(prisma);
     messages = new PrismaTreasuryMessageStore(prisma);
+    reservations = new PrismaReservationRepository(prisma);
+    reserve = new ReserveCapacity(unitOfWork, new SystemClock());
     producer = new DevTreasuryProducer(kafka);
 
     const consumer = new TreasuryCapacityConsumer(
       kafka,
       new ApplyCapacityUpdate(unitOfWork),
+      new ApplyReconciliationSnapshot(unitOfWork, new SystemClock(), KEEP_WINDOW_MS),
       new RejectTreasuryMessage(unitOfWork),
       logger,
     );
@@ -262,12 +274,12 @@ describe('TreasuryCapacityConsumer', () => {
     expect((await deadLetterOf(onBusy)).headers.error).toContain('CURRENCY_MISMATCH');
   });
 
-  it('should reject a message type it does not know yet, such as a snapshot before S-06 defines it', async () => {
+  it('should reject a message type the contract does not define (A-11)', async () => {
     const programId = uniqueId('PRG');
     const messageId = uniqueId('m-snap');
     const snapshot = {
       messageId,
-      type: 'reconciliation_snapshot',
+      type: 'limit_changed',
       programId,
       currency: EUR,
       creditLimit: 700_000_000,
@@ -279,7 +291,7 @@ describe('TreasuryCapacityConsumer', () => {
 
     expect(await outcomeOf(messageId)).toMatchObject({
       outcome: 'rejected',
-      type: 'reconciliation_snapshot',
+      type: 'limit_changed',
       error: expect.stringContaining('type') as string,
     });
     await expect(programs.findById(programId)).resolves.toBeNull();
@@ -337,5 +349,227 @@ describe('TreasuryCapacityConsumer', () => {
     expect(await outcomeOf(validId)).toMatchObject({outcome: 'applied'});
     const deadLetter = await deadLetterOf(marker);
     expect(deadLetter.headers.error).toMatch(/JSON/);
+  });
+
+  describe('reconciliation snapshots', () => {
+    const AT = (hour: number): Date => new Date(Date.UTC(2026, 8, 21, hour));
+    const SEVEN_MILLION = 700_000_000n;
+    const SEVEN_HUNDRED_THOUSAND = 70_000_000n;
+
+    const snapshotOf = (
+      programId: string,
+      overrides: Partial<Parameters<DevTreasuryProducer['publishSnapshot']>[0]> = {},
+    ): Parameters<DevTreasuryProducer['publishSnapshot']>[0] => ({
+      messageId: uniqueId('m-snap'),
+      programId,
+      currency: USD,
+      creditLimit: TEN_MILLION,
+      asOf: AT(18),
+      activeReservations: [],
+      ...overrides,
+    });
+
+    it('[AC-30] should ignore a snapshot older than the last applied one and record it as stale', async () => {
+      const programId = uniqueId('PRG');
+      const newer = snapshotOf(programId, {
+        asOf: AT(18),
+        activeReservations: [{invoiceId: 'INV-X', heldAmount: SEVEN_HUNDRED_THOUSAND}],
+      });
+      const older = snapshotOf(programId, {asOf: AT(12), creditLimit: SEVEN_MILLION});
+
+      await producer.publishSnapshot(newer);
+      expect(await outcomeOf(newer.messageId)).toMatchObject({outcome: 'applied'});
+      const ledgerBefore = await ledger.findByProgram(programId);
+      await producer.publishSnapshot(older);
+
+      expect(await outcomeOf(older.messageId)).toMatchObject({
+        outcome: 'stale',
+        type: 'reconciliation_snapshot',
+        programId,
+      });
+      const program = await programs.findById(programId);
+      expect(program?.limit).toEqual(Money.of(TEN_MILLION, USD));
+      expect(program?.asOf).toEqual(AT(18));
+      expect(await ledger.findByProgram(programId)).toEqual(ledgerBefore);
+    });
+
+    it('should dead-letter a snapshot whose currency differs while a reservation is active (ADR-0007)', async () => {
+      const programId = uniqueId('PRG');
+      const limit = uniqueId('m');
+      await producer.publishCapacityUpdate({
+        messageId: limit,
+        programId,
+        currency: USD,
+        creditLimit: TEN_MILLION,
+        eventTime: AT_10_00,
+      });
+      await outcomeOf(limit);
+      await reserve.execute({
+        programId,
+        invoiceId: 'INV-A',
+        invoiceAmount: SEVEN_HUNDRED_THOUSAND,
+        invoiceCurrency: USD,
+        rate: null,
+        clientId: 'client-contract',
+      });
+      const inEuro = snapshotOf(programId, {currency: EUR});
+
+      await producer.publishSnapshot(inEuro);
+
+      expect(await outcomeOf(inEuro.messageId)).toMatchObject({
+        outcome: 'rejected',
+        error: expect.stringContaining('CURRENCY_MISMATCH') as string,
+      });
+      expect((await deadLetterOf(inEuro.messageId)).key).toBe(programId);
+      const program = await programs.findById(programId);
+      expect(program?.currency).toBe(USD);
+      expect(program?.asOf).toBeNull();
+      expect((await reservations.findByInvoice(programId, 'INV-A'))?.status).toBe('active');
+    });
+
+    it('should re-denominate an empty program from a snapshot in another currency (ADR-0007)', async () => {
+      const programId = uniqueId('PRG');
+      const inDollars = snapshotOf(programId, {asOf: AT(12)});
+      const inEuro = snapshotOf(programId, {
+        currency: EUR,
+        creditLimit: FIVE_MILLION,
+        activeReservations: [{invoiceId: 'INV-X', heldAmount: SEVEN_HUNDRED_THOUSAND}],
+      });
+
+      await producer.publishSnapshot(inDollars);
+      await producer.publishSnapshot(inEuro);
+
+      expect(await outcomeOf(inEuro.messageId)).toMatchObject({outcome: 'applied'});
+      const program = await programs.findById(programId);
+      expect(program?.currency).toBe(EUR);
+      expect(program?.limit).toEqual(FIVE_MILLION_EUR);
+      expect(program?.reserved).toEqual(Money.of(SEVEN_HUNDRED_THOUSAND, EUR));
+    });
+
+    it('should reject a snapshot that lists one invoice twice', async () => {
+      const programId = uniqueId('PRG');
+      const messageId = uniqueId('m-snap');
+      const twice = {
+        messageId,
+        type: 'reconciliation_snapshot',
+        programId,
+        currency: USD,
+        creditLimit: 1_000_000_000,
+        asOf: AT(18).toISOString(),
+        activeReservations: [
+          {invoiceId: 'INV-X', heldAmount: 1},
+          {invoiceId: 'INV-X', heldAmount: 2},
+        ],
+      };
+
+      await kafka.publish(TREASURY_TOPIC, [{key: programId, value: JSON.stringify(twice)}]);
+
+      expect(await outcomeOf(messageId)).toMatchObject({
+        outcome: 'rejected',
+        error: expect.stringContaining('activeReservations') as string,
+      });
+      await deadLetterOf(messageId);
+      await expect(programs.findById(programId)).resolves.toBeNull();
+    });
+
+    /**
+     * Five capacity updates and three snapshots for one program. `INV-X` is listed by the first
+     * snapshot, omitted by the second and listed again by the third, which is the sequence that
+     * needs ADR-0012's reopen for INV-07 to hold.
+     */
+    type Fact = (programId: string) => Promise<string>;
+    const update =
+      (hour: number, creditLimit: bigint): Fact =>
+      async (programId) => {
+        const messageId = uniqueId('m-upd');
+        await producer.publishCapacityUpdate({
+          messageId,
+          programId,
+          currency: USD,
+          creditLimit,
+          eventTime: AT(hour),
+        });
+        return messageId;
+      };
+    const snapshot =
+      (hour: number, creditLimit: bigint, listed: Record<string, bigint>): Fact =>
+      async (programId) => {
+        const published = snapshotOf(programId, {
+          asOf: AT(hour),
+          creditLimit,
+          activeReservations: Object.entries(listed).map(([invoiceId, heldAmount]) => ({
+            invoiceId,
+            heldAmount,
+          })),
+        });
+        await producer.publishSnapshot(published);
+        return published.messageId;
+      };
+    const FACTS: readonly Fact[] = [
+      update(10, 500_000_000n),
+      snapshot(11, 600_000_000n, {'INV-X': 70_000_000n, 'INV-Y': 30_000_000n}),
+      update(12, 800_000_000n),
+      snapshot(13, 700_000_000n, {'INV-Y': 25_000_000n}),
+      update(14, 900_000_000n),
+      update(15, 400_000_000n),
+      snapshot(16, 750_000_000n, {'INV-X': 50_000_000n, 'INV-Y': 25_000_000n}),
+      update(17, 1_000_000_000n),
+    ];
+
+    const shuffled = <T>(items: readonly T[], seed: number): T[] => {
+      const random = new SeededRandom(seed);
+      const result = [...items];
+      for (let index = result.length - 1; index > 0; index -= 1) {
+        const other = Math.floor(random.next() * (index + 1));
+        [result[index], result[other]] = [result[other] as T, result[index] as T];
+      }
+      return result;
+    };
+
+    /** S-06 local decision 12: state, not history. Birth details and the ledger may differ. */
+    const finalStateAfter = async (order: readonly Fact[]): Promise<unknown> => {
+      const programId = uniqueId('PRG');
+      const messageIds: string[] = [];
+      for (const fact of order) messageIds.push(await fact(programId));
+      for (const messageId of messageIds) await outcomeOf(messageId);
+
+      const program = await programs.findById(programId);
+      const listed = await reservations.findByInvoices(programId, ['INV-X', 'INV-Y']);
+      return {
+        currency: program?.currency,
+        limit: program?.limit.amount,
+        limitEventTime: program?.limitEventTime,
+        asOf: program?.asOf,
+        reserved: program?.reserved.amount,
+        available: program?.available.amount,
+        reservations: listed.map((r) => ({
+          invoiceId: r.invoiceId,
+          held: r.held.amount,
+          status: r.status,
+          source: r.source,
+        })),
+      };
+    };
+
+    it('[INV-07] should reach the same final state for shuffled and reversed message order as for in-order delivery', async () => {
+      const inOrder = await finalStateAfter(FACTS);
+
+      expect(inOrder).toEqual({
+        currency: USD,
+        limit: 1_000_000_000n,
+        limitEventTime: AT(17),
+        asOf: AT(16),
+        reserved: 75_000_000n,
+        available: 925_000_000n,
+        reservations: [
+          {invoiceId: 'INV-X', held: 50_000_000n, status: 'active', source: 'reconciliation'},
+          {invoiceId: 'INV-Y', held: 25_000_000n, status: 'active', source: 'reconciliation'},
+        ],
+      });
+      expect(await finalStateAfter([...FACTS].reverse())).toEqual(inOrder);
+      for (const seed of [7, 42, 2026]) {
+        expect(await finalStateAfter(shuffled(FACTS, seed))).toEqual(inOrder);
+      }
+    });
   });
 });

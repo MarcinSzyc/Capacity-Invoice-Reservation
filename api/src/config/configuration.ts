@@ -13,6 +13,8 @@ export interface AppConfig {
   readonly databaseUrl: string;
   readonly kafkaBrokers: readonly string[];
   readonly webOrigin: string;
+  /** ADR-0010: how long before a snapshot's `asOf` a reservation must be to be released by omission. */
+  readonly reconciliationKeepWindowSeconds: number;
   readonly jwt: JwtConfig;
 }
 
@@ -38,6 +40,8 @@ const DEFAULT_WEB_ORIGIN = 'http://localhost:8080';
 export const DEFAULT_JWT_ISSUER = 'capacity-dev';
 export const DEFAULT_JWT_AUDIENCE = 'capacity-api';
 const PORT_PATTERN = /^[1-9][0-9]*$/;
+const DEFAULT_KEEP_WINDOW_SECONDS = 30;
+const WHOLE_SECONDS = /^[0-9]+$/;
 const HIGHEST_PORT = 65_535;
 
 /**
@@ -54,6 +58,10 @@ export const loadConfig = (env: Environment): AppConfig => {
     databaseUrl: readRequired(env.DATABASE_URL, 'DATABASE_URL', problems),
     kafkaBrokers: readBrokers(env.KAFKA_BROKERS, problems),
     webOrigin: readWebOrigin(env.WEB_ORIGIN, problems),
+    reconciliationKeepWindowSeconds: readKeepWindow(
+      env.RECONCILIATION_KEEP_WINDOW_SECONDS,
+      problems,
+    ),
     jwt: readJwt(env, profile, problems),
   };
 
@@ -94,6 +102,15 @@ const readWebOrigin = (value: string | undefined, problems: string[]): string =>
     return DEFAULT_WEB_ORIGIN;
   }
   return value;
+};
+
+const readKeepWindow = (value: string | undefined, problems: string[]): number => {
+  if (value === undefined) return DEFAULT_KEEP_WINDOW_SECONDS;
+  if (WHOLE_SECONDS.test(value)) return Number.parseInt(value, 10);
+  problems.push(
+    `RECONCILIATION_KEEP_WINDOW_SECONDS must be a whole number of seconds, got "${value}"`,
+  );
+  return DEFAULT_KEEP_WINDOW_SECONDS;
 };
 
 const readJwt = (env: Environment, profile: Profile, problems: string[]): JwtConfig => {

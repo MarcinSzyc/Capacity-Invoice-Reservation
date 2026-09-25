@@ -7,8 +7,14 @@ import {
 import {JsonLogger} from '../../../../common/logging/json-logger';
 import {InboundMessage, MESSAGE_SOURCE, MessageSource} from '../../../../messaging/message-source';
 import {ApplyCapacityUpdate} from '../../application/apply-capacity-update.use-case';
+import {
+  ApplyReconciliationSnapshot,
+  RECONCILIATION_SNAPSHOT_TYPE,
+} from '../../application/apply-reconciliation-snapshot.use-case';
 import {RejectTreasuryMessage} from '../../application/reject-treasury-message.use-case';
+import {ReconciliationNote} from '../../domain/reconciliation';
 import {parseCapacityUpdate} from './capacity-update-message.dto';
+import {parseReconciliationSnapshot} from './reconciliation-snapshot-message.dto';
 import {
   MESSAGE_ID_MAX_LENGTH,
   MESSAGE_TYPE_MAX_LENGTH,
@@ -23,6 +29,12 @@ import {
 
 const CONTEXT = 'TreasuryCapacityConsumer';
 const RESUBSCRIBE_AFTER_MS = 2_000;
+// ADR-0013: a message is tried this many times in one delivery before it is set aside.
+const ATTEMPTS = 3;
+const RETRY_PAUSE_MS = 250;
+
+type Attempted<T> =
+  {readonly ok: true; readonly value: T} | {readonly ok: false; readonly error: string};
 
 type ParsedJson =
   {readonly ok: true; readonly payload: unknown} | {readonly ok: false; readonly error: string};
@@ -42,6 +54,7 @@ export class TreasuryCapacityConsumer implements OnApplicationBootstrap, OnModul
   constructor(
     @Inject(MESSAGE_SOURCE) private readonly source: MessageSource,
     private readonly applyCapacityUpdate: ApplyCapacityUpdate,
+    private readonly applyReconciliationSnapshot: ApplyReconciliationSnapshot,
     private readonly rejectTreasuryMessage: RejectTreasuryMessage,
     private readonly logger: JsonLogger,
   ) {}
@@ -96,18 +109,111 @@ export class TreasuryCapacityConsumer implements OnApplicationBootstrap, OnModul
     if (!parsed.ok) {
       return this.reject(message, {messageId, payload: null}, parsed.error, receivedAt);
     }
+    // A-11: two message types on one topic. Anything that is not a snapshot is judged as a
+    // capacity update, whose `type` check refuses whatever the contract does not define.
+    const type = readableString(parsed.payload, 'type', MESSAGE_TYPE_MAX_LENGTH);
+    if (type === RECONCILIATION_SNAPSHOT_TYPE) {
+      return this.processSnapshot(message, parsed.payload, messageId, receivedAt);
+    }
 
     const update = await parseCapacityUpdate(parsed.payload, receivedAt);
     if (!update.ok) {
       return this.reject(message, {messageId, payload: parsed.payload}, update.error, receivedAt);
     }
 
-    const result = await this.applyCapacityUpdate.execute(update.command);
+    const readable = {messageId, payload: parsed.payload};
+    const attempted = await this.attempted(update.command.messageId, () =>
+      this.applyCapacityUpdate.execute(update.command),
+    );
+    if (!attempted.ok) return this.setAside(message, readable, attempted.error, receivedAt);
+    const result = attempted.value;
     if (result.outcome === 'rejected') {
       const error = `${result.reason}: ${result.error}`;
       return this.reject(message, {messageId, payload: parsed.payload}, error, receivedAt);
     }
     this.logger.log(`capacity update ${result.outcome} for ${update.command.programId}`, CONTEXT);
+  }
+
+  private async processSnapshot(
+    message: InboundMessage,
+    payload: unknown,
+    messageId: string | null,
+    receivedAt: Date,
+  ): Promise<void> {
+    const snapshot = await parseReconciliationSnapshot(payload, receivedAt);
+    if (!snapshot.ok) return this.reject(message, {messageId, payload}, snapshot.error, receivedAt);
+
+    const {programId} = snapshot.command;
+    const attempted = await this.attempted(snapshot.command.messageId, () =>
+      this.applyReconciliationSnapshot.execute(snapshot.command),
+    );
+    if (!attempted.ok) {
+      return this.setAside(message, {messageId, payload}, attempted.error, receivedAt);
+    }
+    const result = attempted.value;
+    if (result.outcome === 'rejected') {
+      const error = `${result.reason}: ${result.error}`;
+      return this.reject(message, {messageId, payload}, error, receivedAt);
+    }
+    if (result.outcome === 'applied') {
+      for (const note of result.notes) this.logger.warn(describeNote(programId, note), CONTEXT);
+    }
+    this.logger.log(`reconciliation snapshot ${result.outcome} for ${programId}`, CONTEXT);
+  }
+
+  /**
+   * ADR-0013: an error while applying is tried again, up to `ATTEMPTS` in all. Each attempt is its
+   * own transaction, so a failed one leaves nothing behind.
+   */
+  private async attempted<T>(messageId: string, work: () => Promise<T>): Promise<Attempted<T>> {
+    let failure = '';
+    for (let attempt = 1; attempt <= ATTEMPTS; attempt += 1) {
+      try {
+        return {ok: true, value: await work()};
+      } catch (reason: unknown) {
+        failure = reason instanceof Error ? reason.message : String(reason);
+        this.logger.warn(`message ${messageId} failed attempt ${attempt}: ${failure}`, CONTEXT);
+        await this.keepFailure(messageId, attempt, failure);
+      }
+      if (attempt < ATTEMPTS) await new Promise((resolve) => setTimeout(resolve, RETRY_PAUSE_MS));
+    }
+    return {ok: false, error: failure};
+  }
+
+  /** Best effort: when the database is what is failing, the log line above is all there is. */
+  private async keepFailure(messageId: string, attempt: number, error: string): Promise<void> {
+    try {
+      await this.rejectTreasuryMessage.recordFailure({
+        messageId,
+        attempt,
+        error,
+        failedAt: new Date(),
+      });
+    } catch (reason: unknown) {
+      const detail = reason instanceof Error ? reason.message : String(reason);
+      this.logger.warn(`could not keep failure of ${messageId}: ${detail}`, CONTEXT);
+    }
+  }
+
+  /**
+   * ADR-0013: after the last attempt the message is a rejection like any other: dead-lettered with
+   * the error, recorded, and consumption continues. If the broker or the database cannot take the
+   * dead letter or the record, `reject` throws, the offset stays uncommitted and the message is
+   * delivered again, so an outage delays messages rather than setting them aside.
+   */
+  private async setAside(
+    message: InboundMessage,
+    readable: {messageId: string | null; payload: unknown},
+    failure: string,
+    receivedAt: Date,
+  ): Promise<void> {
+    const error = `failed ${ATTEMPTS} attempts: ${failure}`;
+    this.logger.error(
+      `message ${readable.messageId ?? 'without id'} set aside, ${error}`,
+      undefined,
+      CONTEXT,
+    );
+    await this.reject(message, readable, error, receivedAt);
   }
 
   /**
@@ -185,3 +291,9 @@ const parseJson = (value: Buffer | null): ParsedJson => {
 
 const readableMessageId = (payload: unknown): string | null =>
   readableString(payload, 'messageId', MESSAGE_ID_MAX_LENGTH);
+
+/** ADR-0010: a keep within the window, and every other departure from the snapshot, is visible. */
+const describeNote = (programId: string, note: ReconciliationNote): string => {
+  if ('invoiceId' in note) return `reconciliation ${programId}: ${note.kind} ${note.invoiceId}`;
+  return `reconciliation ${programId}: ${note.kind}`;
+};

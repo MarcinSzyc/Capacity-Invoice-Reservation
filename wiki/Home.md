@@ -26,11 +26,12 @@ Obsidian vault root is this folder. Working rules: `../CLAUDE.md`.
 | S-03 Reservations and the capacity invariant | done 2026-09-22: AC-01, AC-02, AC-03, AC-04, AC-05, AC-08, AC-09, AC-21, AC-22, INV-01, INV-03, INV-04, INV-09, INV-11 |
 | S-04 Cross-currency reservations | done 2026-09-23: AC-06, AC-07, INV-08 |
 | S-05 Releases | done 2026-09-25: AC-10 to AC-19, AC-34, INV-02 |
-| S-06 Reconciliation snapshots | planned, next |
-| S-07 Demo page and operations | planned |
+| S-06 Reconciliation snapshots | done 2026-09-25: AC-26 to AC-31, AC-42 to AC-44, INV-02 (amended), INV-05 to INV-07 |
+| S-07 Demo page and operations | planned, next |
 
-Next: merge the plan PR from `docs/plan-S-06` that adds AC-42 to AC-44 to S-06, then
-`/implement S-06` on branch `slice/S-06-reconciliation-snapshots`. S-06 is `risk: high` (a
-snapshot disagreeing with a `held` that ADR-0009 derives from the invoice, two clocks, shuffled
-delivery) and wants Fable per `CLAUDE.md §8`. ADR-0010, ADR-0011 and ADR-0012 are accepted, and
-A-12 and the glossary already carry their wording (#38).
+Next: `/plan` revision of S-07 against the shipped S-06 code, then `/implement S-07` on branch
+`slice/S-07-demo-and-operations`. S-07 is `risk: low` (AC-38, AC-39) and runs on Opus per
+`CLAUDE.md §8`. Carried from S-06, for its first commit or its plan: the deeply nested message that
+overflows the parser outside the three attempts (the one open major, shipped as an edge case), the
+five minors of review round 3, and A-11 wording for the snapshot's list bound and listed-total
+bound (`/spec`).

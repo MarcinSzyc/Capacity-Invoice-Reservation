@@ -4,6 +4,7 @@ import {Clock} from '../../domain/ports/clock';
 import {ProgramRepository} from '../../domain/ports/program.repository';
 import {ReservationRepository} from '../../domain/ports/reservation.repository';
 import {
+  TreasuryMessageFailure,
   TreasuryMessageRecord,
   TreasuryMessageStore,
 } from '../../domain/ports/treasury-message-store';
@@ -37,9 +38,29 @@ export class InMemoryReservations implements ReservationRepository {
     return Promise.resolve(found ?? null);
   }
 
+  findActiveByProgram(programId: string): Promise<Reservation[]> {
+    return Promise.resolve(
+      this.all.filter((r) => r.programId === programId && r.status === 'active'),
+    );
+  }
+
+  findByInvoices(programId: string, invoiceIds: readonly string[]): Promise<Reservation[]> {
+    return Promise.resolve(
+      this.all.filter((r) => r.programId === programId && invoiceIds.includes(r.invoiceId)),
+    );
+  }
+
   add(reservation: Reservation): Promise<void> {
     this.all.push(reservation);
     return Promise.resolve();
+  }
+
+  async addAll(reservations: readonly Reservation[]): Promise<void> {
+    for (const reservation of reservations) await this.add(reservation);
+  }
+
+  async saveAll(reservations: readonly Reservation[]): Promise<void> {
+    for (const reservation of reservations) await this.save(reservation);
   }
 
   /** The aggregate is held by reference here, so a release has already changed it in place. */
@@ -66,8 +87,36 @@ export class InMemoryLedger implements LedgerRepository {
     return Promise.resolve();
   }
 
+  appendAll(movements: readonly CapacityMovement[]): Promise<void> {
+    this.movements.push(...movements);
+    return Promise.resolve();
+  }
+
   findByReservation(reservationId: string): Promise<CapacityMovement[]> {
     return Promise.resolve(this.movements.filter((m) => m.reservationId === reservationId));
+  }
+
+  findLastByReservations(
+    reservationIds: readonly string[],
+  ): Promise<Map<string, CapacityMovement>> {
+    const last = new Map<string, CapacityMovement>();
+    for (const movement of this.movements) {
+      if (movement.reservationId !== null && reservationIds.includes(movement.reservationId)) {
+        last.set(movement.reservationId, movement);
+      }
+    }
+    return Promise.resolve(last);
+  }
+
+  findClientMovementsSince(programId: string, since: Date): Promise<CapacityMovement[]> {
+    return Promise.resolve(
+      this.movements.filter(
+        (m) =>
+          m.programId === programId &&
+          (m.kind === 'reserve' || m.kind === 'release') &&
+          m.occurredAt > since,
+      ),
+    );
   }
 }
 
@@ -77,6 +126,12 @@ export interface StoredTreasuryMessage extends TreasuryMessageRecord {
 
 export class InMemoryTreasuryMessages implements TreasuryMessageStore {
   readonly byId = new Map<string, StoredTreasuryMessage>();
+  readonly failures: TreasuryMessageFailure[] = [];
+
+  recordFailure(failure: TreasuryMessageFailure): Promise<void> {
+    this.failures.push(failure);
+    return Promise.resolve();
+  }
 
   wasProcessed(messageId: string): Promise<boolean> {
     return Promise.resolve(this.byId.has(messageId));

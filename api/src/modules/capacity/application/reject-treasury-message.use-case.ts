@@ -1,4 +1,5 @@
 import {Inject, Injectable} from '@nestjs/common';
+import {TreasuryMessageFailure} from '../domain/ports/treasury-message-store';
 import {UNIT_OF_WORK, UnitOfWork} from '../domain/ports/unit-of-work';
 
 /** A message that failed validation, with whatever could still be read from it. */
@@ -36,6 +37,14 @@ export class RejectTreasuryMessage {
       treasuryMessages.recordOutcome({...rejection, outcome: 'rejected'}),
     );
     return 'rejected';
+  }
+
+  /**
+   * ADR-0013: a failed attempt, kept in its own table. In its own short transaction, so it is
+   * written even though the attempt's own transaction rolled back.
+   */
+  recordFailure(failure: TreasuryMessageFailure): Promise<void> {
+    return this.unitOfWork.run(({treasuryMessages}) => treasuryMessages.recordFailure(failure));
   }
 
   private countIfKnown(messageId: string): Promise<boolean> {

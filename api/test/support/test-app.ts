@@ -8,20 +8,27 @@ import {APP_CONFIG, AppConfig} from '../../src/config/config.module';
 import {loadConfig} from '../../src/config/configuration';
 import type {ErrorBody} from '../../src/common/filters/error-body';
 import {JsonLogger} from '../../src/common/logging/json-logger';
+import {CLOCK, Clock} from '../../src/modules/capacity/domain/ports/clock';
 
 export interface TestAppOptions {
   readonly config?: Partial<AppConfig>;
   /** Where the application's JSON log lines go, so a test can read them back (AC-40). */
   readonly logOutput?: Writable;
+  /** Where "now" comes from, so a test can stamp `createdAt` at a chosen moment (S-06). */
+  readonly clock?: Clock;
 }
 
-const buildApp = async (config: AppConfig, logOutput?: Writable): Promise<INestApplication> => {
+const buildApp = async (
+  config: AppConfig,
+  {logOutput, clock}: Omit<TestAppOptions, 'config'> = {},
+): Promise<INestApplication> => {
   const builder = Test.createTestingModule({imports: [AppModule]})
     .overrideProvider(APP_CONFIG)
     .useValue(config);
   if (logOutput !== undefined) {
     builder.overrideProvider(JsonLogger).useValue(new JsonLogger(logOutput));
   }
+  if (clock !== undefined) builder.overrideProvider(CLOCK).useValue(clock);
   const moduleRef = await builder.compile();
   const app = moduleRef.createNestApplication({logger: false});
   configureApp(app, config);
@@ -41,9 +48,9 @@ export const createAppWithConfig = (
 
 export const createAppWith = ({
   config = {},
-  logOutput,
+  ...options
 }: TestAppOptions): Promise<INestApplication> =>
-  buildApp({...loadConfig(process.env), ...config}, logOutput);
+  buildApp({...loadConfig(process.env), ...config}, options);
 
 export const createTestApp = (): Promise<INestApplication> => createAppWithConfig();
 

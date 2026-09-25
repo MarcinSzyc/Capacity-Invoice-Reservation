@@ -12,10 +12,44 @@ export class PrismaLedgerRepository implements LedgerRepository {
     );
   }
 
+  /** One multi-row INSERT: its rows take their ids in the order of the list, so they chain. */
+  async appendAll(movements: readonly CapacityMovement[]): Promise<void> {
+    if (movements.length === 0) return;
+    await this.db.withClient((client) =>
+      client.capacityMovement.createMany({data: movements.map(toMovementColumns)}),
+    );
+  }
+
   /** A reservation's own rows, oldest first: what AC-19 shows and what AC-16 searches. */
   async findByReservation(reservationId: string): Promise<CapacityMovement[]> {
     const rows = await this.db.withClient((client) =>
       client.capacityMovement.findMany({where: {reservationId}, orderBy: {id: 'asc'}}),
+    );
+    return rows.map(toMovement);
+  }
+
+  /** `DISTINCT ON (reservation_id)` ordered by id descending: the latest row of each, in one read. */
+  async findLastByReservations(
+    reservationIds: readonly string[],
+  ): Promise<Map<string, CapacityMovement>> {
+    if (reservationIds.length === 0) return new Map();
+    const rows = await this.db.withClient((client) =>
+      client.capacityMovement.findMany({
+        where: {reservationId: {in: [...reservationIds]}},
+        orderBy: [{reservationId: 'asc'}, {id: 'desc'}],
+        distinct: ['reservationId'],
+      }),
+    );
+    return new Map(rows.map((row) => [row.reservationId ?? '', toMovement(row)]));
+  }
+
+  /** ADR-0012, 2A: what clients did after a snapshot's moment, in the order it was appended. */
+  async findClientMovementsSince(programId: string, since: Date): Promise<CapacityMovement[]> {
+    const rows = await this.db.withClient((client) =>
+      client.capacityMovement.findMany({
+        where: {programId, kind: {in: ['reserve', 'release']}, occurredAt: {gt: since}},
+        orderBy: {id: 'asc'},
+      }),
     );
     return rows.map(toMovement);
   }

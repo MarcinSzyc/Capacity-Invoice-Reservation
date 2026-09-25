@@ -68,9 +68,10 @@ Example. Invoice of 1 100 000 EUR in a USD program at rate 1.10:
 | release the rest | 1 100 000 EUR | 1 210 000 USD | 0 USD |
 
 **Held.** See the table: the part of a reservation still counted against the limit,
-in program currency. Starts equal to `reservedAmount`, ends at zero. It is what is left of the
-invoice converted at the stored rate, plus the `heldCorrection` a snapshot may have set (ADR-0009,
-ADR-0012). Can always be recomputed from the ledger as the reserve plus the signed amounts of
+in program currency. Starts equal to `reservedAmount`, ends at zero. A client's release only
+lowers it; a snapshot may set it higher than `reservedAmount` (INV-02, amended 2026-09-25). It
+is what is left of the invoice converted at the stored rate, plus the `heldCorrection` a snapshot
+may have set (ADR-0009, ADR-0012). Can always be recomputed from the ledger as the reserve plus the signed amounts of
 the releases and adjustments of that invoice.
 
 **Active reservation, closed reservation.** A reservation is closed when the whole invoice
@@ -188,8 +189,9 @@ unless they fall inside the keep window. A listed reservation is compared with w
 this moment, so a client's release after it stands. A reservation the snapshot creates takes
 this moment as its `createdAt` (A-12).
 
-**Keep window.** How long before a snapshot's `asOf` a reservation must have been created for
-that snapshot to release it by omission, default 30 seconds (ADR-0010). It exists because our
+**Keep window.** How long before a snapshot's `asOf` a client reservation must have been
+created for that snapshot to release it by omission, default 30 seconds (ADR-0010). A reservation
+a snapshot created has none: its `createdAt` is already on the treasury's clock. It exists because our
 clock and the treasury's are compared: with a snapshot of 18:00:00, a reservation created at
 17:59:45 and not listed is kept, and one created at 17:59:00 is released. Keeping wrongly is fixed
 by the next snapshot; releasing wrongly frees capacity another invoice may take.
@@ -226,8 +228,26 @@ currency is recorded `stale`, not `rejected` (A-13).
 
 **Rejected.** A treasury message that cannot be applied at all: not JSON, failing the contract
 (a missing field, a limit that is not an integer, a type we do not know), or refused by a rule
-such as `CURRENCY_MISMATCH`. Recorded with its reason when its message id can be read, set
-aside as a dead letter, and consumption continues with the next message.
+such as `CURRENCY_MISMATCH`, or failing to apply three attempts in a row for any other reason
+(ADR-0013). Recorded with its reason when its message id can be read, set aside as a dead
+letter, and consumption continues with the next message.
+
+**Failed attempt.** One try at applying a treasury message that threw. The consumer tries a
+message up to three times in one delivery; each failed try is a row in
+`treasury_message_failures` with the attempt number and the error, and after the third the
+message is rejected (ADR-0013). Example: a snapshot fails twice on a dropped database connection
+and applies on the third try, leaving two rows and an `applied` record. While the database or the
+broker is down, nothing can be recorded, so the message is delivered again instead.
+
+**Reconciliation note.** A log line for every place a snapshot was not followed to the letter, so
+an operator can see it. The kinds: `kept_within_window` (an omitted reservation too close to
+`asOf` to release, ADR-0010), `listed_after_as_of` (a listed reservation created after the
+snapshot's moment, left alone by INV-06), `kept_closed_after_as_of` (listed, but the client closed
+it after `asOf`, ADR-0012), `listed_with_nothing_held` (an unknown invoice listed at 0, so nothing
+is created), `listed_in_other_currency` (a closed reservation from before a re-denomination,
+never reopened), `limit_skipped` (the snapshot's limit is older than the last capacity update) and
+`as_of_ahead_of_our_clock` (the snapshot's moment is further ahead of our clock than the keep
+window).
 
 **Dead letter.** A copy of a treasury message we could not apply, set aside on a separate topic
 next to the original, with the reason and where it came from attached, so a human can look at

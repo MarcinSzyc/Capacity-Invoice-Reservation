@@ -2951,3 +2951,364 @@ Findings, most severe first:
 - Branch `docs/plan-S-06`, fast-forwarded to `main` at 1efa91b, since its first PR (#37) is
   merged. Files: `plan.md`, the S-06 slice file, the slice index, `Home.md`, this entry. Nothing
   committed.
+
+## 2026-09-25, implement S-06 (first pass, stopped on a spec conflict), Opus
+- Run on Opus 5.5 by Marcin's decision, although the slice is `risk: high` and `CLAUDE.md §8`
+  asks for Fable. The skill says to wait for a switch; Marcin had kept Opus twice and then said
+  to run implement.
+- Built. Domain: `Money.convertBack`; `Reservation.fromSnapshot`, `correctTo`, `drop`, `reopenTo`
+  and a stored `heldCorrection` that `held` now includes (ADR-0009 with ADR-0012 1A);
+  `Program.adjust`, `isStaleSnapshot`, `reconciledAt`; a pure `reconcile` in
+  `domain/reconciliation.ts` that decides every rule of A-12. Application:
+  `ApplyReconciliationSnapshot`, the same shape as `ApplyCapacityUpdate`, plus
+  `findActiveByProgram`, `findByInvoices` and `findClientMovementsSince` on the ports and fakes.
+  Infrastructure: migration `20260925120000_held_correction`, the Prisma reads, the snapshot DTO
+  with a 10 000 entry bound and unique invoice ids, the consumer routing by `type`, one warning log
+  line per case where a snapshot was not followed, `DevTreasuryProducer.publishSnapshot` and a
+  `snapshot` command in `dev:treasury`. Configuration: `RECONCILIATION_KEEP_WINDOW_SECONDS`,
+  default 30. Test harness: a `SettableClock` the e2e app can take in place of `CLOCK`.
+- All twelve planned tests exist with their exact names and pass: AC-26, AC-27, AC-28, AC-29,
+  AC-31, AC-42, AC-43, AC-44 in `api/test/reconciliation.e2e-test.ts`; INV-05, INV-06 in
+  `api/test/reconciliation-invariants.e2e-test.ts`; AC-30 and INV-07 as contract tests in
+  `treasury-capacity.consumer.integration-test.ts`.
+- Not done by the book, said plainly. For `reconcile`'s unit tests, the consumer's unit tests, the
+  two contract tests and the e2e files, the test was written first but not run red before the code
+  went in. To make up for it each rule was broken on purpose and the tagged tests run against the
+  broken code: without the reopen INV-07 fails; without the stale check AC-30 fails; ignoring
+  releases after `asOf` fails AC-43 alone; dropping the correction from `held` fails AC-29 alone;
+  treating every reservation as older than `asOf` fails INV-06. Every file was restored and
+  checked after each break.
+- One existing contract test changed meaning, not strength: it used a snapshot as the example of
+  a type the contract does not define, which S-06 makes false. It now uses `limit_changed` and
+  asserts the same rejection and dead letter.
+- Borderline local choices, for review. A snapshot in another currency is refused when it names any
+  local reservation, closed ones included, because reopening one would mix currencies; ADR-0007
+  speaks only of active ones. A reservation born from a snapshot at exactly `asOf` is still
+  compared by a second snapshot of the same moment. A reopen restores at least one minor unit of
+  the invoice, so the reservation is really active. A drop writes its adjustment even when `held`
+  was already 0, so the ledger shows the closing; a correction that changes nothing writes nothing.
+  Local decision 10's warning for an `asOf` ahead of our clock is the note `as_of_ahead_of_our_clock`.
+- Stopped on a conflict between INV-02 and ADR-0012, found by the break that treated every
+  reservation as older than `asOf`. INV-02 says `0 <= held <= reservedAmount` and the S-03 CHECK
+  `reservations_held_within_reserved` enforces it; ADR-0012 1A sets `held` to the listed figure,
+  which may be above `reservedAmount` (a reservation of 1 925 000 listed at 2 000 000, or a reopen
+  listed above what was reserved). Today such a snapshot violates the CHECK. Put to Marcin: amend
+  INV-02 so the upper bound applies to client operations and relax the CHECK, or cap a snapshot's
+  figure at `reservedAmount` with a logged note. `wiki/spec/` is not touched here.
+- Second finding, older than this slice: a message that fails for a reason other than validation or
+  `CURRENCY_MISMATCH` is not dead-lettered. The error propagates, the offset stays uncommitted and
+  the message is redelivered forever, which stalls every later message on that partition, other
+  programs included. That is right for a database that is away and wrong for a CHECK violation,
+  which will fail the same way every time. ADR candidate: telling a permanent failure from a
+  transient one in message handling (A-13 clause 4).
+- Third finding, about the tests: the keep window also keeps an omitted reservation created after
+  `asOf`, so AC-28 and AC-42 would pass even if the "never before its creation" rule were broken.
+  INV-06's listed case is the test that holds that rule.
+- Tests beyond the plan, for `/ship`: `Money` convertBack; eleven `Reservation` reconciliation
+  cases; three `Program` reconciliation cases; twenty-two `reconcile` cases; eight
+  `ApplyReconciliationSnapshot` cases; eight snapshot DTO cases; three consumer cases (routing,
+  notes logged, unknown type); two configuration cases; four persistence integration cases (active
+  reads, listed reads, client movements after a moment, a snapshot reservation and its correction
+  round trip); four contract cases (both ADR-0007 cases, an invoice listed twice, the renamed
+  unknown type test).
+- Deferred: the README's snapshot contract (`/ship`); a hand run of `dev:treasury snapshot`
+  against a live stack (`/verify`); everything that depends on the INV-02 decision.
+
+## 2026-09-25, spec (revision: INV-02), Opus
+- Marcin decided the conflict the previous entry stopped on, as recommended: INV-02 is amended so
+  that `held` stays at or above zero always, and above `reservedAmount` only through a snapshot's
+  adjustment, never through a client operation. A Changes row is in the invariants file; the
+  glossary's `Held` entry says the same. Done on the slice branch, as A-06 was during S-02, so the
+  one PR for S-06 carries the requirement change next to the code it allows.
+- The declined option was capping a snapshot's figure at `reservedAmount`: it keeps the old
+  wording but throws away what the treasury said, against A-12 and ADR-0012 as accepted.
+
+## 2026-09-25, implement S-06 (INV-02 as amended), Opus
+- The storage side of the amendment, test first. The new integration case saving a correction
+  above `reservedAmount` failed on `reservations_held_within_reserved`, the reason expected.
+  Migration `20260925130000_held_not_negative` replaces that CHECK with `held >= 0`, in a
+  migration of its own so no applied one changes its checksum. An untagged e2e case lists
+  `INV-B` at 2 000 000 against 1 925 000 reserved and gets `held` 2 000 000 with an adjustment of
+  +75 000 through the real consumer, the path that used to stall the partition.
+- INV-02's tagged test, a unit property over client releases, is unchanged: that is still what the
+  upper bound covers. The finding that a permanent failure stalls a partition stays open as an ADR
+  candidate; with this constraint gone no path found so far reaches it with valid input.
+- Tests beyond the plan, added to the previous entry's list: the persistence case and the e2e case
+  above.
+
+## 2026-09-25, verify S-06, Opus
+- VERIFY S-06: PASS, at b88c97d. Run on Opus by Marcin's model choice; the skill table names
+  Sonnet for verify.
+- Gate: `npm run gate` green in one run, nothing retried. Unit 187 (api) and 2 (web),
+  integration 42, e2e 64, cold start smoke 3 with the stack healthy in 287 s.
+- Coverage: 9/9 AC (AC-26 to AC-31, AC-42 to AC-44) and 3/3 INV (INV-05 to INV-07) found by tag,
+  none skipped or focused, all passing. Levels match the plan: the eight e2e criteria and INV-05
+  and INV-06 go through HTTP with a real broker, AC-30 and INV-07 run through the real consumer
+  and broker at integration level. INV-06 exercises both directions of its rule, a snapshot
+  describing a moment before the reservation (omitted and listed) and after it.
+- Style and layers: prose check clean; no nested ternary or braced one-line `if` in the diff; no
+  `@nestjs`, ORM or Kafka import in `domain/` (the one "Prisma" hit is a comment).
+- Cold start: covered by the gate's smoke, which starts from empty volumes on its own project,
+  waits for health, gets `401` without a token and `200` with one, and tears down.
+- README followed literally on the default stack, after checking that no stack, volume or port of
+  it existed, so `down -v` destroyed nothing but what this check started. Every documented call
+  answered as written. The slice's own done item was run by hand: `dev:treasury snapshot`
+  produced the unknown, omitted, corrected and older cases on a fresh program, with the logs
+  showing the applied and stale outcomes.
+- Findings, none blocking: (minor) README does not yet document the snapshot contract, its list
+  bound or `dev:treasury snapshot`, which the slice's definition of done requires and `/ship`
+  writes; (minor, older than S-06) `dev:treasury` prints a kafkajs `TimeoutNegativeWarning` on
+  stderr on every run. Still open from implement, not a verify finding: the ADR candidate for a
+  permanently failing message that is redelivered forever.
+
+## 2026-09-25, review S-06, Fable
+- REVIEW S-06: 9 findings (2/3/4), at b88c97d, fresh context. Not a pass.
+- Findings, most severe first:
+  - (blocker, standards) `reconciliation-snapshot-message.dto.ts:78,112`: an entry that is itself
+    an array (`activeReservations: [[]]`) passes `@ValidateNested`, then `BigInt(undefined)`
+    throws inside the parser, the handler rejects, the offset is never committed and the message
+    is redelivered forever, stalling the partition (CLAUDE.md §2, A-13 clause 4, AC-25). Found by
+    running the parser on hostile lists.
+  - (blocker, spec) `reconciliation.ts:125-131` with `reservation.ts:281-301`: a closed USD
+    reservation survives a re-denomination to EUR (not active, not listed), and a later EUR
+    snapshot listing it reopens it with `held` in EUR, `reservedAmount` and invoice in USD and
+    the USD rate 1 applied as a USD to EUR rate. Violates INV-08 and ADR-0007. Reproduced in the
+    domain.
+  - (major, spec) `reconciliation.ts:128-129`: two rejection rules beyond A-12 and ADR-0007 (another
+    currency refused when the limit part is stale, and when a closed reservation is listed) live
+    only in the slice's local decision 3 and the work-log; not in A-12, not in "Owed to /spec".
+  - (major, standards) `reconciliation-snapshot-message.dto.ts:39,74`: 1 025 entries at
+    `Number.MAX_SAFE_INTEGER` pass validation and overflow `programs.reserved` (BIGINT), a
+    database error that is redelivered forever.
+  - (major, spec) `apply-reconciliation-snapshot.use-case.ts:101-105` against
+    `prisma-unit-of-work.ts:13`: nothing shows a snapshot at the 10 000 entry bound fits the 15 s
+    transaction timeout (about 20 000 sequential statements); if it does not, a valid message fails
+    the same way on every redelivery. Local decision 5's "one bounded transaction" is unproven.
+  - (minor, spec) `reservation.invariants.test.ts:51`: the `[INV-02]` test is still named and built
+    for `0 <= held <= reservedAmount` and never releases a corrected reservation, the one path the
+    amendment adds.
+  - (minor, spec) `reconciliation.ts:85`, local decision 1: two snapshots with the same `asOf` and
+    different content end in whichever arrived last, so INV-07 is order dependent on a tie; not
+    written in INV-07 or A-13.
+  - (minor, standards) `reservation.ts:261`: `drop` (and the `ReconciliationNote` kinds) have no
+    glossary word; the glossary says "released by adjustment".
+  - (minor, standards) `reconciliation.ts:177`: the closed guard in `stepForOmitted` handles a case
+    the input contract excludes (only active reservations are unlisted locals).
+
+## 2026-09-25, implement S-06 (review fixes, round 1, part one), Opus
+- The findings that needed no decision, each test first and seen red where a test could fail.
+- Blocker, a list entry that is not an object: `activeReservations: [[]]` (and `null`, a string, a
+  number) passed validation and `BigInt(undefined)` threw in the mapping. The red test showed that
+  exact error; `@IsObject({each: true})` makes it a rejection, dead-lettered like any malformed
+  message.
+- Major, the listed total overflowing: the entries' sum is now refused above the largest exact
+  JSON integer, the bound ADR-0006 already puts on every single amount, since the sum becomes the
+  program's `reserved` and availability returns it as one JSON number.
+- Major, the list bound not proven: measured first against PostgreSQL. A snapshot of 10 000
+  unknown invoices took 12.2 to 12.9 s and one correcting 10 000 known reservations 12.5 s, inside
+  the 15 s transaction timeout on this machine but not safely. The writes are now batched:
+  `addAll` and `appendAll` are one `createMany` each, keeping the ledger's order, and `saveAll`
+  is one `UPDATE ... FROM unnest`. The same two cases now take 4.7 s and 2.5 s, and stay as
+  integration tests in `reconciliation-at-the-bound.integration-test.ts`, so a regression fails the
+  transaction rather than a stopwatch.
+- Minor, dead code: the closed check for an omitted reservation is gone; `local` passes only active
+  reservations unlisted, and a comment says so.
+- Minor, INV-02 after the amendment: a second property test mixes random snapshot corrections, up
+  to twice `reservedAmount`, among random releases, and asserts `held` never below zero and no
+  release ever raising it, and that both a correction and one above `reservedAmount` occurred. The
+  tagged INV-02 test and its name in `plan.md` are unchanged; its name still states the old bound,
+  which is a `/plan` correction to make, not one `/implement` may.
+- Minor, the glossary: `Reservation.drop` is renamed `releaseByAdjustment`, the glossary's own
+  phrase. The note kinds still need an entry, which is `/spec` work.
+- Open, waiting on Marcin: the ADR for a message that will always fail, and the currency and tie
+  wording for A-12 and INV-07.
+
+## 2026-09-25, implement S-06 (review fixes, round 1, part two), Opus
+- ADR-0013 accepted as Marcin decided, not as recommended: three attempts inside one delivery, then
+  the message is set aside as a rejection (dead letter with the error, record `rejected` with the
+  error text) and consumption continues. The counting stays in the handler so a restart cannot loop
+  it and an outage cannot trip it: giving up needs the broker and the database, so while either is
+  away the error propagates and Kafka redelivers. Three consumer tests, seen red first: a failure
+  that recovers on the third attempt, a message set aside after three while the next one applies,
+  and a message left for redelivery when the dead letter cannot be published.
+- Marcin then asked for a table for these errors, and to keep it short since it is an edge case.
+  `treasury_message_failures`: one row per failed attempt, best effort, its own transaction, no
+  API, no foreign key. One unit expectation (three rows after three failures, seen red) and one
+  integration case.
+- The review's blocker and major about messages redelivered forever are closed by this for any
+  cause, not only the two found; their specific causes were already fixed in part one.
+- Still owed: the currency questions (blocker 2 and the major about unwritten rules), the tie on
+  `asOf`, and the `/spec` wording for A-13 clause 4, the note kinds and the new table.
+
+## 2026-09-25, implement and spec S-06 (review fixes, round 1, part three), Opus
+- Marcin decided the three remaining questions as recommended.
+- Blocker 2, test first and seen red on the review's own scenario (the old-currency reservation
+  reopened): a listed reservation in another currency than the snapshot is skipped with the note
+  `listed_in_other_currency`. The currency guard now refuses another currency only for an active
+  reservation or a stale limit part; the unit test that expected a closed old-currency listing to
+  refuse the whole snapshot was rewritten for the decision, not weakened.
+- Spec wording, on the slice branch as INV-02 was, each with a Changes row: A-12 gains the two
+  currency rules (stale limit refused, other-currency listing skipped); A-13 gains clause (6), three
+  attempts then unprocessable with each failure kept (ADR-0013), and clause (7), the later of two
+  equal `asOf` snapshots wins; INV-07 says such a pair is outside it. Glossary: `Rejected` covers the
+  third failed attempt, and new entries for `Failed attempt` and `Reconciliation note`, which lists
+  every note kind.
+- Review round 1 is now answered finding by finding: both blockers and all three majors fixed, the
+  four minors fixed or written down. One stays for `/plan`: the tagged INV-02 test's name still
+  states the old bound.
+
+## 2026-09-25, plan S-06 (correction: INV-02 as amended), Opus
+- Small correction on the slice branch, as `CLAUDE.md §6` allows. INV-02 was closed by S-05 with a
+  property over client releases, and S-06 amended what it says: `held` may now go above
+  `reservedAmount`, but only through a snapshot. The S-05 test still holds, but it never releases a
+  corrected reservation, which review round 1 noted. So the requirement row moves to S-06 with
+  status `in progress` and names the property that mixes snapshot corrections among releases; the
+  S-05 test stays as a supporting test without the tag. The S-05 slice file is done and unchanged.
+- Cross-checked: every AC and INV in the spec appears once in `plan.md`, and the thirteen S-06
+  names match the slice file. Test file and commit columns stay empty for `/ship`.
+
+## 2026-09-25, verify S-06 (second pass, after review fixes round 1), Opus
+- VERIFY S-06: PASS, at e3a805e.
+- Gate: `npm run gate` green in one run, nothing retried. Unit 194 (api) and 2 (web), integration
+  46, e2e 64, cold start smoke 3 with the stack healthy in 46 s.
+- Coverage: 9/9 AC and 4/4 INV (INV-02 as amended, INV-05, INV-06, INV-07) found by tag and
+  passing, none skipped or focused; levels as the plan names them, INV-02 a unit property.
+- Style and layers: prose clean; no nested ternary or braced one-line `if` in the diff since
+  review round 1; nothing from Nest, Prisma or Kafka in `domain/`, no ORM in `application/`.
+- README followed again on the default stack, after checking none of it existed: every documented
+  call answered as written, and a live snapshot through `dev:treasury` corrected a reservation
+  with an adjustment. No message was set aside. Stack taken down.
+- Findings: none new. Still open and owed to `/ship`: the README's snapshot contract and
+  `dev:treasury snapshot`, and the kafkajs warning on stderr (minor, older than S-06).
+
+## 2026-09-25, review S-06 (round 2), Opus
+- REVIEW S-06: 7 findings (1/1/5), at 7e2d03d against base d98a421, fresh context. Not a pass.
+  Run on Opus 5.5 by Marcin's decision: the skill asks for Fable, which is out of usage credits.
+- Round 1, finding by finding: both blockers closed (a list entry that is not an object is now
+  rejected, checked with `[[]]`, `[null]`, a string, a number and `true`; a listed reservation in
+  another currency is skipped). All three majors closed: the currency rules are in A-12, the
+  listed total no longer overflows a `BIGINT`, and the bound is proven for creating and for
+  correcting 10 000 reservations. All four minors closed. Two of the fixes leave a narrower gap,
+  reported below as minors.
+- Findings, most severe first:
+  - (blocker, spec) `reconciliation.ts:219-223`: `describedBy` lets a snapshot change a
+    reconciliation-created reservation whose `createdAt` equals `asOf`. ADR-0010's decision and
+    A-12 both say a reservation created at or after `asOf` is untouched, listed or not. The
+    exception is written only in a code comment and in the first implement entry's list of
+    borderline choices. `reconciliation.test.ts:271` asserts the behaviour the ADR rules out.
+    If the same kind of reservation is omitted, it gets the note `kept_within_window`, although
+    it is not in the window before `asOf`.
+  - (major, standards) `treasury-capacity.consumer.test.ts:70-86`: `FailingCapacityUpdate`
+    subclasses our own use case and overrides `execute`, which is a stub of our own code
+    (CLAUDE.md §4). The failure belongs at a port, for example a unit of work or repository
+    fake that throws n times.
+  - (minor, spec) `reconciliation-snapshot-message.dto.ts:31-35,113-119`: the total bound covers
+    only the listed entries. Reservations kept beside them (created after `asOf`, or within the
+    window) add to `reserved`, which can pass the exact JSON bound, and then availability answers
+    500. Reproduced in the domain: `reserved` came to 18 014 398 509 481 982 and `jsonInteger`
+    threw.
+  - (minor, spec) `apply-reconciliation-snapshot.use-case.ts:111-112,129,141-149`: reopening
+    reads each closed listed reservation's movements with its own query, and the bound tests do
+    not cover that path. "Only a few are ever closed" is an unwritten assumption: a snapshot that
+    omits everything, followed by one that lists everything, reopens all of them. Measured against
+    PostgreSQL: 10 000 reopens took 7.1 s of the 15 s transaction timeout, against 2.5 to 4.7 s
+    for the covered cases.
+  - (minor, spec) `treasury-capacity.consumer.ts:119,143`: parsing runs outside `attempted`, so
+    a throw there (the class of the round 1 blocker, which ADR-0013 names as its motivation) still
+    propagates and is redelivered forever. This matches ADR-0013's literal word "applying", but
+    it does not close the class. No input found this round reaches it.
+  - (minor, spec) `ADR-0013-treasury-messages-that-always-fail.md:103`: Consequences still say
+    "the consumer gets one classification function", which belongs to the declined Option 3.
+  - (minor, standards) `S-06-reconciliation-snapshots.md:7`: the header says the slice was
+    "Implemented on Fable", while its Log and the work-log say Opus.
+
+## 2026-09-25, implement and spec S-06 (review fixes, round 2), Opus
+- Blocker, decided by Marcin after a walk through the case: rather than removing the exception
+  that let a snapshot correct a reservation it created at the same `asOf`, the rule is made whole
+  and written down. A reservation a snapshot created is dated by the treasury's clock, so a later
+  snapshot judges it with no keep window, listed or omitted, including one of the same moment,
+  which A-13 clause 7 already says supersedes the first. Two tests, seen red (both reservations
+  stayed active): released by a same-moment snapshot that omits it, and by one ten seconds later.
+  Client reservations keep the window and INV-06 exactly as before. ADR-0010 carries a dated
+  amendment, A-12 a sentence and a Changes row, and the glossary's `Keep window` says it is for
+  client reservations. The mislabelled `kept_within_window` note goes with it.
+- Major, the retry tests stubbed our own use case: replaced by a `FailingUnitOfWork`, a fake of the
+  port that throws a set number of times, so the use case under it is the real one.
+- Minor, `reserved` past the exact JSON bound through reservations kept beside the list:
+  `Program.adjust` refuses it (unit test, seen red), and ADR-0013 sets such a snapshot aside instead
+  of availability answering 500.
+- Minor, reopening at the bound: the closing movement of every closed reservation comes from one
+  `DISTINCT ON` read instead of one query each. The worst case the reviewer measured at 7.1 s now
+  takes 2.7 s, and is a third bound test beside creating (5.2 s) and correcting (2.7 s).
+- Minor, ADR-0013's Consequences named the declined option's classifier; corrected. Minor, the
+  slice header said Fable; corrected.
+- Not changed, with the reason: parsing stays outside the three attempts. The reviewer found no
+  input that reaches a throw there; round 1's crash was a validation gap, closed by validating every
+  entry as an object, and the mapping after validation reads only validated fields. Handling a case
+  no input can reach is what `CLAUDE.md §3` rules out.
+
+## 2026-09-25, verify S-06 (third pass, after review fixes round 2), Opus
+- VERIFY S-06: PASS, at 36f36ba.
+- Gate: `npm run gate` green in one run, nothing retried. Unit 197 (api) and 2 (web),
+  integration 48, e2e 64, cold start smoke 3 with the stack healthy in 33 s.
+- Coverage: 9/9 AC and 4/4 INV found by tag and passing, none skipped or focused, at the planned
+  levels. Style and layers clean in the diff since the second pass.
+- README followed again on the default stack after checking none of it existed. Every documented
+  call answered as written. Live check of the round 2 rule: two snapshots of the same moment
+  through `dev:treasury`, the first creating INV-X, the second omitting it; INV-X ended closed and
+  INV-A was corrected. Stack taken down.
+- Findings: none new. Owed to `/ship` as before: the README's snapshot contract and
+  `dev:treasury snapshot`; the kafkajs warning on stderr (minor, older than S-06).
+
+## 2026-09-25, review S-06 (round 3), Opus
+- REVIEW S-06: 6 findings (0/1/5), at 2f1bdbe against base d98a421, fresh context. Not a pass.
+  Run on Opus 5.5 by Marcin's decision: the skill asks for Fable, which is out of usage credits.
+- Round 2, finding by finding: the blocker is closed (a snapshot-created reservation is judged on
+  the treasury's clock with no window, in code, ADR-0010, A-12 and two unit tests). The major is
+  closed (`FailingUnitOfWork` fakes the port, the use case is real). The `reserved` JSON bound,
+  the reopen read, ADR-0013's Consequences and the slice header are closed. The one not changed,
+  parsing outside the three attempts, does not hold: its reason was that no input reaches a throw
+  there, and one does (first finding below).
+- Findings, most severe first:
+  - (major, spec) `treasury-capacity.consumer.ts:119,143`: a message about 10 KB long with an
+    unknown field nested 5 000 arrays deep makes `plainToInstance` overflow the stack; the
+    `RangeError` leaves `handle`, the offset is not committed and the message is delivered again
+    forever, stalling the partition against A-13 clause 4. Same for a capacity update. Reproduced
+    on the built consumer: `handle` rejected, no dead letter, no record.
+  - (minor, spec) `prisma-ledger.repository.ts:31-40`: the comment says `DISTINCT ON`, but Prisma
+    without `nativeDistinct` sends a plain `SELECT ... ORDER BY` and dedupes in memory (query log
+    checked), so the read loads every movement of every closed listed reservation, not one each.
+  - (minor, spec) `apply-reconciliation-snapshot.use-case.ts:118,121`: the active reservations and
+    the client movements after `asOf` are not bounded by `SNAPSHOT_RESERVATIONS_MAX`, so local
+    decision 5's "one bounded transaction" does not hold for a program with more active
+    reservations than the list bound, and no bound test covers release by omission at scale.
+  - (minor, standards) `apply-reconciliation-snapshot.use-case.ts:130,140-143`: `sumOfDeltas`
+    filters every movement after `asOf` once per local reservation, quadratic inside the locked
+    transaction; 10 000 by 10 000 measured at 0.5 s in plain Node.
+  - (minor, spec) `wiki/spec/glossary.md:185-186`: `Snapshot moment` still says reservations
+    created at or after `asOf` are never changed by that snapshot, which the round 2 amendment
+    made untrue for a snapshot-created reservation of the same moment.
+  - (minor, standards) `domain/ports/ledger.repository.ts:13-19`: the doc comment of
+    `findClientMovementsSince` now sits above `findLastByReservations`, two stacked blocks, and
+    `findClientMovementsSince` has none.
+
+## 2026-09-25, ship S-06, Opus
+- Precondition not met, and shipped anyway by Marcin's explicit decision: verify's third pass is
+  PASS and newer than the last code commit, but review round 3 has one major. Marcin, after three
+  review rounds: "this is enough we are doing a super edge case here, lets move on", and then
+  "yes ship". The major (a message nesting an unknown field about 5 000 arrays deep overflows the
+  parser, which runs outside ADR-0013's three attempts) and five minors are recorded as known
+  limitations in the changelog and carried to S-07. The skill says never to ship over a major;
+  this records that the user overrode it, rather than presenting the slice as clean.
+- `wiki/plan/plan.md`: the thirteen S-06 rows `done` with their test files, and thirteen `extra`
+  rows for the supporting tests. Commit column waits for the merge commit.
+- ADR-0010 to ADR-0013 were accepted during the slice; nothing left to finalise.
+- Assumptions: nothing the code relies on is missing from the register, with one thing for
+  `/spec` to consider: the snapshot's 10 000 entry bound and its listed-total bound are limits on
+  what the treasury may send, today local decisions of the slice and not in A-11's contract.
+- README gains "Reconcile it": the snapshot contract, a `dev:treasury snapshot` example, the rules
+  in one table, the bounds and the three attempts. Run literally on a fresh stack: `INV-A` ended at
+  100 000 000 with an adjustment of -20 000 000, `INV-X` was created from the snapshot with its
+  `messageId`, and availability reported `asOf`.
+- Changelog row, slice status `done`, slice index and Home updated; Home names S-07 next and lists
+  what S-06 carries into it.
