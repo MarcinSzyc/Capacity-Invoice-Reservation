@@ -12,6 +12,7 @@ const SEVEN_HUNDRED_THOUSAND = 70_000_000;
 const ONE_MILLION = 100_000_000;
 const ONE_POINT_NINE_TWO_FIVE_MILLION = 192_500_000;
 const ONE_POINT_NINE_MILLION = 190_000_000;
+const TWO_MILLION = 200_000_000;
 const ONE_POINT_FOUR_MILLION = 140_000_000;
 const NINE_HUNDRED_THOUSAND = 90_000_000;
 const FIVE_HUNDRED_THOUSAND = 50_000_000;
@@ -186,6 +187,23 @@ describe('Reconciliation snapshots', () => {
     // ADR-0012, 1A: the correction survives a later release instead of being derived away.
     await releaseAt(AT_18_05, programId, 'INV-B', NINE_HUNDRED_THOUSAND);
     expect((await readReservation(programId, 'INV-B')).held).toBe(ONE_MILLION);
+  });
+
+  it('should correct held above what was reserved when the snapshot lists more (INV-02, amended)', async () => {
+    const programId = await program();
+    await reserveAt(AT_09_00, programId, 'INV-B', ONE_POINT_NINE_TWO_FIVE_MILLION);
+
+    const snapshot = await applySnapshot(app, {
+      programId,
+      creditLimit: TEN_MILLION,
+      asOf: AT_18_00,
+      activeReservations: [{invoiceId: 'INV-B', heldAmount: BigInt(TWO_MILLION)}],
+    });
+
+    expect(snapshot.outcome).toBe('applied');
+    const invoiceB = await readReservation(programId, 'INV-B');
+    expect(invoiceB.held).toBe(TWO_MILLION);
+    expect(invoiceB.movements.at(-1)?.amount).toBe(TWO_MILLION - ONE_POINT_NINE_TWO_FIVE_MILLION);
   });
 
   it('[AC-31] should set limit and currency from the snapshot and expose its asOf in availability', async () => {
