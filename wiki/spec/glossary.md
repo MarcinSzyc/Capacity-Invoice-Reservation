@@ -182,8 +182,11 @@ program (A-05).
 of one moment: limit, currency and the list of active reservations with their `held`.
 Authoritative for that moment, silent about anything after it.
 
-**Snapshot moment (`asOf`).** The point in time a snapshot describes. Local reservations
-created at or after it are kept, listed or not, and never changed by that snapshot; local
+**Snapshot moment (`asOf`).** The point in time a snapshot describes. Client reservations
+created at or after it are kept, listed or not, and never changed by that snapshot. A
+reservation an earlier snapshot of the same moment created is the exception: its `createdAt`
+is that `asOf`, on the treasury's clock, so the later snapshot may correct or release it
+(A-12, ADR-0010 amended). Local
 reservations created before it and missing from the snapshot are released by adjustment,
 unless they fall inside the keep window. A listed reservation is compared with what it held at
 this moment, so a client's release after it stands. A reservation the snapshot creates takes
@@ -200,6 +203,18 @@ by the next snapshot; releasing wrongly frees capacity another invoice may take.
 messages on the local Kafka broker, so the real consumer has something to read when no
 treasury is present. Used by the `web` treasury panel through a dev-only `api` endpoint and
 by the integration and e2e tests. Not registered in production.
+
+**Dev endpoint.** A route under `/dev/` that `api` serves only outside the production profile
+and without a token, for the demo page: `GET /dev/token` mints a bearer token,
+`GET /dev/programs/:programId/movements` lists a program's latest ledger rows, and
+`POST /dev/treasury` hands a message to the dev producer. In production the routes are not
+registered, so `/dev/token` answers `404` like any unknown path (A-17, AC-38).
+
+**Demo page.** The page the `web` container serves in the dev profile. Four panels: the
+request generator (random reserve and release calls), the request log (each call with its
+status and error code), the live ledger (availability and the latest movements, polled) and
+the treasury panel (limit change, snapshot, duplicate, stale message, through the dev producer).
+It shows what `api` answers and computes nothing (A-17).
 
 **Message id.** The treasury's identifier of one message. Processing the same id twice
 changes nothing.
