@@ -2192,3 +2192,657 @@ correct with a new one. Format:
 - No other AC or INV is affected: AC-26 and AC-28 to AC-31 speak of `held`, adjustments and
   `asOf`, none of them of status.
 - Branch `docs/ac-27-adjustment-closes` from `main`. Wiki only, no code.
+## 2026-09-23, implement S-05 (releases), Opus
+- Branch `slice/S-05-releases` from `main` at 4bd138b. Run on Opus although the slice is
+  `risk: high`: the Fable credits are exhausted and Marcin decided to run it here. Third slice
+  in a row without the model split `CLAUDE.md §8` asks for.
+- C1 from S-04 closed first, test first: the raw insert of a zero rate now fails on
+  `reservations_rate_positive`. C2, the glossary's `RateProvider` examples, is `/spec` work and
+  is still owed before `/review`, together with an entry for `releasedInvoiceAmount`.
+- One thing the slice file did not spell out, and it mattered. `CapacityMovement.deltaHeld` was
+  a `Money`, and `Money` admits no negative amount, so a release row could not be represented at
+  all: `toMovement` would have thrown `Money.of` on the way out of a `delta_held` that the column
+  already stores as a signed BIGINT. Decision 3 of the slice had declined a second money type and
+  said a release's delta is a `bigint` difference; the consistent conclusion is that the movement
+  carries a signed `bigint` too, with the row's currency where it already lives
+  (`limitAfter.currency`). Changed across the module: the type, `Ledger.recompute`, `Program`,
+  the mappers and three test files. `Ledger` now reports a chain that would take a reservation
+  below zero as broken at that row rather than throwing, which is INV-02 at the recomputation.
+- The movement also gained `releaseId` and `reason`, which AC-19 needs and the columns have
+  carried since S-02; `toMovementColumns` was writing null into both.
+- `jsonInteger` now guards magnitude rather than only the upper bound, because a ledger delta is
+  signed and a number too large to be exact is just as wrong with a minus in front of it.
+- Domain, application and infrastructure otherwise as the slice file planned: `Reservation.release`
+  deriving `held` from what the invoice has left, `Program.release`, the four errors, the
+  `ReleaseCapacity` use case checking the repeat before the amount, `GetReservation`, the two
+  routes, and the migration with the column, the partial unique index and C1's CHECK.
+- A second thing worth naming: the `afterEach` ledger helper opened one repeatable-read
+  transaction per program, and S-03 chose to check every program in the database rather than
+  track ids. That is O(programs) per test, so it grew with the suite and finally ran past the
+  180 s hook timeout in a full e2e run once S-05 added a suite. Rewritten to three queries for
+  the whole database in one transaction, grouped in memory: the same guarantee, the releases
+  suite back to 34 s. Found because the full gate failed while the file alone passed, which is
+  exactly the kind of thing running only the fast loop would have hidden.
+- Tests beyond the plan, for `/ship` to add to `wiki/plan/plan.md`: `Reservation.release` for the
+  partial, absent-amount, exact-closing, over-release and already-closed cases;
+  `Program.release` lowering `reserved` and letting an overcommitted program recover;
+  `ReleaseCapacity` for each error and for the repeat running before the amount; and the
+  integration case for the zero rate CHECK.
+- `npm run gate` green: unit 129, integration 26, e2e 51, cold start 3. Nothing committed.
+
+## 2026-09-24, verify S-05, Sonnet
+- `npm run gate` green on 1aeeda8: prose clean, unit 129/129, integration 26/26, e2e 51/51,
+  cold start 3/3, web green.
+- Coverage 12/12 at the planned level: AC-10 to AC-19 and AC-34 through HTTP in
+  `api/test/releases.e2e-test.ts`, INV-02 as a unit property test in
+  `domain/reservation.invariants.test.ts`. No skipped or focused tests.
+- AC-12 uses the numbers the plan said would discriminate, not a case both options pass:
+  100 000 000 EUR minor at `1.13` released as 33 333 333, 33 333 333 and 33 333 334. Confirmed
+  live on a cold started stack, where the intermediate values matched the hand calculation to
+  the minor unit: `held` 75 333 334, then 37 666 667, then exactly 0 with status `closed`. Under
+  the declined Option 1 the three roundings would have summed to 112 999 999 and left 1.
+- A repeated `releaseId` answered `409` on the same live stack.
+- INV-02's property test is not trivially true: 1 000 seeded sequences of 12 releases each at
+  five rates that do not divide evenly, over-releases caught and counted, and every sequence
+  that still holds something is closed at the end and asserted to land on exactly zero. The
+  failure message carries the seed and the whole history.
+- Layer boundaries hold: no `@nestjs` under `domain/`, no ORM or Kafka import outside
+  `infrastructure/`. No nested ternary in `4bd138b..HEAD`.
+- Cold start from `docker compose down -v`: healthy, `/health` and `/health/ready` 200,
+  availability 401 without a token. Stack torn down.
+- One finding, owed to `/ship` and already in the slice's definition of done: `README.md`
+  documents no release route at all, so it shows neither a partial release, a full one, a
+  repeated `releaseId` nor the reservation read. What it does document still works.
+- Result: PASS.
+
+## 2026-09-24, review S-05, Opus
+- Fresh context review of `4bd138b..HEAD` (implementation commit 1aeeda8) plus the uncommitted
+  verify lines, against `CLAUDE.md` and against AC-10 to AC-19, AC-34, INV-02, A-02, A-08, A-09,
+  A-10, ADR-0006, ADR-0008, ADR-0009 and the slice's ten local decisions.
+- Model independence did not hold for this slice. `CLAUDE.md §8` puts a `risk: high` slice on
+  Fable for `/implement` and Fable in a fresh context for `/review`. The Fable credits are
+  exhausted, so the implementation ran on Opus and this review ran on Opus too. The context was
+  fresh, the model was not independent. Recorded plainly rather than glossed.
+- The `Money` to signed `bigint` change on `CapacityMovement.deltaHeld` is the right call: a
+  release row cannot be a `Money`, the column is a signed BIGINT, and a second money type for
+  one field would be worse. The ripple is complete: every use of `deltaHeld` in `api/` and
+  `web/` was checked and none still expects a `Money`. Two doc comments were left behind by the
+  edits, and the one currency guarantee the type used to carry at `Program.release` is now
+  unchecked; both are minors below.
+- The rewritten `afterEach` ledger helper still proves what it claims. One repeatable read
+  transaction over three whole-table queries gives every program the same snapshot, so it is in
+  fact stronger than the old transaction per program, and the grouping covers every program in
+  the database. INV-03 and INV-04 hold as before.
+- Idempotency and ordering are correct. The duplicate check runs before the amount rules
+  (AC-16), `held.isZero()` runs before the amount rules inside `Reservation.release` (AC-15
+  before AC-13), the partial unique index and the in-transaction check agree on scope, and two
+  concurrent releases carrying one id cannot both get through because both writers take the
+  program row lock first (ADR-0008). The `heldAfter` arithmetic is right for several preceding
+  releases, but no test discriminates that case.
+- REVIEW S-05: 15 findings (0 blockers / 7 majors / 8 minors). Not a pass: the majors return to
+  `/implement`, then `/verify` and `/review` run again.
+
+Findings, most severe first:
+
+- [major] [standards] `api/src/modules/capacity/infrastructure/http/reservation.dto.ts:158`: a
+  client input answers `500`. `@IsOptional()` on `amount` skips every validator for an explicit
+  `null` as well as for `undefined`, so `{"releaseId": "R-1", "amount": null}` passes the
+  `ValidationPipe` with zero errors and `programs.controller.ts:101` then evaluates
+  `BigInt(null)`, which throws a `TypeError` the filter renders as `500 INTERNAL_ERROR`.
+  Confirmed by running the DTO through the app's own pipe options. Lines 71 to 74 of this same
+  file document this exact trap for `rate` and use `@ValidateIf` to avoid it; the new fields did
+  not follow. `reason` at line 170 has the milder form: an explicit `null` becomes `repaid`
+  instead of the `400` a wrong value deserves.
+- [major] [spec] `api/test/releases.e2e-test.ts:170`: the test asserts `PROGRAM_NOT_FOUND` for a
+  release on a program that does not exist, but AC-14's Then clause is
+  `404 RESERVATION_NOT_FOUND` and the slice's own test row puts that case under AC-14 "as the
+  same criterion". `release-capacity.use-case.ts:40` decides it. Either answer is defensible;
+  resolving it in the test rather than in the spec is not, and there is no `## Changes` row and
+  no assumption recording the choice.
+- [major] [standards] `api/src/modules/capacity/infrastructure/http/programs.controller.ts:82`:
+  the published contract now says the wrong thing. `ApiNotFoundResponse` on the release route
+  reads "RESERVATION_NOT_FOUND: no reservation for that invoice, or no such program", while the
+  code answers `PROGRAM_NOT_FOUND` for the second half.
+- [major] [spec] `api/src/modules/capacity/domain/reservation.ts:177`: `held` can reach zero
+  while the invoice still owes something, and the reservation is then stuck. `heldAfter` is
+  `round((remaining - amount) * rate)` half up, so any remainder worth less than half a minor
+  unit of the program currency rounds to `0`, `status` at line 144 turns `closed`, and every
+  later release hits the `held.isZero()` guard at line 169 and gets
+  `409 RESERVATION_ALREADY_RELEASED`. `releasedInvoiceAmount` can then never reach
+  `invoiceAmount`. Reachable with an ordinary low value invoice currency: an IDR invoice on a
+  USD program at about `0.000065` leaves a 100 IDR remainder worth zero cents. Nothing in A-08,
+  A-09 or ADR-0009 says what a reservation that holds nothing but still owes something is, so
+  the code is deciding a spec question on its own. INV-02's property test
+  (`domain/reservation.invariants.test.ts:63`) guards its closing release with
+  `if (!reservation.held.isZero())`, so it steps around this state instead of asserting anything
+  about it.
+- [major] [spec] `api/src/modules/capacity/application/release-capacity.use-case.test.ts:111`
+  and `api/test/releases.e2e-test.ts:191`: the AC-16 tests cannot fail on the thing AC-16 names.
+  Both repeat the only release the reservation has, so "the original outcome" and "the current
+  state" are the same number, and an implementation that reported the latest `held` instead of
+  the one that release left behind would pass. The reduce at
+  `release-capacity.use-case.ts:100` is correct for several preceding releases; nothing proves
+  it. One more release before the repeat, with a different `heldAfter`, would close the gap.
+- [major] [standards] `wiki/spec/glossary.md`: `releasedInvoiceAmount` has no glossary entry. It
+  is a new domain word in the domain, the DTO, the API and a column. `CLAUDE.md §2` makes that a
+  review finding, and the slice's own definition of done required the entry from `/spec` before
+  `/review`.
+- [major] [spec] `wiki/spec/glossary.md:241` to `:253`: C2 carried from S-04 is still open. The
+  `Adapter`, `Seam` and `Fake` entries still illustrate themselves with `RateProvider`,
+  `ConfigRateProvider` and "a config-file rate table", which A-02 decided against and which do
+  not exist. The slice's definition of done says C2 is closed before `/review` so review does
+  not find it again. Review found it again.
+- [major] [spec] `api/prisma/migrations/20260923120000_releases/migration.sql:17`: the partial
+  unique index has no test, and neither do two other supporting tests the slice named. Nothing
+  in the suite exercises `UNIQUE (reservation_id, release_id) WHERE release_id IS NOT NULL`,
+  nothing proves `PrismaReservationRepository.save` writes and reads back
+  `released_invoice_amount` and `held`, and nothing proves `findByReservation` returns rows in
+  time order, although the read model and the idempotency check both depend on that order. The
+  slice lists all three under "Supporting tests expected beyond the plan". The index is also
+  invisible to `schema.prisma`, so drift detection cannot see it either: if the migration were
+  wrong or the index were dropped, the gate would stay green.
+- [minor] [spec] `api/src/modules/capacity/domain/reservation.ts:183`: decision 8 says `@Min(1)`
+  keeps a movement that says nothing happened out of the ledger, but the minimum is in invoice
+  currency. A legitimate small release whose converted value rounds to the same `held` appends a
+  `release` row with `deltaHeld: 0n`: with 100 000 000 EUR left at rate `0.0067`, a release of
+  one minor unit leaves `held` at 670 000. The row is not quite meaningless, since
+  `releasedInvoiceAmount` moves, but the decision's stated guarantee does not hold.
+- [minor] [standards] `api/src/modules/capacity/domain/program.ts:19`: the `Program` class doc
+  comment ("A pot of money the treasury sets aside") is stranded above the newly inserted
+  `ReleaseMovementRequest` interface, so the class it describes no longer carries it and the
+  interface appears to have two doc comments.
+- [minor] [standards]
+  `api/src/modules/capacity/infrastructure/persistence/mappers.ts:84`: the "toFixed, not
+  toString" comment now sits above `releasedInvoiceAmount`, which it does not describe. The new
+  field was inserted between the comment and the `rate:` line it explains.
+- [minor] [standards] `api/src/modules/capacity/domain/program.ts:132`: `Program.release` takes
+  a bare `bigint` and adds it straight to `reserved`, with no check of its sign and no tie to
+  the program's currency. The type change was right, but the currency association `Money`
+  carried is gone at this one seam and the only remaining guard is `Money.of` refusing a
+  negative result, which reaches the client as a `500`. A sign assertion, or a request typed
+  against the program's currency, would keep what the type used to guarantee.
+- [minor] [standards]
+  `api/src/modules/capacity/application/testing/in-memory-capacity.fake.ts:45`:
+  `InMemoryReservations.save` relies on the aggregate already being mutated in place, so
+  deleting `await reservations.save(reservation)` from `ReleaseCapacity` would leave every unit
+  test green. Only the e2e would notice.
+- [minor] [spec] `wiki/spec/glossary.md:92`: "A release larger than `held` is rejected"
+  contradicts ADR-0009, which judges over-release against the remaining invoice amount, not
+  against `held`. The code follows the ADR; the glossary still describes the declined reading.
+- [minor] [standards] `api/prisma/migrations/20260923120000_releases/migration.sql:11`:
+  `released_invoice_amount` gets no CHECK, although the table already carries
+  `reservations_held_within_reserved` and C1 in this very migration establishes the CHECK as the
+  house pattern for exactly this class. `CHECK (released_invoice_amount BETWEEN 0 AND
+  invoice_amount)` would hold in storage what `Reservation.release` holds in the domain.
+- [minor] [standards] `README.md`: no release route is documented, so it shows neither a partial
+  release, a full one, a repeated `releaseId` nor the reservation read. Already raised by
+  `/verify` and named in the slice's definition of done; repeated here so it is not lost at
+  `/ship`.
+
+## 2026-09-24, implement S-05 (review fixes, round 1), Opus
+- Seven majors and eight minors came back. The two that mattered most I reproduced before
+  touching anything, rather than taking the report on trust.
+- Major, an explicit `null` answered `500`. `{"releaseId":"R-1","amount":null}` passed the pipe
+  untouched because `@IsOptional()` skips `null` as well as `undefined`, and the controller then
+  evaluated `BigInt(null)`. This is the same trap I fixed on `rate` in S-04, documented ten
+  lines above in the same file, and did not apply to the new fields. Both `amount` and `reason`
+  now use `@ValidateIf` on `undefined`, red first: the new e2e case failed with
+  `expected 400, got 500`.
+- Major, a remainder that rounds away. Reproduced against the domain: a 1 000 000 IDR minor
+  invoice at rate `0.000065` leaves `held` 0 with 1 000 IDR still owed, and the reservation was
+  then unreleasable forever. The code was faithful to AC-15 and the glossary, so this went
+  through `/spec` (merged as #32) and the code now follows the amended rule: status is derived
+  from the remaining invoice amount, and `RESERVATION_ALREADY_RELEASED` is answered on that. Two
+  domain tests cover the state, and INV-02's property test now guards its closing release on
+  what the invoice has left rather than on `held`, so it walks through the case instead of
+  around it. A rate of `0.000065` joined its rate list to make sure it does.
+- Major, the AC-16 tests could not fail: both repeated the only release the reservation had, so
+  "the original outcome" and "the state now" were the same number. A second, different release
+  now runs before the repeat, in the unit test and the e2e, so R-1's `heldAfter` of 192 500 000
+  is asserted while the reservation holds 137 500 000.
+- Major, three promised tests were missing and are now there: `save` writing and reading back
+  `released_invoice_amount`, the partial unique index refusing a repeated
+  `(reservation_id, release_id)` while allowing the same id on another invoice, and
+  `findByReservation` returning rows in append order with their `releaseId` and `reason`.
+- Major, AC-14's contract text. Marcin decided the code is right: an unknown program answers
+  `PROGRAM_NOT_FOUND`, as it does on reserve (AC-04), and only an unknown invoice on a known
+  program answers `RESERVATION_NOT_FOUND`. The OpenAPI description said otherwise and now says
+  what the code does, naming both criteria.
+- Majors for the two glossary entries closed in #32: `releasedInvoiceAmount` has its entry, and
+  C2 carried from S-04 is gone.
+- Minors taken: the stranded `Program` class comment and the detached `toFixed` comment are back
+  above what they describe; `Program.release` refuses a delta that does not lower `held` and one
+  that would take `reserved` below zero, rather than letting a broken caller reach `Money.of`
+  and become a `500`; the migration gained `CHECK (released_invoice_amount >= 0 AND <=
+  invoice_amount)`, which the sibling column already had.
+- Minors left, and why: the in-memory `save` fake cannot fail, which is true of every fake we
+  have and is a testing-strategy question rather than this slice's; a legitimate very small
+  release can still append a `deltaHeld` of zero, which is a real wrinkle in decision 8 but
+  changes no balance and no invariant; the glossary's "larger than `held`" line predates
+  ADR-0009 and is `/spec` work; the README is `/ship`'s.
+- `npm run gate` green: unit 131, integration 29, e2e 52, cold start 3. Nothing committed.
+
+## 2026-09-24, verify S-05 (second pass, after review round 1), Sonnet
+- `npm run gate` green on 079107a: prose clean, unit 131/131, integration 29/29, e2e 52/52,
+  cold start 3/3. Coverage 12/12 at the planned level, no skipped or focused tests, layer
+  boundaries hold.
+- The gate being green is not the whole story. **FAIL**, on a regression the fix round
+  introduced and no test covers.
+- The cold start could not run on the default port: port 3000 is held by a process from
+  Marcin's other project (`agentic-emr`, started 14:45 today), which I left alone. Ran with the
+  `API_PORT` override the README documents, so the check itself still happened.
+- Two of the three round 1 fixes are confirmed live: an explicit `"amount": null` now answers
+  `400` where it answered `500`, and an IDR invoice at rate `0.000065` released down to a
+  remainder now reads `held` 0 with status **active**, which is the amended AC-15 working.
+- The third is broken by the second. Releasing that remainder answers
+  `500 INTERNAL_ERROR`. `Reservation.release` returns `deltaHeld` 0 for it, because `held` had
+  already rounded to zero and stays there, and the guard I added to `Program.release` in the
+  same round refuses any delta that is not negative. So the minor fix blocks the path the major
+  fix exists to open. The guard should refuse a delta that raises `held`, not one that leaves it
+  where it is.
+- Why no test caught it: the two new domain tests call `Reservation.release` directly, and no
+  test walks a rounded-away remainder through `ReleaseCapacity` and `Program`. A use case level
+  test and an e2e for that path are owed with the fix.
+- Result: FAIL. Back to `/implement`.
+
+## 2026-09-24, implement S-05 (review fixes, round 2), Opus
+- Fixes the regression the previous round introduced and verify caught live. The guard I added
+  to `Program.release` refused any delta that was not negative, but closing a remainder whose
+  `held` has already rounded to zero produces a delta of exactly zero, so the minor fix blocked
+  the path the major fix exists to open. The guard now refuses only a delta that raises `held`,
+  which is the broken caller it was meant to catch; zero is legitimate and the ledger records
+  the repayment with no capacity moving.
+- Two tests close the hole that let this through. The round 1 tests called `Reservation.release`
+  directly, so nothing walked a rounded-away remainder through `ReleaseCapacity` and `Program`.
+  There is now a use case test for that path, red first with
+  `RangeError: Release R-2 does not lower held: 0`, and an e2e that reserves an IDR invoice at
+  `0.000065`, releases all but the remainder, sees `held` 0 with status `active`, closes it, and
+  asserts the three movements read `reserve 65`, `release -65`, `release 0`.
+- `npm run gate` green: unit 132, integration 29, e2e 53, cold start 3. Nothing committed.
+
+## 2026-09-24, verify S-05 (third pass, after review fixes round 2), Sonnet
+- `npm run gate` green on 2026dc3: prose clean, unit 132/132, integration 29/29, e2e 53/53,
+  cold start 3/3. Coverage 12/12 at the planned level, no skipped or focused tests, layer
+  boundaries hold.
+- The regression the second pass found is gone, and I checked the whole path live rather than
+  only the one call that failed: an IDR invoice at `0.000065` releases all but its remainder
+  (`held` 0, status `active`), then closes (`held` 0, `releasedInvoiceAmount` 1 000 000, status
+  `closed`, where the previous pass answered `500`), and a further release then answers
+  `RESERVATION_ALREADY_RELEASED`, which is the amended AC-15 doing exactly what it should at
+  both ends. An explicit `"amount": null` still answers `400`.
+- Cold start again used the `API_PORT` override: port 3000 is still held by a process from
+  Marcin's other project, now pid 78243. Left alone.
+- Result: PASS.
+
+## 2026-09-24, review S-05 (round 2, after fix rounds 1 and 2), Opus
+- Fresh context review of `49c34c0..HEAD` (implementation `ef43a7f` plus fix commits `079107a`
+  and `2026dc3`), against `CLAUDE.md` and against AC-10 to AC-19, AC-34, INV-02, A-02, A-08,
+  A-09, A-10, ADR-0006, ADR-0008, ADR-0009 and the slice's ten local decisions.
+- Model independence still did not hold, at any point of this slice. `CLAUDE.md §8` puts a
+  `risk: high` slice on Fable for `/implement` and on Fable in a fresh context for `/review`.
+  The Fable credits are exhausted, so the implementation, review round 1 and this round all ran
+  on Opus. The context was fresh each time, the model never was, so a shared blind spot would
+  have survived every pass. Recorded plainly rather than glossed.
+- All seven majors from round 1 are genuinely closed in the code, not only in the commit
+  message. `amount` and `reason` use `@ValidateIf` on `undefined` and six malformed bodies are
+  refused with `400` in the e2e; the OpenAPI text on the release route names both `404` codes;
+  the rounded away remainder now derives `status` from `remainingInvoiceAmount` and is walked
+  end to end by a domain test, a use case test and an e2e that asserts the three movements read
+  `reserve 65`, `release -65`, `release 0`; the AC-16 tests now run a second, different release
+  before the repeat, so `heldAfter` 192 500 000 is asserted while the reservation holds
+  137 500 000, which is the discrimination the old tests lacked; the glossary has its
+  `releasedInvoiceAmount` entry and C2's `RateProvider` illustrations are gone; and the three
+  promised supporting tests exist (save round trip, the partial unique index refusing a repeat
+  while allowing the same id on another invoice, `findByReservation` returning both rows).
+- The round 2 regression is fixed at the root, not papered over. `Program.release` now refuses
+  only a delta that raises `held`, a delta of zero is legitimate, and the ledger chain, INV-02
+  and INV-03 all hold for a zero delta row (checked against `Ledger.recompute` and the
+  `afterEach` helper, which sums `held` of active reservations and so is unaffected by a
+  reservation that is active while holding nothing).
+- Concurrency re-checked on the write path and it holds: both writers take the program row lock
+  first (ADR-0008), so a duplicate `releaseId` cannot race past the in transaction check into
+  the partial unique index, and `reserved` and `held` move in one transaction. The read path is
+  where it does not hold, which is the first major below.
+- Judgement on the three minors round 1 left deliberately, as asked. The in memory `save` fake
+  is defensible, though not for the reason given: "true of every fake we have" is the weaker
+  half, the real cover is that AC-16 and AC-19 re-read the reservation over HTTP after a release
+  and the new integration test round trips `released_invoice_amount`, so a dropped `save` fails
+  the suite. The zero delta row is more than defensible, it is now required: the amended AC-15
+  path produces exactly such a row and an e2e asserts it; what is left wrong is decision 8's
+  text in the slice file, which still calls it a row that says nothing happened (minor below).
+  The glossary's "larger than `held`" line is defensible only as far as `/ship`: it is the
+  ubiquitous language contradicting an accepted ADR in the very area this slice implements, and
+  a `/spec` pass ran on this exact file during this slice (#32), so "it is `/spec` work" did not
+  in fact block it. `CLAUDE.md §9` wants the wiki true before the slice is done.
+- REVIEW S-05: 10 findings (0 blockers / 2 majors / 8 minors). Not a pass, though both majors
+  are small: one query moved inside a transaction and four sentences that still state the
+  superseded status rule.
+
+Findings, most severe first:
+
+- [major] [spec] `api/src/modules/capacity/application/get-reservation.query.ts:25` and `:27`:
+  the reservation read is two unsynchronised queries, so AC-19 can answer a body that
+  contradicts itself. `findByInvoice` and `findByReservation` run outside any transaction; a
+  release committing between them returns the reservation as it was together with the movement
+  that has already changed it, so the movements no longer sum to the `held` on the same body.
+  The repo's own standard says otherwise in as many words: `api/test/support/ledger-invariants.ts:33`
+  takes a repeatable read transaction for exactly these three reads "so a writer running at the
+  same time cannot split the view between them". The production read model, which S-07's page
+  renders directly, does not. `UnitOfWork.run` is already injected everywhere else for this.
+- [major] [spec] The AC-15 amendment is stated in one place and contradicted in four, two of
+  them published to clients.
+  `api/src/modules/capacity/infrastructure/http/reservation.dto.ts:119` publishes the status
+  property as "active while held > 0", which is the exact rule the amendment replaced and the
+  only description of it a client of the OpenAPI document sees;
+  `api/src/modules/capacity/domain/errors.ts:113` renders the client visible message "holds
+  nothing: it has already been released", when the reason is now that the whole invoice has
+  been released and a reservation can hold nothing without being released;
+  `api/src/modules/capacity/domain/errors.ts:107` and
+  `api/src/modules/capacity/domain/reservation.ts:9` ("Derived from `held`, never stored") and
+  `api/prisma/schema.prisma:39` ("`status` is derived from `held` and never stored") say the
+  same superseded thing in comments. The behaviour is right everywhere; the words a reader
+  meets first are wrong.
+- [minor] [spec] `api/test/releases.e2e-test.ts:201`: the round 1 major about AC-14 is closed in
+  the contract text and in the work-log, but not in the spec. AC-14's Then clause still reads
+  `404 RESERVATION_NOT_FOUND`, the slice's own test row still puts the unknown program under
+  AC-14 "as the same criterion", and a test tagged `[AC-14]` now asserts `PROGRAM_NOT_FOUND` for
+  it. Marcin's decision is sound and consistent with AC-04, but `CLAUDE.md §7` wants it as a
+  `## Changes` row or an assumption, and the slice row corrected, not only as a line in a log.
+- [minor] [standards] `api/src/modules/capacity/domain/reservation.ts:176`: `release` reads only
+  `request.amount`. `releaseId`, `reason` and `clientId` are accepted and ignored, which is dead
+  weight and a small trap: the movement's id and reason come from the use case's own copy at
+  `release-capacity.use-case.ts:75`, so nothing makes the pair agree and a caller passing
+  different values to the two calls would be silently obeyed.
+- [minor] [standards] `api/prisma/schema.prisma:92` and
+  `api/src/modules/capacity/infrastructure/persistence/mappers.ts:58`: `reason` is a free
+  `VarChar(16)` with no enum and no CHECK, while `kind` and `source`, the two other closed
+  vocabularies, are Postgres enums; the mapper then asserts the column into the domain type with
+  a bare `row.reason as ReleaseReason`. Any value that reaches the column from outside the
+  service flows into the domain and out to clients as a `ReleaseReason`. Nothing constrains a
+  `release` row to carry a `release_id` and a `reason` either, which is what makes the new
+  partial unique index meaningful.
+- [minor] [standards]
+  `api/src/modules/capacity/infrastructure/persistence/prisma-capacity.integration-test.ts`, the
+  ordering case added in round 1: it cannot fail on ordering. The two rows are appended in the
+  order asserted and Postgres returns a small fresh table in insertion order, so deleting
+  `orderBy: {id: 'asc'}` from `PrismaLedgerRepository.findByReservation` leaves it green. The
+  prefix sum in `release-capacity.use-case.ts:100` depends on that order for AC-16's `heldAfter`.
+- [minor] [spec] `api/test/releases.e2e-test.ts:316`: AC-18 names six fields and slice decision
+  10 exists so the criterion is not asserted weakly, but only the read after the reserve checks
+  all six (`toEqual` at line 307); the read after the release checks `reserved` and `available`
+  with `toMatchObject`, which is the half of the criterion the slice is actually about.
+- [minor] [spec] `wiki/slices/S-05-releases.md:138`, decision 8: it says a zero release is
+  refused because such a row "says nothing happened", and the shipped code now appends exactly
+  that row on the amended AC-15 path and asserts it in an e2e. The decision's rationale is
+  superseded by the amendment and the slice file still states it.
+- [minor] [standards] `api/src/modules/capacity/domain/program.ts:132`: `Program.release` still
+  takes a bare `bigint` with no tie to the program's currency. The round 1 guards document the
+  sign, not the currency. No reachable defect today: ADR-0007 refuses a re-denomination while
+  anything is held, and a reservation whose `held` rounded away always produces a delta of zero,
+  so no cross currency arithmetic can happen. That reasoning is the guarantee now, and it is
+  written down nowhere.
+- [minor] [standards] `README.md:72` and `:99`: still no release route, no reservation read and
+  none of the four new codes in the error table, and the reserve paragraph still says "cross
+  currency arrives in S-04" two lines above the cross currency example. `/verify` and review
+  round 1 both raised the missing routes; repeated so `/ship` does not lose it.
+
+## 2026-09-24, implement S-05 (review fixes, round 3), Opus
+- Review round 2 confirmed all seven round 1 majors closed in the code, and found two more.
+- Major, the reservation read was two unsynchronised queries. `GetReservation` read the
+  reservation and then its movements outside any transaction, so a release committing between
+  them would answer AC-19 with a body whose movements do not sum to the `held` printed beside
+  them. It now runs both reads inside `UnitOfWork.run`, which is the rule the ledger invariant
+  helper states for its own reads and which S-07's page will depend on. The two standalone read
+  providers and their tokens are gone with it, since nothing else used them.
+- Major, the AC-15 amendment was stated once and contradicted in four places, two of them
+  published: the OpenAPI status description still said "active while held > 0", and the `409`
+  message still said the reservation "holds nothing". Both now say what the rule is. The type
+  comment and the schema comment followed.
+- Minors taken. `ReleaseRequest` carried `releaseId`, `reason` and `clientId` that the entity
+  never read, a second copy of what the use case already passes to `Program.release` with
+  nothing keeping the two equal; it now takes the amount alone. `capacity_movements.reason` was
+  a free `VarChar(16)` while `kind` and `source` are enums, so the mapper cast whatever it
+  found: there is now a CHECK, and the mapper refuses an unknown value instead of casting. The
+  ordering integration test appended newest first, so it can now fail on ordering rather than
+  passing on Postgres's habit of returning a small fresh table in insertion order. AC-18's
+  second read asserts all six fields, as the criterion names them. Slice decision 8's text said
+  a zero delta row says nothing happened, which the amended AC-15 makes false, and the AC-14
+  test row said the opposite of what Marcin decided; both corrected.
+- One correction of my own process: I first fixed the glossary's "larger than `held`" line on
+  this branch, which `/implement` may not do, and took it back out. It goes through its own docs
+  PR like #32 did.
+- `npm run gate` green: unit 132, integration 29, e2e 53, cold start 3.
+
+## 2026-09-24, verify S-05 (fourth pass, after review fixes round 3), Sonnet
+- `npm run gate` green on the rebased branch: prose clean, unit 132/132, integration 29/29,
+  e2e 53/53, cold start 3/3. Coverage 12/12 at the planned level, no skipped or focused tests,
+  layer boundaries hold.
+- Both round 2 majors confirmed fixed against behaviour on a cold started stack, not only in the
+  diff. The AC-19 read now answers a body whose movements sum to the `held` printed beside them
+  (`reserve` 302 500 000 and `release` -110 000 000 against `held` 192 500 000), which is the
+  one-transaction read doing its job. The published status description now reads "active until
+  the whole invoice has been released; `held` may already be 0 (AC-15)", the amended rule rather
+  than the one it replaced.
+- The new `reason` constraint works end to end: an unknown reason answers `400`.
+- Cold start again on the `API_PORT` override, port 3000 still held by Marcin's other project.
+- Result: PASS.
+
+## 2026-09-24, review S-05 (round 3), Opus
+- REVIEW S-05: 8 findings (0 blockers / 3 majors / 5 minors). Ran on Opus again, for the same
+  reason as every other pass of this slice: the Fable credits are exhausted. Implementation and
+  all three reviews have now run on one model, so the model independence `CLAUDE.md §8` asks for
+  has not held at any point of S-05, and a shared blind spot would have survived every pass.
+- Round 2's second major is genuinely closed. The amended AC-15 rule is stated consistently in
+  the OpenAPI `status` description, the `RESERVATION_ALREADY_RELEASED` message, the domain type
+  comment and the schema comment, and the glossary entry landed in PR #33.
+- Round 2's first major is not closed. `GetReservation` now runs both reads inside
+  `UnitOfWork.run`, but `PrismaUnitOfWork` opens the transaction with `{timeout}` alone, so it
+  runs at PostgreSQL's default read committed, where every statement takes its own snapshot. One
+  transaction is not one snapshot: a release committing between the two statements is still
+  invisible to the first and visible to the second. The precedent the fix cites in its own
+  comment, the ledger invariant helper, passes `{isolationLevel: 'RepeatableRead'}` for exactly
+  this reason.
+- Two majors nobody has looked at in three rounds: the assumptions register. AC-15 was amended
+  and given its Changes row, but A-09 still says a new `releaseId` on a reservation with
+  `held = 0` is a `409`, which is now false, and A-08 still says a release is judged against the
+  remaining `held` rather than against what the invoice has left. Both are assumptions AC-15 and
+  AC-13 reference by id, both contradict shipped behaviour, and neither has a Changes row.
+- Checked and clean: trimming `ReleaseRequest` to the amount alone strands nothing (the type has
+  two references, both in `reservation.ts`) and removes no behaviour, since the three dropped
+  fields were only ever read by `Program.release` from the command; no orphan repository token
+  survives (`PROGRAM_REPOSITORY` is the only one left and predates this slice); the new
+  `capacity_movements_reason_known` CHECK agrees exactly with what the domain can produce
+  (`ReleaseReason` is `repaid | cancelled`, null on every other kind); and moving `GetReservation`
+  into a transaction changed nothing it can throw, since Prisma rolls back and rethrows the
+  domain error unchanged.
+- INV-02 under two parallel requests: the critical section is the program row lock taken by
+  `lockById` (`FOR UPDATE`) before the reservation is read, so two releases on one reservation
+  serialise and the second reads the first's committed `released_invoice_amount`. The partial
+  unique index on `(reservation_id, release_id)` and the `reservations_released_within_invoice`
+  CHECK are the backstop under the lock. The invariant holds.
+- Full list of findings, most severe first:
+- [major] [spec] `api/src/modules/capacity/infrastructure/persistence/prisma-unit-of-work.ts:26`
+  and `api/src/modules/capacity/application/get-reservation.query.ts:18`: the transaction is
+  opened with no `isolationLevel`, so it is read committed and each statement re-snapshots. The
+  two reads of `GetReservation` can still disagree, so AC-19 can answer a body whose movements do
+  not sum to the `held` printed beside them. The comment claims parity with
+  `api/test/support/ledger-invariants.ts:59`, which is repeatable read. Round 2's major is not
+  closed; the write paths are unaffected because they lock the program row first.
+- [major] [spec] `wiki/spec/assumptions.md:260` (A-09): "a new `releaseId` on a reservation with
+  `held = 0` is `409 RESERVATION_ALREADY_RELEASED`". The service answers `200` for exactly that
+  case when the invoice still owes (`reservation.ts:153`, `releases.e2e-test.ts:217`). AC-15's
+  amendment was never carried to the assumption AC-15 and AC-16 both reference, and the
+  assumptions `## Changes` table has no row for it. `/spec` work, as C2 was.
+- [major] [spec] `wiki/spec/assumptions.md:236` and `:240` (A-08): "Several releases may follow
+  until `held` is zero" and "A release larger than the remaining `held` is
+  `422 RELEASE_EXCEEDS_HELD`". The code judges against the remaining invoice amount
+  (`reservation.ts:179`), which is ADR-0009 and what the glossary was corrected to say in PR #33.
+  The register still states the superseded rule and has no Changes row.
+- [minor] [standards] `api/src/modules/capacity/domain/reservation.test.ts:54` and `:201`,
+  `api/src/modules/capacity/application/release-capacity.use-case.test.ts:156`, and
+  `wiki/slices/S-05-releases.md:56`: four more statements of the rule the AC-15 amendment
+  removed, in test names and in the slice's own Scope ("once nothing is held", "holds nothing",
+  "`held.isZero()` before the call throws `ReservationAlreadyReleased`"). Round 2 found four and
+  fixed four; these are the ones it did not reach, and `reservation.test.ts:201` sits directly
+  above the sibling at `:240` that proves the opposite.
+- [minor] [standards] `api/prisma/migrations/20260923120000_releases/migration.sql`: the
+  migration was edited in 78240f2 after being created and applied in 2e6eabc. `prisma migrate
+  deploy` (`api/package.json:22`) refuses a migration whose checksum changed after it was
+  applied, so any database that ran this branch before the fix round now fails to migrate.
+  Testcontainers and the cold start always start empty, so no gate can see it.
+- [minor] [standards] `api/prisma/migrations/20260923120000_releases/migration.sql:27`: the new
+  `capacity_movements_reason_known` CHECK has no test, and neither has
+  `reservations_released_within_invoice`, while their sibling `reservations_rate_positive` does
+  (`prisma-capacity.integration-test.ts:272`). A constraint that wrongly excluded `cancelled`
+  would fail the AC-17 e2e, but one that is too permissive, or a `toReleaseReason`
+  (`mappers.ts:54`) that stops refusing, would not.
+- [minor] [spec] `api/src/modules/capacity/application/get-reservation.query.ts:25`: a `GET` of a
+  reservation on a program the treasury never announced answers `RESERVATION_NOT_FOUND`, while a
+  `POST` of a release on the same unknown program answers `PROGRAM_NOT_FOUND`, which
+  `programs.controller.ts:85` publishes as the rule. The query never loads the program, so
+  Marcin's AC-14 decision of 2026-09-24 was not carried to the read. Both are `404` and AC-19 is
+  silent, so nothing on the wire is wrong.
+- [minor] [standards] `api/test/releases.e2e-test.ts:166`: the `[AC-13]` test asserts that
+  availability did not move but not the "no movement appended" its row in the slice file names
+  (`wiki/slices/S-05-releases.md:159`). A `release` row with `deltaHeld` 0 would pass both the
+  assertion and the `afterEach` ledger invariants, so the criterion is proved one notch weaker
+  than it is written. AC-16's test already does the stronger thing at `:292`.
+
+## 2026-09-24, implement S-05 (review fixes, round 4), Opus
+- Review round 3 found that my round 2 fix did not actually fix anything. I had moved AC-19's
+  two reads into one transaction, but `PrismaUnitOfWork.run` passes only a timeout, so the
+  transaction runs at read committed, where every statement takes its own snapshot. One
+  transaction is not one instant. The review quoted my own comment, which cited the ledger
+  invariant helper as precedent, and that helper sets `RepeatableRead` for exactly this reason.
+- Fixed without disturbing the write path, which is the part that needed care: the port gains
+  `readSnapshot`, a second door that runs at `RepeatableRead`, while `run` stays at read
+  committed on purpose. Raising the write path to repeatable read would make
+  `SELECT ... FOR UPDATE` fail to serialise instead of blocking, and INV-01's parallel
+  reservations would start answering errors rather than queueing.
+- The test proves the property rather than the setting: inside a `readSnapshot`, a committed
+  write from another connection lands between two reads and is not seen, while the row really
+  did change. Checked that it can fail by running the same body through `run`, where it reports
+  `1n` against the expected `100000000n`.
+- Two majors were in the assumptions register, which three rounds of review and four of mine
+  never opened. A-08 still said releases run "until `held` is zero" and that over-release is
+  judged against the remaining `held`; A-09 still said a new `releaseId` on a reservation with
+  `held = 0` is `409`. Both are `/spec` work and go in their own PR; the code already does what
+  ADR-0009 and the amended AC-15 say.
+- Minors taken. The two constraints I had added by editing an already-applied migration are now
+  a migration of their own: editing one changes its checksum, and `prisma migrate deploy` then
+  refuses the whole database, which no gate can see because every test database starts empty.
+  The `releases` migration is back to the byte it was applied as, checked against its creating
+  commit. Both constraints now have tests. `GetReservation` answers `PROGRAM_NOT_FOUND` for an
+  unannounced program, as the release route does and as the controller publishes, instead of
+  telling a client two different things about one state. AC-13 asserts that a refused release
+  appends no movement, which its slice row always claimed. Four more statements of the removed
+  AC-15 rule, in test names and the slice's Scope, now say the rule that holds.
+- `npm run gate` green: unit 132, integration 32, e2e 53, cold start 3.
+
+## 2026-09-25, verify S-05 (fifth pass, after review fixes round 4), Sonnet
+- `npm run gate` green on the rebased branch: prose clean, unit 132/132, integration 32/32,
+  e2e 53/53, cold start 3/3. Coverage 12/12 at the planned level, no skipped or focused tests.
+- Swept the whole tree for statements of the rule AC-15 replaced, in `api/src`, `wiki/spec` and
+  the slice file: none left. That sweep is what the last three rounds kept finding one more of,
+  so it is worth doing as a check rather than as a fix.
+- Both round 3 majors confirmed live on a cold started stack: AC-19's movements sum exactly to
+  the `held` on the same body, and the release route and the read route now answer the same code
+  for the same state (`PROGRAM_NOT_FOUND` for an unannounced program), rather than telling a
+  client two different things.
+- A-08 and A-09 landed in #34, so the register, the glossary and the criteria now agree with
+  ADR-0009 and with each other.
+- Result: PASS.
+
+## 2026-09-25, review S-05 (round 4), Opus
+- Ran on Opus again, for the same reason as every other pass of this slice: the Fable credits
+  are exhausted. Four rounds of review and five of implementation have now all run on one model,
+  so a shared blind spot has had nothing to catch it.
+- REVIEW S-05: 6 findings (0 blockers / 1 major / 5 minors).
+- Round 3's three majors are genuinely closed. `readSnapshot` runs at `RepeatableRead` and `run`
+  stays at read committed, which is the right split: the write path keeps blocking on
+  `SELECT ... FOR UPDATE` (INV-01) and the read path gets one instant. The integration case at
+  `prisma-capacity.integration-test.ts:374` proves the property rather than the setting, with a
+  committed write from another connection landing between two reads inside the snapshot, and it
+  checks that the write really happened so it cannot pass for the wrong reason. A-08 and A-09 in
+  the assumptions register now state the rules ADR-0009 and the amended AC-15 actually hold, with
+  their Changes rows.
+- Asked of the newest code specifically. `readSnapshot` cannot deadlock or fail to serialise:
+  it takes no lock and writes nothing, and a read-only `RepeatableRead` transaction in Postgres
+  has no conflict to lose. The migration split is sound: `20260923120000_releases` is byte
+  identical to its creating commit (checked against de6e10f) and `20260924120000_release_constraints`
+  adds only CHECK constraints, which the Prisma schema cannot express in either file, so schema
+  and migrations still agree and both apply in order on an empty database. The extra
+  `programs.findById` in `GetReservation` is one primary key lookup inside the same snapshot and
+  introduces no new failure: it can answer `PROGRAM_NOT_FOUND` (404) or the mapper errors every
+  other program read already carries.
+- The major is the shape the last round found, one file further out. The AC-15 amendment of
+  2026-09-24 changed what `closed` means, and AC-27 in the criteria still reads `held` 0 and
+  status closed as one statement. With `status` derived from the remaining invoice amount they
+  are now two, and nothing records how a reconciliation adjustment is meant to reach the second.
+  The criteria carry a Changes row for AC-15 and none for AC-27, and this slice's hand-off note
+  to S-06 talks about `releasedInvoiceAmount` on snapshot created reservations but not about a
+  snapshot closing one that exists. It is `/spec` work, like A-08 and A-09 were, not a defect in
+  the code.
+- Minors: the read route publishes only `RESERVATION_NOT_FOUND` on its 404 although the round 3
+  fix deliberately made it answer `PROGRAM_NOT_FOUND` too, and the work-log entry for that fix
+  claims the controller publishes it; the mapper's comment still points at the `releases`
+  migration for a constraint that now lives in `release_constraints`; the in-memory unit of work
+  claims a rollback it does not perform on aggregate state, which matters from this slice on
+  because `ReleaseCapacity` is the first use case to mutate a loaded aggregate; `readSnapshot`
+  hands out the full write repositories, which is the one way the isolation split could be
+  turned back into the bug it was created to remove; and the INV-02 property test catches
+  over-release attempts without ever asserting that any occurred.
+- No code defect was found in the release path itself. The critical section for INV-02 and INV-03
+  is the program row lock, taken before the reservation and the ledger are read, and a release
+  only lowers `reserved`, so two parallel releases on one program are ordered and neither can
+  double apply: the duplicate check reads the same ledger rows behind that lock, with the partial
+  unique index as the backstop.
+
+## 2026-09-25, implement S-05 (review fixes, round 5), Opus
+- Review round 4 passed the code and would not send anything back to `/implement`; its one major
+  is AC-27, a requirement of S-06 whose meaning our own AC-15 amendment changed. That is `/spec`
+  work and goes in its own PR. Marcin decided it: a reconciliation adjustment that drops a
+  reservation also takes `releasedInvoiceAmount` to the whole invoice, so `held` 0 and status
+  closed coincide again, which is what a snapshot saying "this reservation is gone" means.
+- The five minors are closed here. The read route publishes both codes it can answer, not just
+  one. The `toReleaseReason` comment cites `release_constraints`, which is where the CHECK
+  actually went after the migration split. The in-memory `run` no longer claims to be a
+  rollback: it restores the collections but hands back the same aggregates, and S-05 is the
+  first slice whose use case mutates a loaded one in place, so a "wrote nothing" assertion
+  against the fake is weaker than the same assertion against the database, and the comment now
+  says so.
+- `readSnapshot` is narrowed to a `CapacityReads` of exactly the three reads it needs, instead of
+  taking the full repositories and warning in prose that the write path must not run there. The
+  type now prevents what the comment used to ask for.
+- INV-02's property test asserts it reached the boundary at all: over-release and
+  already-released outcomes are counted, and the test fails if the random amounts stop ever
+  asking for too much. Without it the suite could quietly cover less and stay green, which is
+  the same defect class as the AC-16 tests round 1 found.
+- `npm run gate` green: unit 132, integration 32, e2e 53, cold start 3.
+
+## 2026-09-25, ship S-05, Sonnet
+- Precondition with one caveat, stated rather than glossed. `CLAUDE.md` wants the latest review
+  to have zero majors; review round 4 had one, AC-27, and that major is fixed and merged in #35
+  rather than closed by a fifth review round. Marcin decided to ship on that basis: the round 4
+  report says in as many words that the code would pass and that nothing in `api/`, `api/test/`
+  or the migrations would go back to `/implement`, and the one finding was a requirement of
+  S-06 whose meaning this slice's own AC-15 amendment changed.
+- `wiki/plan/plan.md`: the twelve S-05 rows are `done` with their test files, and eight `extra`
+  rows cover the supporting tests, including the three storage constraints and the snapshot
+  read. Commit column waits for the merge commit.
+- README gains the release route, the full release, the repeated `releaseId` and the reservation
+  read, plus the four new codes, and loses the stale line saying cross-currency arrives in S-04.
+  Every new example run literally on a fresh stack: the partial release left `held` 192 500 000
+  and status `active`, the full one 0 and `closed`, the repeat answered
+  `RELEASE_ALREADY_PROCESSED` with `heldAfter` 192 500 000, and the read showed the three
+  movements.
+- ADR-0009 was accepted before the slice; no ADR to finalise. No assumption is missing from the
+  register: A-08 and A-09 were amended in #34 during the slice.
+- Changelog row, slice status `done`, slice index and Home updated; Home names S-06 next and
+  records that ADR-0010 and ADR-0011 are both still `proposed`, and that ADR-0011 now also owes
+  the rule S-05 put on it.
+- Four review rounds, 39 findings. Worth carrying forward rather than filing away: two of them
+  were ordinary client input answering `500`, one was a regression a fix round introduced that
+  only a live check caught, and the last three majors were in the wiki rather than the code. No
+  round had the model independence `CLAUDE.md §8` asks for, because the Fable credits were
+  exhausted from the second round of S-04 onwards.

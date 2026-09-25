@@ -1,4 +1,5 @@
 import {CapacityMovement} from './capacity-movement';
+import type {ReleaseReason} from './reservation';
 import {CapacityExceededError, CurrencyMismatchError} from './errors';
 import {Money} from './money';
 
@@ -14,6 +15,17 @@ export interface ProgramState {
 export type SetLimitOutcome =
   | {readonly kind: 'applied'; readonly movement: CapacityMovement}
   | {readonly kind: 'stale'; readonly appliedEventTime: Date};
+
+/** What a release needs from the caller to become a ledger row (ADR-0009). */
+export interface ReleaseMovementRequest {
+  /** Negative minor units of the program currency: a release lowers `reserved`. */
+  readonly deltaHeld: bigint;
+  readonly clientId: string;
+  readonly reservationId: string;
+  readonly releaseId: string;
+  readonly reason: ReleaseReason;
+  readonly occurredAt: Date;
+}
 
 /**
  * A pot of money the treasury sets aside (glossary). The treasury owns its limit and currency
@@ -107,7 +119,41 @@ export class Program {
     return {
       ...this.movement('reserve', {clientId}, occurredAt),
       reservationId,
-      deltaHeld: held,
+      deltaHeld: held.amount,
+    };
+  }
+
+  /**
+   * A-08: a release gives capacity back. `deltaHeld` is negative minor units of this program's
+   * currency (ADR-0009); `Money.of` refuses a `reserved` that would go below zero, which is
+   * INV-03 holding at the one place that lowers it. An overcommitted program may stop being
+   * overcommitted here, with no special case: `available` is the same formula either way.
+   */
+  release(request: ReleaseMovementRequest): CapacityMovement {
+    // A release gives capacity back or leaves it where it is, and never takes more than the
+    // program holds. A delta of zero is legitimate and not rare: once a remainder has rounded
+    // `held` to zero, closing the invoice gives nothing back but is still a repayment the
+    // ledger must record (AC-15, amended). Only a delta that raises `held` is a broken caller,
+    // and it is refused here rather than reaching `Money.of` as a bare range error, which
+    // would leave the client a 500.
+    if (request.deltaHeld > 0n) {
+      throw new RangeError(`Release ${request.releaseId} would raise held by ${request.deltaHeld}`);
+    }
+    if (this.reserved.amount + request.deltaHeld < 0n) {
+      throw new RangeError(
+        `Release ${request.releaseId} would take reserved of ${this.programId} below zero`,
+      );
+    }
+    this.state = {
+      ...this.state,
+      reserved: Money.of(this.reserved.amount + request.deltaHeld, this.currency),
+    };
+    return {
+      ...this.movement('release', {clientId: request.clientId}, request.occurredAt),
+      reservationId: request.reservationId,
+      deltaHeld: request.deltaHeld,
+      releaseId: request.releaseId,
+      reason: request.reason,
     };
   }
 
@@ -127,7 +173,9 @@ export class Program {
       kind,
       programId: this.programId,
       reservationId: null,
-      deltaHeld: Money.zero(this.currency),
+      deltaHeld: 0n,
+      releaseId: null,
+      reason: null,
       limitAfter: this.limit,
       reservedAfter: this.reserved,
       availableAfter: this.available,

@@ -27,11 +27,8 @@ export class Ledger {
     for (const [rowIndex, row] of movements.entries()) {
       const reason = explainBreak(previous, row);
       if (reason !== null) return {ok: false, rowIndex, reason};
-      if (row.reservationId !== null) {
-        const before =
-          heldByReservation.get(row.reservationId) ?? Money.zero(row.deltaHeld.currency);
-        heldByReservation.set(row.reservationId, before.add(row.deltaHeld));
-      }
+      const heldBreak = applyToHeld(heldByReservation, row);
+      if (heldBreak !== null) return {ok: false, rowIndex, reason: heldBreak};
       previous = row;
     }
 
@@ -48,6 +45,24 @@ export class Ledger {
   }
 }
 
+/**
+ * Adds a row's signed delta to what its reservation holds. A chain that would take a
+ * reservation below zero is broken, not an exception: the helper wants to name the row
+ * (INV-02).
+ */
+const applyToHeld = (
+  heldByReservation: Map<string, Money>,
+  row: CapacityMovement,
+): string | null => {
+  if (row.reservationId === null) return null;
+  const currency = row.limitAfter.currency;
+  const before = heldByReservation.get(row.reservationId) ?? Money.zero(currency);
+  const after = before.amount + row.deltaHeld;
+  if (after < 0n) return `held of ${row.reservationId} would be ${after}`;
+  heldByReservation.set(row.reservationId, Money.of(after, currency));
+  return null;
+};
+
 const explainBreak = (
   previous: CapacityMovement | undefined,
   row: CapacityMovement,
@@ -56,9 +71,9 @@ const explainBreak = (
     previous !== undefined && previous.limitAfter.currency === row.limitAfter.currency;
   // A re-denomination (ADR-0007) starts a fresh chain in the new currency with nothing held.
   const reservedBefore = sameCurrency ? previous.reservedAfter.amount : 0n;
-  const expectedReserved = reservedBefore + row.deltaHeld.amount;
+  const expectedReserved = reservedBefore + row.deltaHeld;
   if (row.reservedAfter.amount !== expectedReserved) {
-    return `reserved_after ${row.reservedAfter.amount} is not the previous ${reservedBefore} plus delta_held ${row.deltaHeld.amount}`;
+    return `reserved_after ${row.reservedAfter.amount} is not the previous ${reservedBefore} plus delta_held ${row.deltaHeld}`;
   }
 
   const gap = row.limitAfter.amount - row.reservedAfter.amount;

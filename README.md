@@ -68,8 +68,7 @@ healthy. To play the treasury yourself, publish another:
 npm run dev:treasury -- capacity-update --program PRG-2 --currency EUR --limit 500000000
 ```
 
-Reserve capacity for an invoice. The amount is in minor units of the invoice currency, and for
-now the invoice must be in the program currency (cross-currency arrives in S-04):
+Reserve capacity for an invoice. The amount is in minor units of the invoice currency:
 
 ```bash
 curl -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
@@ -95,14 +94,51 @@ curl -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
 `"1.1"` for a sent `"1.10"` and `"1"` for a same-currency reservation (A-10). Send no rate
 within one currency; send one across two, or the answer is `400` naming `rate`.
 
+### Release it
+
+A repayment gives capacity back. The amount is in invoice currency and `releaseId` is the
+client's identifier of that repayment, so sending it twice is the same repayment twice:
+
+```bash
+curl -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -d '{"releaseId":"R-1","amount":100000000}' \
+  http://localhost:3000/programs/PRG-1/reservations/INV-B/releases
+```
+
+`200` with the reservation: 1 000 000.00 EUR of the invoice released, so `held` falls from
+3 025 000.00 to 1 925 000.00 USD and availability grows by the difference. Leave `amount` out to
+release everything the invoice has left, which closes the reservation:
+
+```bash
+curl -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+  -d '{"releaseId":"R-2"}' \
+  http://localhost:3000/programs/PRG-1/reservations/INV-B/releases
+```
+
+`held` is derived from what the invoice has left rather than decremented per release, so
+instalments that do not divide evenly by the rate still close at exactly zero (ADR-0009). Add
+`"reason":"cancelled"` if the invoice was not paid after all; it is recorded and changes no rule.
+Sending `R-1` again answers `409 RELEASE_ALREADY_PROCESSED` with what that release did, so a
+retry is never a second repayment.
+
+Read a reservation with the movements that explain it:
+
+```bash
+curl -H "Authorization: Bearer $TOKEN" http://localhost:3000/programs/PRG-1/reservations/INV-B
+```
+
 Refusals carry a stable `code` in the body:
 
 | Status | `code` | When |
 |---|---|---|
 | `400` | `VALIDATION_FAILED` | a field is missing or malformed, or `rate` does not fit the two currencies; `details` names it |
 | `404` | `PROGRAM_NOT_FOUND` | the treasury never announced the program |
+| `404` | `RESERVATION_NOT_FOUND` | the program holds no reservation for that invoice |
 | `409` | `RESERVATION_ALREADY_EXISTS` | the invoice already has a reservation; the original is in the body |
+| `409` | `RESERVATION_ALREADY_RELEASED` | the whole invoice has already been released |
+| `409` | `RELEASE_ALREADY_PROCESSED` | that `releaseId` was applied before; `appliedAt` and `heldAfter` say what it did |
 | `422` | `CAPACITY_EXCEEDED` | the amount is more than `available`, which the body carries |
+| `422` | `RELEASE_EXCEEDS_HELD` | the release is more than the invoice has left; the body carries `held` and `remainingInvoiceAmount` |
 
 Without a token, or with an expired or wrongly signed one, every business route answers `401`.
 The token command signs with `JWT_SECRET`, or with the development secret compose starts the

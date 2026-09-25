@@ -1,8 +1,26 @@
 import {ApiProperty} from '@nestjs/swagger';
-import {IsInt, IsString, Length, Matches, Max, Min, ValidateIf} from 'class-validator';
-import {INVOICE_ID_MAX_LENGTH} from '../../domain/identifier-limits';
-import {ReservationSource, ReservationStatus} from '../../domain/reservation';
+import {IsIn, IsInt, IsString, Length, Matches, Max, Min, ValidateIf} from 'class-validator';
+import {
+  INVOICE_ID_MAX_LENGTH,
+  PROGRAM_ID_MAX_LENGTH,
+  RELEASE_ID_MAX_LENGTH,
+} from '../../domain/identifier-limits';
+import {CapacityMovementKind} from '../../domain/capacity-movement';
+import {ReleaseReason, ReservationSource, ReservationStatus} from '../../domain/reservation';
 import {IsCurrencyCode} from '../currency-code';
+
+/** A-07: a reservation is named by its invoice id within a program, never by its surrogate. */
+export class ReservationParams {
+  @ApiProperty({example: 'PRG-1', description: 'The treasury identifier of the program.'})
+  @IsString()
+  @Length(1, PROGRAM_ID_MAX_LENGTH)
+  programId!: string;
+
+  @ApiProperty({example: 'INV-B', description: "The client's identifier of the invoice."})
+  @IsString()
+  @Length(1, INVOICE_ID_MAX_LENGTH)
+  invoiceId!: string;
+}
 
 /** A-07, A-10: what a client sends to reserve. `rate` is required only across currencies (A-02). */
 export class ReserveRequestDto {
@@ -89,9 +107,17 @@ export class ReservationDto {
   rate!: string;
 
   @ApiProperty({
+    type: 'integer',
+    example: 0,
+    description: 'How much of the invoice has been released, in minor units of invoiceCurrency.',
+  })
+  releasedInvoiceAmount!: number;
+
+  @ApiProperty({
     enum: ['active', 'closed'],
     example: 'active',
-    description: 'active while held > 0.',
+    description:
+      'active until the whole invoice has been released; `held` may already be 0 (AC-15).',
   })
   status!: ReservationStatus;
 
@@ -104,4 +130,72 @@ export class ReservationDto {
 
   @ApiProperty({type: String, format: 'date-time', example: '2026-09-21T10:10:00.000Z'})
   createdAt!: string;
+}
+
+/** A-08, A-09: what a client sends to release. The amount is in invoice currency (decision 1). */
+export class ReleaseRequestDto {
+  @ApiProperty({example: 'R-1', description: "The client's identifier of one repayment."})
+  @IsString()
+  @Length(1, RELEASE_ID_MAX_LENGTH)
+  releaseId!: string;
+
+  @ApiProperty({
+    type: 'integer',
+    required: false,
+    example: 100_000_000,
+    description:
+      'Minor units of invoiceCurrency. Absent releases everything the invoice has left (A-08).',
+  })
+  // ValidateIf rather than IsOptional, for the reason spelled out on `rate` above: IsOptional
+  // skips validation for `null` as well as `undefined`, and the controller would then convert
+  // an explicit null, which is a 500 where the client deserves a 400.
+  @ValidateIf((dto: ReleaseRequestDto) => dto.amount !== undefined)
+  @IsInt()
+  @Min(1)
+  @Max(Number.MAX_SAFE_INTEGER)
+  amount?: number;
+
+  @ApiProperty({
+    enum: ['repaid', 'cancelled'],
+    required: false,
+    example: 'repaid',
+    description: 'Why the release happened; defaults to repaid and changes no rule (A-08).',
+  })
+  @ValidateIf((dto: ReleaseRequestDto) => dto.reason !== undefined)
+  @IsIn(['repaid', 'cancelled'])
+  reason?: ReleaseReason;
+}
+
+/** One row of the ledger as a client reads it (AC-19). */
+export class CapacityMovementDto {
+  @ApiProperty({enum: ['limit_set', 'reserve', 'release', 'adjustment'], example: 'release'})
+  kind!: CapacityMovementKind;
+
+  @ApiProperty({
+    type: 'integer',
+    example: -110_000_000,
+    description: 'What this movement did to held, in program currency minor units. Signed.',
+  })
+  amount!: number;
+
+  @ApiProperty({type: String, nullable: true, example: 'repaid'})
+  reason!: ReleaseReason | null;
+
+  @ApiProperty({type: String, nullable: true, example: 'R-1'})
+  releaseId!: string | null;
+
+  @ApiProperty({type: String, nullable: true, example: null})
+  messageId!: string | null;
+
+  @ApiProperty({type: String, nullable: true, example: 'demo-client'})
+  clientId!: string | null;
+
+  @ApiProperty({type: String, format: 'date-time', example: '2026-09-21T10:10:00.000Z'})
+  occurredAt!: string;
+}
+
+/** AC-19: the reservation with the movements that explain it. */
+export class ReservationWithMovementsDto extends ReservationDto {
+  @ApiProperty({type: [CapacityMovementDto]})
+  movements!: CapacityMovementDto[];
 }

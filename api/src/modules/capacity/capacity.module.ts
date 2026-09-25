@@ -4,6 +4,8 @@ import {PersistenceModule} from '../../persistence/persistence.module';
 import {PrismaService} from '../../persistence/prisma.service';
 import {ApplyCapacityUpdate} from './application/apply-capacity-update.use-case';
 import {GetAvailability} from './application/get-availability.query';
+import {GetReservation} from './application/get-reservation.query';
+import {ReleaseCapacity} from './application/release-capacity.use-case';
 import {RejectTreasuryMessage} from './application/reject-treasury-message.use-case';
 import {ReserveCapacity} from './application/reserve-capacity.use-case';
 import {CLOCK} from './domain/ports/clock';
@@ -33,7 +35,9 @@ import {SystemClock} from './infrastructure/system-clock';
     ApplyCapacityUpdate,
     RejectTreasuryMessage,
     ReserveCapacity,
+    ReleaseCapacity,
     GetAvailability,
+    GetReservation,
     TreasuryCapacityConsumer,
   ],
 })

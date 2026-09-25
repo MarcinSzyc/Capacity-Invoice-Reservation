@@ -18,4 +18,17 @@ export class PrismaReservationRepository implements ReservationRepository {
       client.reservation.create({data: toReservationColumns(reservation)}),
     );
   }
+
+  /** A release moves `held` and `releasedInvoiceAmount`; everything else is fixed for life. */
+  async save(reservation: Reservation): Promise<void> {
+    await this.db.withClient((client) =>
+      client.reservation.update({
+        where: {id: reservation.reservationId},
+        data: {
+          held: reservation.held.amount,
+          releasedInvoiceAmount: reservation.releasedInvoiceAmount.amount,
+        },
+      }),
+    );
+  }
 }

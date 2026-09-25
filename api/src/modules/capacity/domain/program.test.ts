@@ -51,11 +51,13 @@ describe('Program', () => {
       kind: 'limit_set',
       programId: PROGRAM_ID,
       reservationId: null,
-      deltaHeld: Money.zero(EUR),
+      deltaHeld: 0n,
       limitAfter: FIVE_MILLION_EUR,
       reservedAfter: Money.zero(EUR),
       availableAfter: FIVE_MILLION_EUR,
       attribution: {messageId: MESSAGE_1},
+      releaseId: null,
+      reason: null,
       occurredAt: AT_10_00,
     });
   });
@@ -142,11 +144,13 @@ describe('Program', () => {
       kind: 'reserve',
       programId: PROGRAM_ID,
       reservationId: RESERVATION_ID,
-      deltaHeld: held,
+      deltaHeld: held.amount,
       limitAfter: FIVE_MILLION_EUR,
       reservedAfter: held,
       availableAfter: Money.of(380_000_000n, EUR),
       attribution: {clientId: CLIENT},
+      releaseId: null,
+      reason: null,
       occurredAt: AT_10_10,
     });
   });
@@ -201,5 +205,57 @@ describe('Program', () => {
       CapacityExceededError,
     );
     expect(program.reserved).toEqual(Money.of(400_000_000n, EUR));
+  });
+
+  it('should give capacity back on a release and record a release movement with its id and reason', () => {
+    const program = Program.announce(PROGRAM_ID, EUR);
+    program.setLimit(Money.of(1_000_000_000n, EUR), AT_10_00, 'm-1');
+    const held = Money.of(400_000_000n, EUR);
+    program.reserve(held, CLIENT, RESERVATION_ID, AT_10_10);
+
+    const movement = program.release({
+      deltaHeld: -150_000_000n,
+      clientId: CLIENT,
+      reservationId: RESERVATION_ID,
+      releaseId: 'R-1',
+      reason: 'repaid',
+      occurredAt: AT_10_10,
+    });
+
+    expect(program.reserved).toEqual(Money.of(250_000_000n, EUR));
+    expect(program.available).toEqual(Money.of(750_000_000n, EUR));
+    expect(movement).toEqual({
+      kind: 'release',
+      programId: PROGRAM_ID,
+      reservationId: RESERVATION_ID,
+      deltaHeld: -150_000_000n,
+      limitAfter: Money.of(1_000_000_000n, EUR),
+      reservedAfter: Money.of(250_000_000n, EUR),
+      availableAfter: Money.of(750_000_000n, EUR),
+      attribution: {clientId: CLIENT},
+      releaseId: 'R-1',
+      reason: 'repaid',
+      occurredAt: AT_10_10,
+    });
+  });
+
+  it('should let an overcommitted program stop being overcommitted when capacity comes back', () => {
+    const program = Program.announce(PROGRAM_ID, EUR);
+    program.setLimit(Money.of(1_000_000_000n, EUR), AT_10_00, 'm-1');
+    program.reserve(Money.of(800_000_000n, EUR), CLIENT, RESERVATION_ID, AT_10_10);
+    program.setLimit(Money.of(500_000_000n, EUR), AT_10_10, 'm-2');
+    expect(program.overcommitted).toBe(true);
+
+    program.release({
+      deltaHeld: -400_000_000n,
+      clientId: CLIENT,
+      reservationId: RESERVATION_ID,
+      releaseId: 'R-1',
+      reason: 'repaid',
+      occurredAt: AT_10_10,
+    });
+
+    expect(program.overcommitted).toBe(false);
+    expect(program.available).toEqual(Money.of(100_000_000n, EUR));
   });
 });
