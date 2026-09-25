@@ -189,8 +189,9 @@ unless they fall inside the keep window. A listed reservation is compared with w
 this moment, so a client's release after it stands. A reservation the snapshot creates takes
 this moment as its `createdAt` (A-12).
 
-**Keep window.** How long before a snapshot's `asOf` a reservation must have been created for
-that snapshot to release it by omission, default 30 seconds (ADR-0010). It exists because our
+**Keep window.** How long before a snapshot's `asOf` a client reservation must have been
+created for that snapshot to release it by omission, default 30 seconds (ADR-0010). A reservation
+a snapshot created has none: its `createdAt` is already on the treasury's clock. It exists because our
 clock and the treasury's are compared: with a snapshot of 18:00:00, a reservation created at
 17:59:45 and not listed is kept, and one created at 17:59:00 is released. Keeping wrongly is fixed
 by the next snapshot; releasing wrongly frees capacity another invoice may take.

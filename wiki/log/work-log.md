@@ -3221,3 +3221,28 @@ Findings, most severe first:
     "the consumer gets one classification function", which belongs to the declined Option 3.
   - (minor, standards) `S-06-reconciliation-snapshots.md:7`: the header says the slice was
     "Implemented on Fable", while its Log and the work-log say Opus.
+
+## 2026-09-25, implement and spec S-06 (review fixes, round 2), Opus
+- Blocker, decided by Marcin after a walk through the case: rather than removing the exception
+  that let a snapshot correct a reservation it created at the same `asOf`, the rule is made whole
+  and written down. A reservation a snapshot created is dated by the treasury's clock, so a later
+  snapshot judges it with no keep window, listed or omitted, including one of the same moment,
+  which A-13 clause 7 already says supersedes the first. Two tests, seen red (both reservations
+  stayed active): released by a same-moment snapshot that omits it, and by one ten seconds later.
+  Client reservations keep the window and INV-06 exactly as before. ADR-0010 carries a dated
+  amendment, A-12 a sentence and a Changes row, and the glossary's `Keep window` says it is for
+  client reservations. The mislabelled `kept_within_window` note goes with it.
+- Major, the retry tests stubbed our own use case: replaced by a `FailingUnitOfWork`, a fake of the
+  port that throws a set number of times, so the use case under it is the real one.
+- Minor, `reserved` past the exact JSON bound through reservations kept beside the list:
+  `Program.adjust` refuses it (unit test, seen red), and ADR-0013 sets such a snapshot aside instead
+  of availability answering 500.
+- Minor, reopening at the bound: the closing movement of every closed reservation comes from one
+  `DISTINCT ON` read instead of one query each. The worst case the reviewer measured at 7.1 s now
+  takes 2.7 s, and is a third bound test beside creating (5.2 s) and correcting (2.7 s).
+- Minor, ADR-0013's Consequences named the declined option's classifier; corrected. Minor, the
+  slice header said Fable; corrected.
+- Not changed, with the reason: parsing stays outside the three attempts. The reviewer found no
+  input that reaches a throw there; round 1's crash was a validation gap, closed by validating every
+  entry as an object, and the mapping after validation reads only validated fields. Handling a case
+  no input can reach is what `CLAUDE.md §3` rules out.

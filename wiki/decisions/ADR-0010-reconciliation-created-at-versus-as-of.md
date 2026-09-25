@@ -85,6 +85,15 @@ Option 2 with a 30 s default window and the `Clock` port, as recommended in the 
   the port, so the tests use the criteria's own times through the API.
 
 
+Amended 2026-09-25, from review round 2 of S-06, decided by Marcin. The window exists because two
+clocks are compared: a client reservation's `createdAt` is ours, `asOf` is the treasury's. A
+reservation a snapshot created carries the treasury's own moment as `createdAt` (ADR-0011), so for
+it there is no second clock and no window. A later snapshot compares it on the treasury's time
+alone: created at or before `asOf`, it is corrected when listed and released when omitted, with no
+window, including by a second snapshot of the very same moment, which A-13 clause 7 already says
+supersedes the first. The rule "created at or after `asOf` is untouched" keeps applying to client
+reservations exactly as decided above.
+
 ## Consequences
 
 Configuration gains `RECONCILIATION_KEEP_WINDOW_SECONDS`. A-12 should mention the window when

@@ -100,6 +100,6 @@ would stall it until a deploy.
 A-13 clause 4 gains a sentence: a message whose handling fails three times in a row, while the
 database and the broker can record that, is treated as unprocessable (Changes row via `/spec`).
 A flapping database that is back only for the moment of recording can set a valid message aside;
-it is then in the dead-letter topic with its error and can be re-published. The consumer gets one classification function, which is
-the thing to review when a new infrastructure error appears. The glossary's `Rejected` entry says
+it is then in the dead-letter topic with its error and can be re-published. The consumer counts attempts in the handler and keeps each
+failed one in `treasury_message_failures`; there is no list of error classes to maintain. The glossary's `Rejected` entry says
 a rejection can also come from an unexpected failure, with the error recorded.
