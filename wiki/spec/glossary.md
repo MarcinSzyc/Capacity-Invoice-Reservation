@@ -57,7 +57,7 @@ the client approves it for early payment until it is fully repaid. Exactly one p
 |---|---|---|---|
 | `invoiceAmount` | invoice | the invoice amount as the client sent it | never |
 | `reservedAmount` | program | what the reservation took from the limit at creation, after conversion | never |
-| `held` | program | how much of `reservedAmount` is still occupying the limit | decreases with each release |
+| `held` | program | how much of the reservation is still occupying the limit | decreases with each release; a reconciliation adjustment may move it either way |
 
 Example. Invoice of 1 100 000 EUR in a USD program at rate 1.10:
 
@@ -68,8 +68,10 @@ Example. Invoice of 1 100 000 EUR in a USD program at rate 1.10:
 | release the rest | 1 100 000 EUR | 1 210 000 USD | 0 USD |
 
 **Held.** See the table: the part of a reservation still counted against the limit,
-in program currency. Starts equal to `reservedAmount`, ends at zero. Can always be
-recomputed from the ledger as reserve minus the sum of releases for that invoice.
+in program currency. Starts equal to `reservedAmount`, ends at zero. It is what is left of the
+invoice converted at the stored rate, plus the `heldCorrection` a snapshot may have set (ADR-0009,
+ADR-0012). Can always be recomputed from the ledger as the reserve plus the signed amounts of
+the releases and adjustments of that invoice.
 
 **Active reservation, closed reservation.** A reservation is closed when the whole invoice
 amount has been released, so nothing is left to release; until then it is active. Usually that
@@ -77,7 +79,8 @@ is the same moment `held` reaches zero, but not always: `held` is the remaining 
 converted at the stored rate, so a remainder worth less than half a minor unit of the program
 currency rounds to zero while the invoice still owes. Such a reservation is active with `held`
 zero: it occupies none of the limit, and it can still be released to the end (AC-15, amended
-2026-09-24).
+2026-09-24). A snapshot can close a reservation (it omits it) and can reopen one it lists, when
+the reservation was closed at or before the snapshot's `asOf` (A-12, ADR-0012).
 
 **Reservation source (`source`).** Who brought a reservation into existence. Exactly two
 values: `client`, when a client reserved the invoice over HTTP (the reserve movement then
@@ -127,6 +130,14 @@ released so far, in invoice currency and minor units. The number `held` is deriv
 left of the invoice, converted at the stored rate (ADR-0009). A reservation of 2 750 000.00 EUR
 with 1 000 000.00 EUR released has `releasedInvoiceAmount` 100 000 000 and 175 000 000 left.
 
+**Held correction (`heldCorrection`).** The difference a snapshot found between the `held` the
+treasury reported and the `held` the invoice implies, kept on the reservation in program currency
+so that later releases do not undo it. Signed, zero until a snapshot corrects the reservation,
+set rather than added to by each snapshot. Example (AC-29): an invoice of 1 925 000 USD at rate 1
+holds 1 925 000; a snapshot says 1 900 000, so the correction is minus 25 000 and `held` is
+1 900 000. A release of 900 000 then leaves 1 025 000 of the invoice, minus 25 000, so `held` is
+1 000 000. Once the whole invoice is released `held` is 0 whatever the correction (ADR-0012).
+
 **Conversion rate.** The rate used once, at reservation time, to express the invoice
 amount in program currency. Supplied by the client in the reservation request (the
 platform knows the rate the treasury will pay out at), stored on the reservation and
@@ -150,8 +161,11 @@ technical layer ("all repositories") and not a single endpoint: a thin vertical 
 
 **Adjustment.** A movement created by reconciliation, not by a client: a reservation the
 treasury knows and we did not, a release the treasury saw and the client never reported,
-or a corrected `held`. Always marked as coming from reconciliation so the audit trail
-shows what the treasury changed.
+a corrected `held`, or a reopened reservation. Always attributed to the snapshot's message id
+so the audit trail shows what the treasury changed. A reservation created this way has an
+`invoiceAmount` equal to the `held` the treasury reported, in program currency at rate 1,
+because the treasury never tells us the real invoice: a snapshot listing `INV-X` at 700 000 USD
+creates a reservation of 700 000 USD with source `reconciliation` (ADR-0011).
 
 ## Treasury messages
 
@@ -168,8 +182,17 @@ of one moment: limit, currency and the list of active reservations with their `h
 Authoritative for that moment, silent about anything after it.
 
 **Snapshot moment (`asOf`).** The point in time a snapshot describes. Local reservations
-created after it are kept even if the snapshot does not list them; local reservations
-created before it and missing from the snapshot are released by adjustment.
+created at or after it are kept, listed or not, and never changed by that snapshot; local
+reservations created before it and missing from the snapshot are released by adjustment,
+unless they fall inside the keep window. A listed reservation is compared with what it held at
+this moment, so a client's release after it stands. A reservation the snapshot creates takes
+this moment as its `createdAt` (A-12).
+
+**Keep window.** How long before a snapshot's `asOf` a reservation must have been created for
+that snapshot to release it by omission, default 30 seconds (ADR-0010). It exists because our
+clock and the treasury's are compared: with a snapshot of 18:00:00, a reservation created at
+17:59:45 and not listed is kept, and one created at 17:59:00 is released. Keeping wrongly is fixed
+by the next snapshot; releasing wrongly frees capacity another invoice may take.
 
 **Dev producer.** Code that exists only in the dev profile and publishes treasury-shaped
 messages on the local Kafka broker, so the real consumer has something to read when no

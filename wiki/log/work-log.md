@@ -2899,3 +2899,37 @@ Findings, most severe first:
 - Still owed to `/spec` before `/review`: A-12 wording for the window, the comparison as of `asOf`
   and the reopen rule, and glossary entries for `Held`, `Adjustment`, `Snapshot moment` and
   `heldCorrection`, each with a Changes row.
+
+## 2026-09-25, spec (revision: S-06 reconciliation wording), Opus
+- Revision run with no new source: the wording ADR-0010, ADR-0011 and ADR-0012 owed to the spec
+  after they were accepted in the S-06 plan PR (#37). No question was open; each rule below was
+  decided by Marcin in those ADRs, so nothing was assumed here.
+- A-12 amended, with a Changes row: a 30 s keep window before `asOf` for omitted reservations,
+  the shape and `createdAt` of a snapshot-created reservation, a listed reservation compared as of
+  `asOf` so a client's later release stands (worked example with numbers), and a reopen of a
+  listed reservation closed at or before `asOf`.
+- Glossary: `Held` now names the correction and says the ledger recomputes it from releases and
+  adjustments, not releases alone; the reservation table's `held` row admits an adjustment in
+  either direction; active and closed mention that a snapshot closes and reopens; `Adjustment`
+  carries ADR-0011's sentence and an example; `Snapshot moment` states the window and the as of
+  comparison. Two new entries, `Held correction (heldCorrection)` with the AC-29 numbers and
+  `Keep window` with a 17:59:45 against 17:59:00 example, since both words will be in code.
+- Cross-check found a gap, recorded here rather than resolved: the keep window, the comparison
+  as of `asOf` and the reopen are now requirements in A-12 but have no AC or INV, only the
+  untagged supporting tests the S-06 plan names. `CLAUDE.md §4` says a test that is the only proof
+  of a requirement is not supporting. Put to Marcin: add three ACs (then a targeted `/plan` adds
+  their rows to S-06), or keep them as supporting tests on purpose.
+- Branch `docs/s-06-reconciliation-wording` from `main` at 3d6102c. Files: `assumptions.md`,
+  `glossary.md`, this entry. Nothing committed.
+
+## 2026-09-25, spec (revision: AC-42 to AC-44), Opus
+- Marcin answered the gap the previous entry put to him: the three A-12 rules get acceptance
+  criteria. AC-42, the keep window: a reservation created at 17:59:45 is kept by an 18:00:00
+  snapshot that omits it. AC-43, a release after `asOf` stands: 1 925 000 held, 500 000 released
+  at 18:05, an 18:00 snapshot listing 1 900 000 leaves 1 400 000 with an adjustment of minus
+  25 000. AC-44, a reopen: an invoice omitted at 12:00 and listed at 300 000 at 18:00 is active
+  again with `held` 300 000. Changes row added.
+- The case where a client's full release after `asOf` keeps a listed reservation closed is AC-43's
+  rule applied to a whole invoice, so it stays a supporting test rather than a fourth criterion.
+- `wiki/plan/plan.md` does not list the three yet. That is a targeted `/plan AC-42 AC-43 AC-44`
+  into S-06, which is not done, so they are the next step before `/implement S-06`.
