@@ -2846,3 +2846,56 @@ Findings, most severe first:
   only a live check caught, and the last three majors were in the wiki rather than the code. No
   round had the model independence `CLAUDE.md §8` asks for, because the Fable credits were
   exhausted from the second round of S-04 onwards.
+
+## 2026-09-25, plan S-06 (revision before implement), Opus
+- Targeted run for a slice that already existed: S-06 was written on 2026-09-19, before releases
+  existed. S-05 shipped today, so the file was reconciled with the shipped code rather than
+  rewritten. The nine requirement rows in `wiki/plan/plan.md` are untouched: all nine test names
+  still match the slice file, checked name by name, and the levels are unchanged. The slice index
+  is unchanged too.
+- The first version would have been wrong in three places, all caused by ADR-0009 and none
+  visible before S-05. A correction written only to `held` is undone by the next release, because
+  a release derives `held` from the remaining invoice. A listed reservation compared with its
+  current `held` would undo a release the client was told succeeded after `asOf`. And an invoice
+  that one snapshot drops and a later one lists again has no rule, which breaks INV-07: reversed
+  delivery ends active, in-order delivery ends closed. These are one decision with three
+  questions, drafted as ADR-0012 (proposed), recommendation: a stored signed correction, a
+  comparison as of `asOf`, and a reopen unless the client closed the reservation after `asOf`.
+- ADR-0010's recommendation is revised, not decided. Option 3's "listed wins" would correct a
+  listed reservation created after `asOf`, which INV-06 forbids in as many words, so Option 2
+  is recommended instead. The clock is the shipped `Clock` port rather than the database clock,
+  because the e2e app can override it and the tests can then use the criteria's own times. The
+  first text's claim that AC-28 sits on the window boundary was wrong: the window is before
+  `asOf` and AC-28's reservation is after it.
+- ADR-0011 gains an addendum: a reservation born from a snapshot has `createdAt` equal to the
+  snapshot's `asOf`. With our processing time instead, a queued message would make a later
+  snapshot keep an invoice the treasury has dropped.
+- Checked against the code rather than assumed: the `reconciliation` source value, `programs.as_of`,
+  the `adjustment` kind and a movement's `messageId` all exist already, and the availability
+  mapper already returns `asOf`. What is new is the consumer's dispatch by `type`, two repository
+  reads (a program's active reservations, its client movements after a moment), one column if
+  ADR-0012 is accepted as recommended, and a settable clock in the e2e harness.
+- Thirteen local decisions recorded for review to hold the code to, among them that a snapshot is
+  stale only when strictly older (A-12's word, and what `setLimit` already does), that the limit
+  inside a snapshot is judged as a fact of its own (INV-07), that a listed `held` of 0 is legal,
+  and that INV-07 compares state rather than history.
+- Owed to `/spec` once the ADRs are decided: A-12 wording for the window, the comparison as of
+  `asOf` and the reopen rule; the glossary's `Held`, `Adjustment` and `Snapshot moment` entries,
+  and an entry for the correction field.
+- Branch `docs/plan-S-06` cut from `main` at c206c30. Files: the S-06 slice file, ADR-0012 (new),
+  ADR-0010 and ADR-0011 (recommendation revised, addendum), the decisions index, `Home.md`, this
+  entry. `wiki/plan/plan.md` and the slice index needed no change. Nothing committed.
+
+## 2026-09-25, plan S-06 (ADR decisions), Opus
+- Marcin accepted ADR-0010, ADR-0011 and ADR-0012 as recommended, on the plan branch before its PR
+  was opened. ADR-0010: Option 2, a 30 s keep window before `asOf` for omitted reservations,
+  nothing created at or after `asOf` touched, `createdAt` from the `Clock` port. ADR-0011:
+  Option 1, a snapshot-born reservation has `invoiceAmount` equal to the listed `heldAmount`,
+  program currency, rate 1 and `createdAt` equal to `asOf`. ADR-0012: 1A, 2A, 3A, a stored signed
+  `heldCorrection`, a listed reservation compared as of `asOf`, a reopen unless the client closed
+  it after `asOf`.
+- The slice file loses its "if decided as recommended" conditions: the migration, the keep window
+  setting and the supporting tests are now plain scope. Decisions index and Home updated.
+- Still owed to `/spec` before `/review`: A-12 wording for the window, the comparison as of `asOf`
+  and the reopen rule, and glossary entries for `Held`, `Adjustment`, `Snapshot moment` and
+  `heldCorrection`, each with a Changes row.

@@ -1,9 +1,9 @@
 # ADR-0010: Deciding whether a local reservation is older than a snapshot
 
-- Status: proposed
-- Date: 2026-09-19
+- Status: accepted
+- Date: proposed 2026-09-19, accepted 2026-09-25
 - Slice: S-06
-- Related: A-12, A-13, AC-27, AC-28, INV-06, INV-07
+- Related: A-12, A-13, AC-27, AC-28, INV-06, INV-07, ADR-0011, ADR-0012
 
 ## Context
 
@@ -41,9 +41,49 @@ Option 3 with a 30 s default tolerance and the database clock. INV-06 tests both
 edge and the window; AC-28's 30 s example sits exactly on the window boundary and should use
 a larger gap (60 s) so the test does not depend on the default.
 
+Revised 2026-09-25, while revising the S-06 plan against the shipped S-05 code. The
+recommendation changes in three places.
+
+- **Option 2, not Option 3.** "Listed wins" compares a listed reservation regardless of
+  `createdAt`, so a reservation created at 18:00:30 and listed by a snapshot of 18:00 would be
+  corrected. INV-06 says a reservation created at `t` is never altered by a snapshot with
+  `asOf < t`, listed or not. Option 2 keeps INV-06 as written: the window only widens keeping
+  before `asOf`, and a listed reservation inside the window is still corrected, because it was
+  created before `asOf` and the treasury knows it.
+- **The `Clock` port, not the database clock.** S-03 shipped `createdAt` stamped by a `Clock`
+  port whose comment already names INV-06, and the e2e app can override it, so AC-27, AC-28 and
+  INV-06 can be written at 09:00, 18:00:30 and 18:00 through the API rather than by writing rows
+  behind it. The skew between two service instances is milliseconds with NTP, far inside a 30 s
+  window, so the window covers it too. The database clock stays a valid alternative; it would
+  move stamping into the repository and the tests into it.
+- **AC-28 does not touch the window.** The first text said its example sits on the boundary. It
+  does not: the window is before `asOf`, and AC-28's reservation is 30 s after it, so it is kept
+  whatever the window is. The test uses the criterion's own times.
+
+A reservation created by a snapshot has `createdAt` equal to that snapshot's `asOf` (ADR-0011,
+addendum of 2026-09-25), so a later snapshot judges it on the treasury's clock alone.
+
 ## Decision
 
-(empty until Marcin decides)
+Option 2 with a 30 s default window and the `Clock` port, as recommended in the revision of
+2026-09-25. Decided by Marcin on 2026-09-25.
+
+- **Keep window, before `asOf` only.** A local active reservation that the snapshot does not list
+  is dropped when `createdAt < asOf - window`, and kept, logged as "kept within window", when
+  `asOf - window <= createdAt < asOf`. The window is `RECONCILIATION_KEEP_WINDOW_SECONDS`,
+  default 30. Option 1, the strict comparison, was declined because a few seconds of skew
+  between two clocks would release a reservation a client was just told about, and a wrongly
+  released reservation frees capacity another invoice may take, while a wrongly kept one is
+  corrected by the next snapshot.
+- **A listed reservation created before `asOf` is corrected, window or not.** The treasury knows
+  it, so there is nothing to be unsure about.
+- **A reservation created at or after `asOf` is untouched, listed or not** (INV-06 as written).
+  Option 3, "listed wins", was declined for that reason: it would correct a listed reservation
+  created after `asOf`, which INV-06 forbids.
+- **`createdAt` is stamped by the `Clock` port**, as S-03 shipped it, not by the database. Two
+  service instances differ by milliseconds, far inside the window, and the e2e app can override
+  the port, so the tests use the criteria's own times through the API.
+
 
 ## Consequences
 
