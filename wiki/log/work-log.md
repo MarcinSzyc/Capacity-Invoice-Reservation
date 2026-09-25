@@ -3180,3 +3180,44 @@ Findings, most severe first:
   with an adjustment. No message was set aside. Stack taken down.
 - Findings: none new. Still open and owed to `/ship`: the README's snapshot contract and
   `dev:treasury snapshot`, and the kafkajs warning on stderr (minor, older than S-06).
+
+## 2026-09-25, review S-06 (round 2), Opus
+- REVIEW S-06: 7 findings (1/1/5), at 7e2d03d against base d98a421, fresh context. Not a pass.
+  Run on Opus 5.5 by Marcin's decision: the skill asks for Fable, which is out of usage credits.
+- Round 1, finding by finding: both blockers closed (a list entry that is not an object is now
+  rejected, checked with `[[]]`, `[null]`, a string, a number and `true`; a listed reservation in
+  another currency is skipped). All three majors closed: the currency rules are in A-12, the
+  listed total no longer overflows a `BIGINT`, and the bound is proven for creating and for
+  correcting 10 000 reservations. All four minors closed. Two of the fixes leave a narrower gap,
+  reported below as minors.
+- Findings, most severe first:
+  - (blocker, spec) `reconciliation.ts:219-223`: `describedBy` lets a snapshot change a
+    reconciliation-created reservation whose `createdAt` equals `asOf`. ADR-0010's decision and
+    A-12 both say a reservation created at or after `asOf` is untouched, listed or not. The
+    exception is written only in a code comment and in the first implement entry's list of
+    borderline choices. `reconciliation.test.ts:271` asserts the behaviour the ADR rules out.
+    If the same kind of reservation is omitted, it gets the note `kept_within_window`, although
+    it is not in the window before `asOf`.
+  - (major, standards) `treasury-capacity.consumer.test.ts:70-86`: `FailingCapacityUpdate`
+    subclasses our own use case and overrides `execute`, which is a stub of our own code
+    (CLAUDE.md §4). The failure belongs at a port, for example a unit of work or repository
+    fake that throws n times.
+  - (minor, spec) `reconciliation-snapshot-message.dto.ts:31-35,113-119`: the total bound covers
+    only the listed entries. Reservations kept beside them (created after `asOf`, or within the
+    window) add to `reserved`, which can pass the exact JSON bound, and then availability answers
+    500. Reproduced in the domain: `reserved` came to 18 014 398 509 481 982 and `jsonInteger`
+    threw.
+  - (minor, spec) `apply-reconciliation-snapshot.use-case.ts:111-112,129,141-149`: reopening
+    reads each closed listed reservation's movements with its own query, and the bound tests do
+    not cover that path. "Only a few are ever closed" is an unwritten assumption: a snapshot that
+    omits everything, followed by one that lists everything, reopens all of them. Measured against
+    PostgreSQL: 10 000 reopens took 7.1 s of the 15 s transaction timeout, against 2.5 to 4.7 s
+    for the covered cases.
+  - (minor, spec) `treasury-capacity.consumer.ts:119,143`: parsing runs outside `attempted`, so
+    a throw there (the class of the round 1 blocker, which ADR-0013 names as its motivation) still
+    propagates and is redelivered forever. This matches ADR-0013's literal word "applying", but
+    it does not close the class. No input found this round reaches it.
+  - (minor, spec) `ADR-0013-treasury-messages-that-always-fail.md:103`: Consequences still say
+    "the consumer gets one classification function", which belongs to the declined Option 3.
+  - (minor, standards) `S-06-reconciliation-snapshots.md:7`: the header says the slice was
+    "Implemented on Fable", while its Log and the work-log say Opus.
