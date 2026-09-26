@@ -17,6 +17,7 @@ import {
 import {Money} from '../../domain/money';
 import {CapacityReads, CapacityRepositories, UnitOfWork} from '../../domain/ports/unit-of-work';
 import {Program} from '../../domain/program';
+import {ERROR_TEXT_MAX_LENGTH} from './readable-payload';
 import {TreasuryCapacityConsumer} from './treasury-capacity.consumer';
 import {TREASURY_DEAD_LETTER_TOPIC, TREASURY_TOPIC} from './treasury-topics';
 
@@ -54,6 +55,8 @@ const inbound = (payload: unknown): InboundMessage => ({
 const KEEP_WINDOW_MS = 30_000;
 // Deep enough to overflow the stack of class-transformer, found by review round 3 of S-06.
 const NESTING = 5_000;
+// Enough to make an unbounded validation error larger than the broker takes (review round 2 of S-08).
+const MANY_UNKNOWN_FIELDS = 40_000;
 
 const consumerFor = (
   capacity: InMemoryUnitOfWork,
@@ -265,6 +268,24 @@ describe('TreasuryCapacityConsumer', () => {
       TREASURY_DEAD_LETTER_TOPIC,
     ]);
     expect(byId.get('m-limit')?.outcome).toBe('applied');
+  });
+
+  it('should dead-letter a message with a bounded error, however many fields it refuses', async () => {
+    const capacity = inMemoryCapacity();
+    const source = new FakeMessageSource();
+    const unknownFields = Object.fromEntries(
+      Array.from({length: MANY_UNKNOWN_FIELDS}, (_, index) => [`k${index}`, 0]),
+    );
+
+    await consumerFor(capacity, source).handle(
+      inbound({...UPDATE, messageId: 'm-wide', ...unknownFields}),
+    );
+
+    const error = source.published[0]?.messages[0]?.headers?.error;
+    expect(typeof error === 'string' ? error.length : Infinity).toBeLessThanOrEqual(
+      ERROR_TEXT_MAX_LENGTH,
+    );
+    expect(capacity.repositories.treasuryMessages.byId.get('m-wide')?.outcome).toBe('rejected');
   });
 
   describe('a message whose handling fails (ADR-0013)', () => {

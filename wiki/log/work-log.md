@@ -3644,3 +3644,16 @@ Findings, most severe first:
     writes client reservations through the repositories. Carried to `/ship`.
 - Scratch reproductions were written under `api/src/` and deleted; the working tree holds only
   this entry and the slice log row.
+
+## 2026-09-26, implement S-08 (review round 2 fixes), Opus
+- Major: a validation error names every refused field, so with 40 000 unknown fields the dead
+  letter's `error` header made it larger than the broker accepts; the publish failed before the
+  record and the partition stalled. `storableText` now also cuts the text at
+  `ERROR_TEXT_MAX_LENGTH` (2 000) before making it well-formed, and `reject` applies it once, so
+  the dead letter header, the record and the log carry the same bounded text. Unit tests red first
+  on behaviour (the constant added alone, then the cut); the real-broker integration test with
+  40 000 unknown fields was written before the fix and passes after it (the reviewer's
+  reproduction is its red).
+- Minor: the id validator is `StorableId` in `storable-id.ts`, no longer one letter of case away
+  from `storableText`.
+- Minor (slice text, item 5): `/ship`.

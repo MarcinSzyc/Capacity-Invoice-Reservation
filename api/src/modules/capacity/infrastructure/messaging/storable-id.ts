@@ -5,9 +5,9 @@ import {isStorableText} from './readable-payload';
  * PostgreSQL refuses NUL and lone surrogates in a text column, so such an id could never be
  * stored. Refused on sight as malformed (A-13 clause 4) rather than after three failed attempts.
  */
-export const StorableText = (): PropertyDecorator =>
+export const StorableId = (): PropertyDecorator =>
   ValidateBy({
-    name: 'storableText',
+    name: 'storableId',
     validator: {
       validate: (value: unknown) => typeof value !== 'string' || isStorableText(value),
       defaultMessage: (args) =>

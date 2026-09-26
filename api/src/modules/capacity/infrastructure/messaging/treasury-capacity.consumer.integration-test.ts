@@ -431,6 +431,29 @@ describe('TreasuryCapacityConsumer', () => {
     expect((await deadLetterOf(idSurrogateId)).headers.error).toBeDefined();
   });
 
+  it('should dead-letter and record a message whose error would not fit the broker, and apply the next one', async () => {
+    const programId = uniqueId('PRG');
+    const wideId = uniqueId('m-many-fields');
+    const validId = uniqueId('m');
+    const unknownFields = Object.fromEntries(
+      Array.from({length: 40_000}, (_, index) => [`k${index}`, 0]),
+    );
+    const refused = {messageId: wideId, type: 'capacity_update', programId, ...unknownFields};
+
+    await kafka.publish(TREASURY_TOPIC, [{key: programId, value: JSON.stringify(refused)}]);
+    await producer.publishCapacityUpdate({
+      messageId: validId,
+      programId,
+      currency: EUR,
+      creditLimit: FIVE_MILLION,
+      eventTime: AT_10_00,
+    });
+
+    expect(await outcomeOf(validId)).toMatchObject({outcome: 'applied'});
+    expect(await outcomeOf(wideId)).toMatchObject({outcome: 'rejected'});
+    expect(await deadLetterOf(wideId)).toBeDefined();
+  });
+
   describe('reconciliation snapshots', () => {
     const AT = (hour: number): Date => new Date(Date.UTC(2026, 8, 21, hour));
     const SEVEN_MILLION = 700_000_000n;
