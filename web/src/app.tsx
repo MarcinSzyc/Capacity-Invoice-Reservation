@@ -3,6 +3,7 @@ import {apiBaseUrl, availabilityOf, CallRecord, createApi, movementsOf} from './
 import type {Availability, Movement} from './api';
 import {Generator} from './generator';
 import {ReleaseGenerator} from './release-generator';
+import {ResilienceScenarios} from './resilience-scenarios';
 import {useReservedInvoices} from './reserved-invoices';
 import {Ledger} from './ledger';
 import {REQUEST_LOG_SIZE, RequestLog} from './request-log';
@@ -105,6 +106,7 @@ export const App = (): React.JSX.Element => {
         onReserved={reservedInvoices.add}
       />
       <ReleaseGenerator api={api} programId={programId} reserved={reservedInvoices} />
+      <ResilienceScenarios api={api} programId={programId} currency={currency} />
       <TreasuryPanel
         api={api}
         programId={programId}
