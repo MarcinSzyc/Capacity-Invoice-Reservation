@@ -224,9 +224,11 @@ export class TreasuryCapacityConsumer implements OnApplicationBootstrap, OnModul
   private async reject(
     message: InboundMessage,
     readable: {messageId: string | null; payload: unknown},
-    error: string,
+    refusal: string,
     receivedAt: Date,
   ): Promise<void> {
+    // One text for the dead letter, the record and the log: bounded and storable everywhere.
+    const error = storableText(refusal);
     if (readable.messageId === null) {
       await this.deadLetter(message, error);
       this.logger.warn(`message rejected: ${error}`, CONTEXT);
@@ -238,7 +240,7 @@ export class TreasuryCapacityConsumer implements OnApplicationBootstrap, OnModul
         programId: readableString(readable.payload, 'programId', PROGRAM_ID_MAX_LENGTH),
         type: readableString(readable.payload, 'type', MESSAGE_TYPE_MAX_LENGTH),
         payload: storablePayload(readable.payload),
-        error: storableText(error),
+        error,
         receivedAt,
       },
       () => this.deadLetter(message, error),

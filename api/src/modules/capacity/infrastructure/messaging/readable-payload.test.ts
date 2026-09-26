@@ -1,4 +1,9 @@
-import {readableString, storablePayload, storableText} from './readable-payload';
+import {
+  ERROR_TEXT_MAX_LENGTH,
+  readableString,
+  storablePayload,
+  storableText,
+} from './readable-payload';
 
 const LIMIT = 8;
 const NUL = '\u0000';
@@ -69,6 +74,13 @@ describe('storablePayload', () => {
 describe('storableText', () => {
   it('should remove NUL from an error text', () => {
     expect(storableText(`Unexpected ${NUL} in JSON`)).toBe('Unexpected  in JSON');
+  });
+
+  it('should bound an error text that grows with the message', () => {
+    const long = 'property k should not exist; '.repeat(40_000);
+
+    expect(storableText(long).length).toBeLessThanOrEqual(ERROR_TEXT_MAX_LENGTH);
+    expect(storableText('short')).toBe('short');
   });
 
   it('should make an error text well-formed Unicode', () => {

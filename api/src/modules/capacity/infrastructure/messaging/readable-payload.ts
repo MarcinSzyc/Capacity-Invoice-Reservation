@@ -51,5 +51,16 @@ export const storablePayload = (payload: unknown): unknown => {
   return payload;
 };
 
-/** An error text can quote the input it refused, so it is made storable rather than refused. */
-export const storableText = (text: string): string => text.replaceAll(NUL, '').toWellFormed();
+/**
+ * A validation error names every field it refuses, so it grows with the message; unbounded it
+ * can make the dead letter larger than the broker accepts, which stalls the partition as surely
+ * as a record the database refuses (review round 2 of S-08). Enough to read what went wrong.
+ */
+export const ERROR_TEXT_MAX_LENGTH = 2_000;
+
+/**
+ * An error text can quote the input it refused, so it is made storable rather than refused. Cut
+ * before `toWellFormed`, so a surrogate pair split by the cut becomes a replacement character.
+ */
+export const storableText = (text: string): string =>
+  text.slice(0, ERROR_TEXT_MAX_LENGTH).replaceAll(NUL, '').toWellFormed();
