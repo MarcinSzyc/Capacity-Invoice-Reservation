@@ -206,15 +206,17 @@ by the integration and e2e tests. Not registered in production.
 
 **Dev endpoint.** A route under `/dev/` that `api` serves only outside the production profile
 and without a token, for the demo page: `GET /dev/token` mints a bearer token,
-`GET /dev/programs/:programId/movements` lists a program's latest ledger rows, and
-`POST /dev/treasury` hands a message to the dev producer. In production the routes are not
+`GET /dev/programs/:programId/movements` lists a program's latest ledger rows,
+`POST /dev/treasury` hands a message to the dev producer, and `POST /dev/reset` empties every
+program, reservation, movement and treasury message so a demo starts from nothing. In production the routes are not
 registered, so `/dev/token` answers `404` like any unknown path (A-17, AC-38).
 
-**Demo page.** The page the `web` container serves in the dev profile. Four panels: the
-request generator (random reserve and release calls), the request log (each call with its
-status and error code), the live ledger (availability and the latest movements, polled) and
-the treasury panel (limit change, snapshot, duplicate, stale message, through the dev producer).
-It shows what `api` answers and computes nothing (A-17).
+**Demo page.** The page the `web` container serves in the dev profile. Five panels: the
+request generator (random reservations), the release generator (releases on an interval, oldest
+first, or one invoice by hand), the request log (each call with its status and error code), the
+live ledger (availability and the latest movements, polled, with a reset) and the treasury panel
+(a new limit, a snapshot, a duplicate or a stale message, through the dev producer). It shows
+what `api` answers and computes nothing (A-17).
 
 **Message id.** The treasury's identifier of one message. Processing the same id twice
 changes nothing.
