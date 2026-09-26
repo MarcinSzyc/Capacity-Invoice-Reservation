@@ -94,169 +94,177 @@ export const TreasuryPanel = ({
 
   return (
     <section id="treasury" aria-labelledby="treasury-title">
-      <h2 id="treasury-title">Treasury panel</h2>
-      <p className="hint">
-        Simulates the treasury. Send calls <code>POST /dev/treasury</code>, and the api publishes
-        the message on the Kafka topic <code>treasury.capacity</code>. The api's own consumer is
-        subscribed to that topic, so Kafka hands it the message within a moment; the consumer
-        validates it, applies it in the database and only then marks it read. The ledger shows the
-        result on its next poll.
-      </p>
-      <details className="box">
+      <details className="panel" open>
         <summary>
-          New limit
-          {limitAdded ? <span className="summary-note"> · added to request</span> : null}
+          <h2 id="treasury-title">Treasury panel</h2>
         </summary>
-        <div role="group" aria-label="New limit">
-          <p className="notice">
-            <span>
-              Sent for a program id that does not exist yet, this creates the program. It is the
-              only way to create one.
-            </span>
-          </p>
-          <div className="columns">
-            <div>
-              <label>
-                Limit (minor units){' '}
-                <input value={limit} onChange={(event) => setLimit(event.target.value)} />
-              </label>
-              <label>
-                Currency{' '}
-                <input
-                  value={messageCurrency}
-                  placeholder={currency}
-                  onChange={(event) => setMessageCurrency(event.target.value)}
-                />
-              </label>
-            </div>
-            <div>
-              <label>
-                <input
-                  type="checkbox"
-                  checked={limitAdded}
-                  onChange={(event) => setLimitAdded(event.target.checked)}
-                />{' '}
-                Add to request
-              </label>
+        <p className="hint">
+          Simulates the treasury. Send calls <code>POST /dev/treasury</code>, and the api publishes
+          the message on the Kafka topic <code>treasury.capacity</code>. The api's own consumer is
+          subscribed to that topic, so Kafka hands it the message within a moment; the consumer
+          validates it, applies it in the database and only then marks it read. The ledger shows the
+          result on its next poll.
+        </p>
+        <details className="box">
+          <summary>
+            New limit
+            {limitAdded ? <span className="summary-note"> · added to request</span> : null}
+          </summary>
+          <div role="group" aria-label="New limit">
+            <p className="notice">
+              <span>
+                Sent for a program id that does not exist yet, this creates the program. It is the
+                only way to create one.
+              </span>
+            </p>
+            <div className="columns">
+              <div>
+                <label>
+                  Limit (minor units){' '}
+                  <input value={limit} onChange={(event) => setLimit(event.target.value)} />
+                </label>
+                <label>
+                  Currency{' '}
+                  <input
+                    value={messageCurrency}
+                    placeholder={currency}
+                    onChange={(event) => setMessageCurrency(event.target.value)}
+                  />
+                </label>
+              </div>
+              <div>
+                <label>
+                  <input
+                    type="checkbox"
+                    checked={limitAdded}
+                    onChange={(event) => setLimitAdded(event.target.checked)}
+                  />{' '}
+                  Add to request
+                </label>
+              </div>
             </div>
           </div>
-        </div>
-      </details>
-      <details className="box">
-        <summary>
-          Invoices
-          {invoicesAdded ? <span className="summary-note"> · added to request</span> : null}
-        </summary>
-        <div role="group" aria-label="Invoices">
-          <label>
-            <input
-              type="checkbox"
-              checked={invoicesAdded}
-              onChange={(event) => setInvoicesAdded(event.target.checked)}
-            />{' '}
-            Add to request
-          </label>
-          <div className="snapshot">
-            <div>
-              <table className="snapshot-list">
-                <thead>
-                  <tr>
-                    <th>Invoice</th>
-                    <th>Held</th>
-                    <th />
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map((row) => (
-                    <tr key={row.key}>
-                      <td>
-                        <input
-                          aria-label="Invoice"
-                          value={row.invoiceId}
-                          placeholder="INV-A"
-                          onChange={(event) => changeRow(row.key, {invoiceId: event.target.value})}
-                        />
-                      </td>
-                      <td>
-                        <input
-                          aria-label="Held"
-                          inputMode="numeric"
-                          value={row.held}
-                          placeholder="70000"
-                          onChange={(event) => changeRow(row.key, {held: event.target.value})}
-                        />
-                      </td>
-                      <td>
-                        <button
-                          type="button"
-                          aria-label="Remove"
-                          onClick={() => removeRow(row.key)}
-                        >
-                          ×
-                        </button>
-                      </td>
+        </details>
+        <details className="box">
+          <summary>
+            Invoices
+            {invoicesAdded ? <span className="summary-note"> · added to request</span> : null}
+          </summary>
+          <div role="group" aria-label="Invoices">
+            <label>
+              <input
+                type="checkbox"
+                checked={invoicesAdded}
+                onChange={(event) => setInvoicesAdded(event.target.checked)}
+              />{' '}
+              Add to request
+            </label>
+            <div className="snapshot">
+              <div>
+                <table className="snapshot-list">
+                  <thead>
+                    <tr>
+                      <th>Invoice</th>
+                      <th>Held</th>
+                      <th />
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-              <button type="button" onClick={addRow}>
-                Add invoice
-              </button>
-            </div>
-            <div>
-              <p className="hint">
-                The treasury's view of the program: the reservations it says are active, with what
-                each holds. For example <code>INV-A 70000</code> and <code>INV-B 0</code>: INV-A is
-                set to 70 000, created if new; INV-B, if it exists, is kept holding nothing; every
-                other reservation older than 30 s is released. An empty table says there are none.
-              </p>
-              <p className="hint">
-                What to expect: the request log shows <code>POST /dev/treasury 202</code> at once,
-                which only means the message is on Kafka. A moment later the consumer processes it
-                and the live ledger shows a <code>limit_set</code> row, then one{' '}
-                <code>adjustment</code> row for each reservation it created, corrected or released,
-                all attributed to the snapshot's message id, with Reserved and Available updated
-                above. A snapshot older than the last one changes nothing.
-              </p>
+                  </thead>
+                  <tbody>
+                    {rows.map((row) => (
+                      <tr key={row.key}>
+                        <td>
+                          <input
+                            aria-label="Invoice"
+                            value={row.invoiceId}
+                            placeholder="INV-A"
+                            onChange={(event) =>
+                              changeRow(row.key, {invoiceId: event.target.value})
+                            }
+                          />
+                        </td>
+                        <td>
+                          <input
+                            aria-label="Held"
+                            inputMode="numeric"
+                            value={row.held}
+                            placeholder="70000"
+                            onChange={(event) => changeRow(row.key, {held: event.target.value})}
+                          />
+                        </td>
+                        <td>
+                          <button
+                            type="button"
+                            aria-label="Remove"
+                            onClick={() => removeRow(row.key)}
+                          >
+                            ×
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <button type="button" onClick={addRow}>
+                  Add invoice
+                </button>
+              </div>
+              <div>
+                <p className="hint">
+                  The treasury's view of the program: the reservations it says are active, with what
+                  each holds. For example <code>INV-A 70000</code> and <code>INV-B 0</code>: INV-A
+                  is set to 70 000, created if new; INV-B, if it exists, is kept holding nothing;
+                  every other reservation older than 30 s is released. An empty table says there are
+                  none.
+                </p>
+                <p className="hint">
+                  What to expect: the request log shows <code>POST /dev/treasury 202</code> at once,
+                  which only means the message is on Kafka. A moment later the consumer processes it
+                  and the live ledger shows a <code>limit_set</code> row, then one{' '}
+                  <code>adjustment</code> row for each reservation it created, corrected or
+                  released, all attributed to the snapshot's message id, with Reserved and Available
+                  updated above. A snapshot older than the last one changes nothing.
+                </p>
+              </div>
             </div>
           </div>
+        </details>
+        <div className="actions">
+          <button
+            type="button"
+            className="primary"
+            disabled={!limitAdded && !invoicesAdded}
+            onClick={() => void publish(request())}
+          >
+            Send
+          </button>
+          <span className="hint">
+            Sends one request with what is added: a new limit alone goes as a limit update; invoices
+            go as a snapshot, carrying the new limit when it is added too, otherwise the current
+            one.
+          </span>
+          <button type="button" onClick={() => void publish(update({eventTime: STALE_EVENT_TIME}))}>
+            Stale
+          </button>
+          <span className="hint">
+            Sends the new limit as an update dated 2000; ignored once a newer limit exists.
+          </span>
+          <button
+            type="button"
+            disabled={last === null}
+            onClick={() => last && void publish(repeat(last))}
+          >
+            Duplicate
+          </button>
+          <span className="hint">
+            Resends the last message, update or snapshot; counted as a duplicate, not applied.
+          </span>
         </div>
+        <CurlBox
+          baseUrl={apiBaseUrl()}
+          commands={[curl(apiBaseUrl(), 'POST', '/dev/treasury', request())]}
+        />
+        {last === null ? null : <p>Last published: {String(last.messageId)}</p>}
       </details>
-      <div className="actions">
-        <button
-          type="button"
-          className="primary"
-          disabled={!limitAdded && !invoicesAdded}
-          onClick={() => void publish(request())}
-        >
-          Send
-        </button>
-        <span className="hint">
-          Sends one request with what is added: a new limit alone goes as a limit update; invoices
-          go as a snapshot, carrying the new limit when it is added too, otherwise the current one.
-        </span>
-        <button type="button" onClick={() => void publish(update({eventTime: STALE_EVENT_TIME}))}>
-          Stale
-        </button>
-        <span className="hint">
-          Sends the new limit as an update dated 2000; ignored once a newer limit exists.
-        </span>
-        <button
-          type="button"
-          disabled={last === null}
-          onClick={() => last && void publish(repeat(last))}
-        >
-          Duplicate
-        </button>
-        <span className="hint">
-          Resends the last message, update or snapshot; counted as a duplicate, not applied.
-        </span>
-      </div>
-      <CurlBox
-        baseUrl={apiBaseUrl()}
-        commands={[curl(apiBaseUrl(), 'POST', '/dev/treasury', request())]}
-      />
-      {last === null ? null : <p>Last published: {String(last.messageId)}</p>}
     </section>
   );
 };

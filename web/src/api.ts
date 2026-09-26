@@ -19,9 +19,19 @@ export interface Answer {
   readonly body: unknown;
 }
 
+export interface SendOptions {
+  /** False sends the call without the bearer token, to show api refusing it. */
+  readonly authorize?: boolean;
+}
+
 export interface Api {
   /** A call the request log shows: the generator's and the treasury panel's. */
-  send(method: 'GET' | 'POST', path: string, body?: unknown): Promise<Answer>;
+  send(
+    method: 'GET' | 'POST',
+    path: string,
+    body?: unknown,
+    options?: SendOptions,
+  ): Promise<Answer>;
   /** A read the page polls. Not logged, or the log would be nothing but polls. */
   read(path: string): Promise<Answer>;
 }
@@ -117,8 +127,15 @@ export const createApi = (baseUrl: string, onCall: (record: CallRecord) => void)
     return token;
   };
 
-  const call = async (method: string, path: string, body?: unknown): Promise<Answer> => {
-    const headers: Record<string, string> = {Authorization: `Bearer ${await bearer()}`};
+  const call = async (
+    method: string,
+    path: string,
+    body?: unknown,
+    authorize = true,
+  ): Promise<Answer> => {
+    const headers: Record<string, string> = authorize
+      ? {Authorization: `Bearer ${await bearer()}`}
+      : {};
     if (body !== undefined) headers['Content-Type'] = 'application/json';
     const response = await fetch(`${baseUrl}${path}`, {
       method,
@@ -132,8 +149,8 @@ export const createApi = (baseUrl: string, onCall: (record: CallRecord) => void)
   };
 
   return {
-    send: async (method, path, body) => {
-      const answer = await call(method, path, body);
+    send: async (method, path, body, options) => {
+      const answer = await call(method, path, body, options?.authorize ?? true);
       calls += 1;
       onCall({
         id: calls,
