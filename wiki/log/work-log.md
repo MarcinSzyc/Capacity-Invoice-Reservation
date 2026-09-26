@@ -3549,3 +3549,39 @@ Findings, most severe first:
   `programId` published through `/dev/treasury`, then a limit change; the limit change applied.
   README reserve and snapshot steps answered as written. Stack taken down.
 - Findings: none.
+
+## 2026-09-26, review S-08 (round 1), Fable
+- REVIEW S-08: 4 findings (0/2/2), at bd1ba58 against base e52d553, fresh context. Not a pass.
+- Closed as planned: NUL in a string, a key or an id no longer stalls (items 1 to 4, reproduced
+  green on the real store by the new integration test); `Infinity` from `1e999` and a
+  `__proto__` key are stored fine; release by omission of 20 000 holds (item 5); web items 6 to
+  11 do what the slice says, and each new render test fails on the old code. No catch-all was
+  added around the record insert (local decision 3 holds).
+- Findings, most severe first:
+  - (major, spec) `api/src/modules/capacity/infrastructure/messaging/readable-payload.ts:33-45`
+    with `capacity-update-message.dto.ts:28-39` and `reconciliation-snapshot-message.dto.ts:41-70`:
+    a lone UTF-16 surrogate (valid JSON `"\ud800"`) passes `storablePayload` and the DTOs, and
+    PostgreSQL refuses it in jsonb ("invalid input syntax for type json"). Reproduced through the
+    real consumer, broker and database: an unknown field `"a\ud800b"` gave 150 dead letters in 15 s
+    and no record, the next message on the partition never applied; a `messageId` ending in
+    `\udc00` fails three attempts (the applied record carries the payload), is set aside, its
+    record fails the same way, and it is delivered again forever (20 dead letters in 15 s). The
+    slice outcome ("no treasury message can stall its partition by what it contains", A-13
+    clauses 4 and 6) is not met; the store's refusals were enumerated as NUL only.
+  - (major, spec) `api/src/modules/capacity/infrastructure/messaging/readable-payload.ts:42`:
+    `pending.push(...entries.map(...))` spreads every child as a call argument, which throws
+    `RangeError: Maximum call stack size exceeded` from about 125 000 children on Node 24. A
+    capacity update with an unknown field `note` holding 200 000 zeros (400 KB, under the broker's
+    1 MB) is refused by the DTO, then `storablePayload` throws in `reject` before the dead letter,
+    outside any catch: no dead letter, no record, kafkajs logs `Crash: KafkaJSNonRetriableError`,
+    the next message never applied (reproduced on the real stack). New with S-08: before it the
+    payload was kept and Prisma stored it.
+  - (minor, standards) `web/src/api.ts:127`: `await response.text()` is now outside the catch; a
+    body that fails mid-read rejects `call`, so `send` logs nothing and `void poll()` and the
+    generator's `void latestStep.current()` end in an unhandled rejection. Before S-08 it was
+    caught and logged.
+  - (minor, spec) `wiki/slices/S-08-hardening-carried-findings.md:68`: item 5 still says the
+    20 000 reservations come from two snapshots of 10 000; the test writes client reservations
+    through the repositories. The plan correction is only in the work-log.
+- Scratch reproductions were written under `api/src/` and deleted; the working tree holds only
+  this entry and the slice log row.
