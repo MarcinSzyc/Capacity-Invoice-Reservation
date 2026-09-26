@@ -28,12 +28,9 @@ Obsidian vault root is this folder. Working rules: `../CLAUDE.md`.
 | S-05 Releases | done 2026-09-25: AC-10 to AC-19, AC-34, INV-02 |
 | S-06 Reconciliation snapshots | done 2026-09-25: AC-26 to AC-31, AC-42 to AC-44, INV-02 (amended), INV-05 to INV-07 |
 | S-07 Demo page and operations | done 2026-09-25: AC-38, AC-39 |
-| S-08 Hardening: the carried review findings | planned, next |
+| S-08 Hardening: the carried review findings | done 2026-09-26: the S-06 and S-07 carried findings, no new requirement |
 
-Every slice is done and the plan is complete: every AC and INV in [[plan/plan]] is `done`.
-Known limitations, carried as they stand in [[log/changelog]]: a treasury message with `\u0000`
-in a string stalls its partition (the one open major, older than S-07), eight minors of the S-07
-review, and no bound test for a program past 10 000 active reservations.
-
-Next: `/implement S-08` on branch `slice/S-08-hardening-carried-findings`, which closes all of
-them. `risk: medium`, runs on Opus per `CLAUDE.md §8`.
+Every slice is done and the plan is complete: every AC and INV in [[plan/plan]] is `done`, and
+S-08 closed every finding the reviews had carried. Waiting on Marcin: the ADR-0003 amendment
+proposed in S-08 (oversized dead letters). Known limitations, in [[log/changelog]]: kafkajs has no
+LZ4, Snappy or ZSTD codec; S-08's sixth review was stopped before it reported.

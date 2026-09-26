@@ -266,7 +266,10 @@ window).
 
 **Dead letter.** A copy of a treasury message we could not apply, set aside on a separate topic
 next to the original, with the reason and where it came from attached, so a human can look at
-it later. Every rejected message becomes a dead letter; a duplicate or stale one does not,
+it later. A message too large to republish is set aside without its bytes: the headers
+`valueOmitted` or `keyOmitted` say what was left out and how large it was, and `sourceTopic`,
+`sourcePartition` and `sourceOffset` find the original, for example a 3 MB message arriving
+compressed (ADR-0003, amendment proposed 2026-09-26). Every rejected message becomes a dead letter; a duplicate or stale one does not,
 because nothing is wrong with it, there is only nothing to do. Setting a message aside never
 stops consumption.
 
