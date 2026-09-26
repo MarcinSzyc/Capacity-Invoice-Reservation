@@ -3601,3 +3601,9 @@ Findings, most severe first:
   its red.
 - Minor (web): a body that breaks off mid-read is logged with its status; red first.
 - Minor (slice text, item 5 setup): corrected at `/ship`, as S-07's was.
+
+## 2026-09-26, verify S-08 (round 2), Opus
+- VERIFY S-08: PASS, at d2b2a78. `npm run gate` green: unit 211, web 10, integration 53, e2e 66,
+  cold start 3. The compose stack took 941 s to turn healthy on this machine (24 to 36 s before);
+  it passed, noted as an observation of the Docker host, not of the code. Prose check clean, no
+  layer import moved. Findings: none new.
