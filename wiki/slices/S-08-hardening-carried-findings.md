@@ -153,3 +153,4 @@ Beyond `CLAUDE.md §9`:
 | 2026-09-26 | verify (round 3) | PASS: gate green at 9cec1c1 |
 | 2026-09-26 | review (round 3) | 1 findings (0/1/0) |
 | 2026-09-26 | implement (round 4) | review round 3 major fixed: a dead letter value past 1 000 000 bytes is left out, named by its source position |
+| 2026-09-26 | verify (round 4) | PASS: gate green at 5be2328 |
