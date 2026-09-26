@@ -145,3 +145,4 @@ Beyond `CLAUDE.md §9`:
 | 2026-09-25 | implement | started on Opus |
 | 2026-09-26 | implement | done: items 1 to 11, npm run gate green |
 | 2026-09-26 | verify | PASS: gate green, all ten planned tests present and passing, cold start and README green |
+| 2026-09-26 | review (round 1) | 4 findings (0/2/2) |
