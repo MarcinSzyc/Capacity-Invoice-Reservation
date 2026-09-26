@@ -148,3 +148,4 @@ Beyond `CLAUDE.md §9`:
 | 2026-09-26 | review (round 1) | 4 findings (0/2/2) |
 | 2026-09-26 | implement (round 2) | review round 1: both majors and the web minor fixed; the plan-text minor goes to ship |
 | 2026-09-26 | verify (round 2) | PASS: gate green at d2b2a78 |
+| 2026-09-26 | review (round 2) | 3 findings (0/1/2) |

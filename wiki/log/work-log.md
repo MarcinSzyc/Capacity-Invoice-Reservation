@@ -3607,3 +3607,40 @@ Findings, most severe first:
   cold start 3. The compose stack took 941 s to turn healthy on this machine (24 to 36 s before);
   it passed, noted as an observation of the Docker host, not of the code. Prose check clean, no
   layer import moved. Findings: none new.
+
+## 2026-09-26, review S-08 (round 2), Fable
+- REVIEW S-08: 3 findings (0/1/2), at 0bab5ae against base e52d553, fresh context, attention on
+  d2b2a78. Not a pass.
+- Round 1 closed on the real store: a lone surrogate in a string, a key or an id is dropped from
+  the record or refused on sight, and a 200 000-wide payload is walked without throwing; the new
+  integration test proves both with the next message applied. Probed PostgreSQL directly through
+  `PrismaTreasuryMessageStore.recordOutcome` with Prisma-tagged objects (`$type` Json, DateTime,
+  Decimal, Bytes, FieldRef, Param, Raw), `toJSON` and `__proto__` keys, `1e999`, `5e-324`, a
+  30-digit integer, paired surrogates and noncharacters: every one stored. Text columns are
+  unbounded or fed only width-checked ids. No catch-all was added around the record insert (local
+  decision 3 holds). The web minor is closed: a body that breaks off mid-read is logged with its
+  status.
+- Findings, most severe first:
+  - (major, spec) `api/src/modules/capacity/infrastructure/messaging/treasury-capacity.consumer.ts:254-266`
+    with `capacity-update-message.dto.ts:71-73` and `reconciliation-snapshot-message.dto.ts:113,144-148`:
+    the dead letter carries the original bytes plus the whole validation error in its `error`
+    header, and that error names every unknown field ("property k00001 should not exist; ..."),
+    so it grows with the message. A capacity update with 40 000 short unknown fields (440 KB,
+    under the broker's 1 MB) makes a dead letter over the broker's `message.max.bytes`; the broker
+    refuses it ("The request included a message larger than the max message size the server will
+    accept"), `reject` throws before the record, kafkajs logs `Crash: KafkaJSNonRetriableError`,
+    no dead letter and no record exist, and the next message on the partition was never applied
+    (reproduced through the real consumer, broker and database). The same holds for one unknown
+    key of about 600 KB, or for snapshot entries each carrying an unknown key. Not new with S-08,
+    but inside its outcome ("no treasury message can stall its partition by what it contains",
+    A-13 clauses 4 and 6): the broker is the other store the rejection writes to, and ADR-0013
+    redelivers only while one of them is away, not when it refuses deterministically.
+  - (minor, standards) `api/src/modules/capacity/infrastructure/messaging/readable-payload.ts:55`
+    and `storable-text.ts:8`: `storableText` (sanitises an error text) and `StorableText` (the id
+    validator) differ only in case and do opposite things, and `storable-text.ts` does not export
+    `storableText`. A reader following the name lands in the wrong file.
+  - (minor, spec) `wiki/slices/S-08-hardening-carried-findings.md:68`: still open from round 1 by
+    decision; item 5 says the 20 000 reservations come from two snapshots of 10 000, the test
+    writes client reservations through the repositories. Carried to `/ship`.
+- Scratch reproductions were written under `api/src/` and deleted; the working tree holds only
+  this entry and the slice log row.
