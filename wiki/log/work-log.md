@@ -3810,3 +3810,20 @@ Findings, most severe first:
 - Scratch reproductions were written under `api/src/` and the scratchpad and deleted, and the
   Kafka container the crashed run left behind was removed; the working tree holds only this entry
   and the slice log row.
+
+## 2026-09-26, implement S-08 (review round 5 fix), Opus
+- Major: a GZIP message that decompresses to 80 MB cost 1.6 GB of heap in `JSON.parse` and
+  class-transformer before any bound of ours ran, and the walk's `Object.entries` finished the
+  heap: the process died and restarted into the same message. The bound that closes it is on the
+  raw bytes, before parsing: `TREASURY_MESSAGE_MAX_BYTES` (8 000 000, a 10 000 entry snapshot is
+  under 5 MB) refuses a larger message as malformed. It has no readable id, so it is dead-lettered
+  (value omitted past its own bound) and not recorded, like a message that is not JSON.
+- The walk also counts each child as it queues it and walks an array lazily, so it stops inside a
+  wide array at the payload bound instead of copying it first; the comment says so truthfully now.
+- Tests red first: the consumer never parses the oversized message and applies the next one; the
+  walk never calls `Object.entries` on a 16 000 000-element array. Spies on `JSON.parse` and
+  `Object.entries` are on built-ins, not our code. No real-broker test: publishing a compressed
+  80 MB message needs a codec our `KafkaService` does not send, and the raw bound is checked
+  before anything the broker does matters.
+- Minor (glossary `Dead letter` and the two omission headers): with the ADR-0003 amendment at
+  `/ship`.

@@ -45,6 +45,12 @@ export const DEAD_LETTER_VALUE_MAX_BYTES = 1_000_000;
  * push the dead letter past the broker's limit (review round 4 of S-08).
  */
 export const DEAD_LETTER_KEY_MAX_BYTES = 1_000;
+/**
+ * The largest treasury message parsed at all. A snapshot at its 10 000 entry bound is under
+ * 5 MB; a compressed message can decompress far past what the broker took, and parsing it costs
+ * gigabytes of heap before any other bound applies (review round 5 of S-08).
+ */
+export const TREASURY_MESSAGE_MAX_BYTES = 8_000_000;
 
 type Attempted<T> =
   {readonly ok: true; readonly value: T} | {readonly ok: false; readonly error: string};
@@ -310,6 +316,12 @@ export class TreasuryCapacityConsumer implements OnApplicationBootstrap, OnModul
 
 const parseJson = (value: Buffer | null): ParsedJson => {
   if (value === null) return {ok: false, error: 'message has no value'};
+  if (value.length > TREASURY_MESSAGE_MAX_BYTES) {
+    return {
+      ok: false,
+      error: `message is ${value.length} bytes, more than the ${TREASURY_MESSAGE_MAX_BYTES} a treasury message may carry`,
+    };
+  }
   try {
     return {ok: true, payload: JSON.parse(value.toString('utf8'))};
   } catch (reason: unknown) {

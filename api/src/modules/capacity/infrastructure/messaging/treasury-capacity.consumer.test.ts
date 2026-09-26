@@ -21,6 +21,7 @@ import {ERROR_TEXT_MAX_LENGTH} from './readable-payload';
 import {
   DEAD_LETTER_KEY_MAX_BYTES,
   DEAD_LETTER_VALUE_MAX_BYTES,
+  TREASURY_MESSAGE_MAX_BYTES,
   TreasuryCapacityConsumer,
 } from './treasury-capacity.consumer';
 import {TREASURY_DEAD_LETTER_TOPIC, TREASURY_TOPIC} from './treasury-topics';
@@ -328,6 +329,24 @@ describe('TreasuryCapacityConsumer', () => {
     expect(deadLetter?.key).toBeNull();
     expect(deadLetter?.headers).toMatchObject({keyOmitted: expect.any(String) as string});
     expect(capacity.repositories.treasuryMessages.byId.get('m-long-key')?.outcome).toBe('rejected');
+  });
+
+  it('should refuse a message larger than the bound before parsing it, and keep consuming', async () => {
+    const capacity = inMemoryCapacity();
+    const source = new FakeMessageSource();
+    const huge = Buffer.from(
+      `{"messageId":"m-huge","note":"${'0'.repeat(TREASURY_MESSAGE_MAX_BYTES)}"}`,
+    );
+    const parse = jest.spyOn(JSON, 'parse');
+
+    await consumerFor(capacity, source).handle({...inbound(UPDATE), value: huge});
+    const parsedHuge = parse.mock.calls.some(([text]) => text.length > TREASURY_MESSAGE_MAX_BYTES);
+    parse.mockRestore();
+    await consumerFor(capacity, source).handle(inbound(UPDATE));
+
+    expect(parsedHuge).toBe(false);
+    expect(source.published[0]?.messages[0]?.headers?.error).toMatch(/bytes/);
+    expect(capacity.repositories.treasuryMessages.byId.get('m-limit')?.outcome).toBe('applied');
   });
 
   it('should keep the original bytes of a dead letter that fits', async () => {
