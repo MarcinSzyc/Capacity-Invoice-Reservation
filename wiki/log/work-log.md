@@ -3657,3 +3657,7 @@ Findings, most severe first:
 - Minor: the id validator is `StorableId` in `storable-id.ts`, no longer one letter of case away
   from `storableText`.
 - Minor (slice text, item 5): `/ship`.
+
+## 2026-09-26, verify S-08 (round 3), Opus
+- VERIFY S-08: PASS, at 9cec1c1. `npm run gate` green: unit 213, web 10, integration 54, e2e 66,
+  cold start 3. Prose check clean, no layer import moved. Findings: none new.
