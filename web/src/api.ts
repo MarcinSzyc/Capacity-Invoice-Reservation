@@ -10,6 +10,8 @@ export interface CallRecord {
   readonly path: string;
   readonly status: number;
   readonly code: string | null;
+  /** What was sent, so the request log can show the call again as a curl. */
+  readonly body?: unknown;
 }
 
 export interface Answer {
@@ -140,6 +142,7 @@ export const createApi = (baseUrl: string, onCall: (record: CallRecord) => void)
         path,
         status: answer.status,
         code: codeOf(answer.body),
+        ...(body === undefined ? {} : {body}),
       });
       return answer;
     },
