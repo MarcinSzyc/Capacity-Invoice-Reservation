@@ -3709,3 +3709,7 @@ Findings, most severe first:
   stalls) with the bound raised past it, then green with the bound restored.
 - The two comments that claimed more than the code did are corrected: the set-aside comment
   now separates an outage from what a store would refuse every time.
+
+## 2026-09-26, verify S-08 (round 4), Opus
+- VERIFY S-08: PASS, at 5be2328. `npm run gate` green: unit 215, web 10, integration 55, e2e 66,
+  cold start 3. Prose check clean, no layer import moved. Findings: none new.
