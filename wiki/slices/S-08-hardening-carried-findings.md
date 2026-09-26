@@ -159,3 +159,4 @@ Beyond `CLAUDE.md §9`:
 | 2026-09-26 | verify (round 5) | PASS: gate green at 4474dde |
 | 2026-09-26 | review (round 5) | 2 findings (0/1/1) |
 | 2026-09-26 | implement (round 6) | review round 5 major fixed: a treasury message past 8 000 000 bytes is refused before parsing; the walk stops inside a wide array |
+| 2026-09-26 | verify (round 6) | PASS: gate green at d528dd8 |
