@@ -3856,3 +3856,22 @@ Findings, most severe first:
   CI ran the 10 000 entry snapshot about twice as slow as local (10.1 s against 5.2 s), so on CI it
   is likely near 11 s of the 15 s. A larger program, or a slower runner, would reach the timeout;
   batching the snapshot's reads and writes would be the fix if it does.
+
+## 2026-09-26, demo page improvements, Opus
+- Asked for piece by piece by Marcin while using the page; not a slice, no requirement changes.
+  AC-38 still holds: the page shows only what `api` answers, and every dev endpoint is absent in
+  production (the e2e test now also checks `/dev/reset` answers `404` there).
+- `api`: `POST /dev/reset` empties programs, reservations, the ledger and the treasury message
+  tables in one `TRUNCATE`, behind a `StateReset` port and a `ResetState` use case provided only
+  by `CapacityDevModule`. Integration test on the real database, e2e test through HTTP.
+- `web`: the layout (tables side by side, framed panels, folded accordions with a summary in the
+  title, buttons with a description beside each), a release generator split from the request
+  generator (interval release oldest first, one release of a typed invoice, repeat a release id),
+  the treasury panel as two optional parts sent by one Send (a limit alone is an update,
+  invoices make a snapshot), five predefined snapshot invoices, a Reset button and a Clear
+  button, pastel colours by kind in the request log and the ledger, an Invoice column in the log,
+  a copyable curl box per panel, clearer notes on how a program comes to exist.
+- Two bugs found while doing it and fixed: release ids and invoice ids built from `Math.random`
+  could repeat, now `crypto.randomUUID()`; the generator used to release on its own, now only the
+  release generator releases, and only when asked.
+- README "See it working" and the glossary (`Dev endpoint`, `Demo page`) updated to match.
