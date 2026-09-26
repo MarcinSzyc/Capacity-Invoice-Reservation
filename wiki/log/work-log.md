@@ -3772,3 +3772,7 @@ Findings, most severe first:
 - Noted from the round 4 review, outside this slice: kafkajs ships no LZ4, Snappy or ZSTD codec,
   so a treasury batch compressed with one of them would fail the fetch before any handler runs.
   For `/ship` to list as a known limitation.
+
+## 2026-09-26, verify S-08 (round 5), Opus
+- VERIFY S-08: PASS, at 4474dde. `npm run gate` green: unit 217, web 10, integration 56, e2e 66,
+  cold start 3. Prose check clean, no layer import moved. Findings: none new.
