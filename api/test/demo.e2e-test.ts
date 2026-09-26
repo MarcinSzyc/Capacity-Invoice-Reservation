@@ -8,6 +8,7 @@ const DEV_ROUTES = [
   {method: 'get', path: '/dev/token'},
   {method: 'get', path: '/dev/programs/PRG-1/movements'},
   {method: 'post', path: '/dev/treasury'},
+  {method: 'post', path: '/dev/reset'},
 ] as const;
 
 interface MovementsBody {
@@ -55,5 +56,24 @@ describe('Demo page dev endpoints', () => {
         `${method.toUpperCase()} ${path} -> 404`,
       );
     }
+  });
+
+  it('should empty the ledger through the dev reset, so the page starts from nothing', async () => {
+    const programId = uniqueId('PRG');
+    const {token} = (await request(httpServer(app)).get('/dev/token').expect(200)).body as {
+      token: string;
+    };
+    await request(httpServer(app))
+      .post('/dev/treasury')
+      .send({type: 'capacity_update', programId, currency: USD, creditLimit: TEN_MILLION_USD})
+      .expect(202);
+    await awaitAvailability(app, programId, token, (body) => body.limit === TEN_MILLION_USD);
+
+    await request(httpServer(app)).post('/dev/reset').expect(204);
+
+    await request(httpServer(app))
+      .get(`/programs/${programId}/availability`)
+      .set('Authorization', `Bearer ${token}`)
+      .expect(404);
   });
 });

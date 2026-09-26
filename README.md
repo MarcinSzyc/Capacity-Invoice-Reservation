@@ -39,15 +39,21 @@ real treasury topic, on program `PRG-1` unless you type another id:
 
 | Panel | What it does |
 |---|---|
-| Request generator | Start, Stop, One request: random reservations of up to 100 000 minor units, and releases of them in full or in part |
-| Request log | the last 50 calls the page made, with method, path, status and the error `code` |
-| Live ledger | availability and the latest 100 movements, polled every second, amounts in minor units |
-| Treasury panel | Limit change, Snapshot (reservations as `INV-A:70000000,INV-B:0`), Duplicate (the last message again), Stale (an update from 2000) |
+| Request generator | Start, Stop, One request: random reservations between a minimum and a maximum (1 000 to 10 000 minor units by default), every 1 to 10 s. It never releases |
+| Release generator | Start, Stop: releases the oldest reservation the generator made, in full, every 1 to 10 s. One release: the invoice you type, in full or in part. Repeat last release shows the `409` of a repeated `releaseId` |
+| Treasury panel | Send, with New limit and Invoices each added or not: a new limit alone goes as a limit update, invoices go as a snapshot. Stale (an update dated 2000) and Duplicate (the last message again) |
+| Request log | the last 50 calls the page made, coloured by kind, with invoice, status and the error `code`; Clear empties it |
+| Live ledger | availability and the latest 100 movements, polled every second, coloured by kind; Reset empties the whole database |
 
-The page gets its token from `GET /dev/token` and reaches the ledger and the treasury through
-`GET /dev/programs/:programId/movements` and `POST /dev/treasury`. Those dev endpoints need no
-token and exist only outside the production profile; with `NODE_ENV=production` they answer
-`404` because they are not registered. Stop and start the stack and every number reads the same.
+Every panel has a folded curl box with the call its settings make, one click to copy. A program
+exists only once the treasury has sent a first message for it: after a Reset, or for a new
+program id, send a New limit first.
+
+The page gets its token from `GET /dev/token`, reads the ledger through
+`GET /dev/programs/:programId/movements`, publishes through `POST /dev/treasury` and empties the
+database through `POST /dev/reset`. Those dev endpoints need no token and exist only outside the
+production profile; with `NODE_ENV=production` they answer `404` because they are not
+registered. Stop and start the stack and every number reads the same.
 
 ### Where to look first
 
