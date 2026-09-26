@@ -3661,3 +3661,33 @@ Findings, most severe first:
 ## 2026-09-26, verify S-08 (round 3), Opus
 - VERIFY S-08: PASS, at 9cec1c1. `npm run gate` green: unit 213, web 10, integration 54, e2e 66,
   cold start 3. Prose check clean, no layer import moved. Findings: none new.
+
+## 2026-09-26, review S-08 (round 3), Fable
+- REVIEW S-08: 1 finding (0/1/0), at 47d53a8 against base e52d553, fresh context, attention on
+  9cec1c1. Not a pass.
+- Round 2 closed as far as it reached: the `error` header, the record's error and the failure
+  row are one text cut at 2 000 characters, so a message with 40 000 unknown fields is
+  dead-lettered and recorded and the next one applied on the real broker. The validator is
+  `StorableId` in `storable-id.ts`, no stale name left. The record insert has no deterministic
+  refusal left that I could find: ids are width and text checked, `type` and `programId` go
+  through `readableString`, the payload through `storablePayload`, the error is bounded and
+  storable. No catch-all was added around the record insert or the publish (local decision 3
+  holds). The item 5 slice text is carried to `/ship` by decision and not raised again.
+- Findings:
+  - (major, spec) `api/src/modules/capacity/infrastructure/messaging/treasury-capacity.consumer.ts:256-269`
+    with `api/src/messaging/kafka.service.ts:88-91`: the dead letter is the decompressed value
+    plus up to about 2 KB of headers, published uncompressed, and nothing bounds it against what
+    the broker accepts; "the broker already accepted these bytes" does not hold. Reproduced
+    through the real consumer, broker and database, twice. (a) A capacity update with an unknown
+    field of 3 000 000 zeros, sent with GZIP compression (kafkajs, any treasury producer may
+    compress): the broker accepts it compressed, the consumer refuses it, the dead letter of 3 MB
+    is refused ("The request included a message larger than the max message size the server will
+    accept"), kafkajs logs `Crash: KafkaJSNonRetriableError`, no dead letter, no record, and the
+    next valid message on the partition was not applied within 20 s. (b) Without compression, a
+    source message of 1 048 509 bytes, the largest the broker took: the headers push the dead
+    letter over the limit, with the same result. The partition stalls by what a message contains
+    (A-13 clauses 4 and 6, the slice outcome); the comments at `readable-payload.ts:54-58` and
+    `treasury-capacity.consumer.ts:198-203` present the error bound as closing that and a
+    refusal as an outage.
+- Scratch reproductions were written under `api/src/` and deleted; the working tree holds only
+  this entry and the slice log row.
