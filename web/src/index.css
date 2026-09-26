@@ -1,4 +1,8 @@
 :root {
+  /* The yellow of the notes that ask for attention, reused by the main Send buttons. */
+  --attention: #f5c518;
+  /* A light red for the buttons that delete something. */
+  --danger: #ff8a8a;
   color-scheme: light dark;
   font-family:
     system-ui,
@@ -14,17 +18,54 @@ body {
   justify-content: center;
 }
 
+/* One column on a narrow screen: generator, its request log, treasury, ledger. */
 main {
+  box-sizing: border-box;
   width: 100%;
-  max-width: 72rem;
+  max-width: 110rem;
   padding: 2rem 1rem;
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(22rem, 1fr));
-  gap: 0 2rem;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas: 'header' 'generator' 'release-generator' 'request-log' 'treasury' 'ledger';
+  gap: 1.5rem 2rem;
+}
+
+/* Wider: the two forms side by side, and below them the two tables side by side, the request
+   log on the left and the ledger, the widest table, on the right with more room. */
+@media (min-width: 60rem) {
+  main {
+    grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+    grid-template-areas:
+      'header header'
+      'generator treasury'
+      'release-generator treasury'
+      'request-log ledger';
+    align-items: start;
+  }
 }
 
 header {
-  grid-column: 1 / -1;
+  grid-area: header;
+}
+
+#generator {
+  grid-area: generator;
+}
+
+#release-generator {
+  grid-area: release-generator;
+}
+
+#request-log {
+  grid-area: request-log;
+}
+
+#treasury {
+  grid-area: treasury;
+}
+
+#ledger {
+  grid-area: ledger;
 }
 
 nav {
@@ -34,9 +75,13 @@ nav {
   margin-bottom: 1rem;
 }
 
+/* A light frame around each panel: white on the dark scheme, from the text colour either way. */
 section {
   min-width: 0;
   overflow-x: auto;
+  border: 1px solid color-mix(in srgb, currentColor 25%, transparent);
+  border-radius: 8px;
+  padding: 0 1rem 1rem;
 }
 
 label {
@@ -83,4 +128,246 @@ h2 {
 
 code {
   opacity: 0.7;
+}
+
+.hint {
+  font-size: 0.85rem;
+  opacity: 0.8;
+}
+
+/* Buttons in a column, each with what it does beside it. */
+.actions {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0.5rem 1rem;
+  align-items: center;
+  margin: 0.5rem 0 1rem;
+}
+
+.actions button {
+  margin-top: 0;
+  justify-self: stretch;
+}
+
+/* The snapshot table on the left, what it means on the right. */
+.snapshot {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 1rem;
+  align-items: start;
+  margin-bottom: 0.5rem;
+}
+
+.snapshot-list {
+  width: auto;
+}
+
+.snapshot-list input {
+  width: 8rem;
+}
+
+/* The two kinds of treasury message, each in its own light frame inside the panel. */
+/* A part of a panel that folds away: click its title to open or close it. */
+details.box {
+  border: 1px solid color-mix(in srgb, currentColor 20%, transparent);
+  border-radius: 6px;
+  margin: 0 0 1rem;
+  padding: 0.5rem 1rem;
+}
+
+details.box > summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+details.box[open] > summary {
+  margin-bottom: 0.5rem;
+}
+
+/* Something to do first: a yellow exclamation mark before the text. */
+.notice {
+  font-size: 0.85rem;
+  display: flex;
+  gap: 0.5rem;
+  align-items: baseline;
+}
+
+.notice::before {
+  content: '!';
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: 1.2rem;
+  height: 1.2rem;
+  border-radius: 50%;
+  background: var(--attention);
+  color: #111;
+  font-weight: 700;
+}
+
+.program {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 1.5rem;
+  align-items: baseline;
+  /* Framed like the panels below it. */
+  border: 1px solid color-mix(in srgb, currentColor 25%, transparent);
+  border-radius: 8px;
+  padding: 0.5rem 1rem;
+  margin: 1rem 0 0;
+}
+
+/* One pastel per kind of event, the same hue for the same thing in both tables: blue for a
+   reservation, green for a release, violet for the treasury, orange for a correction. Mixed
+   with transparency so the text keeps its contrast on either scheme. */
+.call-reserve,
+.movement-reserve {
+  background: color-mix(in srgb, #9ecbff 22%, transparent);
+}
+
+.call-release,
+.movement-release {
+  background: color-mix(in srgb, #a8e6a1 22%, transparent);
+}
+
+.call-treasury,
+.movement-limit_set {
+  background: color-mix(in srgb, #d4b5ff 22%, transparent);
+}
+
+.movement-adjustment {
+  background: color-mix(in srgb, #ffd59e 24%, transparent);
+}
+
+.call-reset {
+  background: color-mix(in srgb, #ffb3b3 24%, transparent);
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  font-size: 0.8rem;
+}
+
+.legend span {
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+}
+
+/* The curl boxes: folded by default, the command in a scrollable block under its Copy button. */
+details.curl pre {
+  font-size: 0.75rem;
+  overflow-x: auto;
+  padding: 0.5rem;
+  border-radius: 4px;
+  background: color-mix(in srgb, currentColor 8%, transparent);
+  white-space: pre;
+}
+
+/* The program's figures in two rows of three: the amounts first, the rest below. */
+dl.figures {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.75rem 1rem;
+}
+
+dl.figures dt {
+  font-size: 0.8rem;
+  opacity: 0.75;
+}
+
+dl.figures dd {
+  font-size: 1.1rem;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Settings side by side: the main ones on the left, the switches on the right. */
+.columns {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  gap: 0 1.5rem;
+  align-items: start;
+}
+
+/* The note shares the row with the field and wraps inside its own width. */
+.program > .notice {
+  flex: 1 1 20rem;
+  margin: 0.5rem 0;
+}
+
+.program > label {
+  flex: none;
+  margin: 0;
+}
+
+/* A wide table scrolls sideways inside its panel, with a scrollbar that stays visible: on macOS
+   the default one is hidden until you scroll, so a cut-off column looked like the end. */
+.table-scroll {
+  overflow-x: auto;
+  padding-bottom: 0.25rem;
+}
+
+.table-scroll::-webkit-scrollbar {
+  height: 8px;
+}
+
+.table-scroll::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, currentColor 35%, transparent);
+  border-radius: 4px;
+}
+
+.table-scroll::-webkit-scrollbar-track {
+  background: color-mix(in srgb, currentColor 8%, transparent);
+  border-radius: 4px;
+}
+
+/* The buttons that send the request a panel is built for: a quarter larger, framed in the same
+   yellow as the notes. */
+button.primary {
+  /* A plain button is 13.33px with 1px 6px of padding (the browser default); these are 25% more. */
+  font-size: calc(13.333px * 1.25);
+  padding: calc(1px * 1.25) calc(6px * 1.25);
+  border: 1px solid var(--attention);
+  border-radius: 4px;
+}
+
+/* Every button that can be pressed shows a hand and brightens a little under the pointer; a
+   disabled one keeps the arrow and does not react. */
+button:not(:disabled) {
+  cursor: pointer;
+  transition: filter 0.12s ease;
+}
+
+button:not(:disabled):hover {
+  filter: brightness(1.2);
+}
+
+button:disabled {
+  cursor: not-allowed;
+}
+
+/* What a folded box contributes, readable without opening it. */
+.summary-note {
+  font-weight: 400;
+  font-size: 0.85rem;
+  color: var(--attention);
+}
+
+/* Buttons that throw something away: Reset (the whole database) and Clear (the request log). */
+button.danger {
+  border: 1px solid var(--danger);
+  border-radius: 4px;
+}
+
+details.box h3 {
+  font-size: 0.95rem;
+  margin: 0.75rem 0 0.25rem;
+}
+
+/* A field that belongs to the button on its left, with its hint after it. */
+.inline-field {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  align-items: center;
 }

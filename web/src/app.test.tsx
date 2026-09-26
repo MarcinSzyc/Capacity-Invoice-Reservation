@@ -82,7 +82,7 @@ describe('App', () => {
     expect(screen.getByRole('region', {name: 'Request log'})).toBeInTheDocument();
     expect(screen.getByRole('region', {name: 'Live ledger'})).toBeInTheDocument();
     const treasury = within(screen.getByRole('region', {name: 'Treasury panel'}));
-    for (const action of ['Limit change', 'Snapshot', 'Duplicate', 'Stale']) {
+    for (const action of ['Send', 'Duplicate', 'Stale']) {
       expect(treasury.getByRole('button', {name: action})).toBeInTheDocument();
     }
   });
@@ -117,13 +117,11 @@ describe('App', () => {
     render(<App />);
 
     fireEvent.change(screen.getByLabelText('Program'), {target: {value: OTHER_PROGRAM_ID}});
-    await screen.findByText('The treasury has not announced this program yet.');
+    await screen.findByText(/PRG-2 doesn't exist yet/);
     answerSlowProgram(json(200, AVAILABILITY));
     await new Promise((resolve) => setTimeout(resolve, 50));
 
-    expect(
-      screen.getByText('The treasury has not announced this program yet.'),
-    ).toBeInTheDocument();
+    expect(screen.getByText(/doesn't exist yet/)).toBeInTheDocument();
   });
 
   it('should show no availability for a body that is not one', async () => {
@@ -140,9 +138,52 @@ describe('App', () => {
     render(<App />);
     await new Promise((resolve) => setTimeout(resolve, 50));
 
-    expect(
-      screen.getByText('The treasury has not announced this program yet.'),
-    ).toBeInTheDocument();
+    expect(screen.getByText(/doesn't exist yet/)).toBeInTheDocument();
     expect(screen.queryByText('a lot')).toBeNull();
+  });
+
+  it('should reset the ledger after a confirmation and start the request log again', async () => {
+    const fetchMock = vi.fn(fakeApi);
+    vi.stubGlobal('fetch', fetchMock);
+    vi.stubGlobal('confirm', () => true);
+    render(<App />);
+    fireEvent.click(await screen.findByRole('button', {name: 'One request'}));
+    const log = within(screen.getByRole('region', {name: 'Request log'}));
+    await log.findByRole('row', {name: /reservations/});
+
+    fireEvent.click(screen.getByRole('button', {name: 'Reset'}));
+
+    await log.findByRole('row', {name: /\/dev\/reset/});
+    expect(log.queryByRole('row', {name: /reservations/})).toBeNull();
+    const calls = fetchMock.mock.calls.map(([request, init]) => [pathOf(request), init?.method]);
+    expect(calls).toContainEqual(['/dev/reset', 'POST']);
+  });
+
+  it('should leave everything as it is when the reset is not confirmed', async () => {
+    const fetchMock = vi.fn(fakeApi);
+    vi.stubGlobal('fetch', fetchMock);
+    vi.stubGlobal('confirm', () => false);
+    render(<App />);
+
+    fireEvent.click(await screen.findByRole('button', {name: 'Reset'}));
+
+    const paths = fetchMock.mock.calls.map(([request]) => pathOf(request));
+    expect(paths).not.toContain('/dev/reset');
+  });
+
+  it('should clear the request log on the page without calling api', async () => {
+    const fetchMock = vi.fn(fakeApi);
+    vi.stubGlobal('fetch', fetchMock);
+    render(<App />);
+    fireEvent.click(await screen.findByRole('button', {name: 'One request'}));
+    const log = within(screen.getByRole('region', {name: 'Request log'}));
+    await log.findByRole('row', {name: /reservations/});
+    const callsBefore = fetchMock.mock.calls.length;
+
+    fireEvent.click(log.getByRole('button', {name: 'Clear'}));
+
+    expect(log.queryByRole('row', {name: /reservations/})).toBeNull();
+    const newCalls = fetchMock.mock.calls.slice(callsBefore).map(([request]) => pathOf(request));
+    expect(newCalls.every((path) => !path.startsWith('/dev/reset'))).toBe(true);
   });
 });
