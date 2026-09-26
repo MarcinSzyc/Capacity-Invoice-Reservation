@@ -211,12 +211,14 @@ and without a token, for the demo page: `GET /dev/token` mints a bearer token,
 program, reservation, movement and treasury message so a demo starts from nothing. In production the routes are not
 registered, so `/dev/token` answers `404` like any unknown path (A-17, AC-38).
 
-**Demo page.** The page the `web` container serves in the dev profile. Five panels: the
+**Demo page.** The page the `web` container serves in the dev profile. Six panels: the
 request generator (random reservations), the release generator (releases on an interval, oldest
-first, or one invoice by hand), the request log (each call with its status and error code), the
-live ledger (availability and the latest movements, polled, with a reset) and the treasury panel
-(a new limit, a snapshot, a duplicate or a stale message, through the dev producer). It shows
-what `api` answers and computes nothing (A-17).
+first, or one invoice by hand), the resilience scenarios (stress situations run against the
+program shown, each reporting whether api held up), the request log (each call with its status
+and error code), the live ledger (availability and the latest movements, polled, with a reset)
+and the treasury panel (a new limit, a snapshot, a duplicate or a stale message, through the dev
+producer). It shows what `api` answers and computes nothing (A-17); the scenarios compare
+those answers with what the acceptance criteria promise, from the outside, as a client would.
 
 **Message id.** The treasury's identifier of one message. Processing the same id twice
 changes nothing.
