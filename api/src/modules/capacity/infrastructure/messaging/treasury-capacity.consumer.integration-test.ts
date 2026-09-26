@@ -485,6 +485,28 @@ describe('TreasuryCapacityConsumer', () => {
     expect(deadLetter.headers.sourceOffset).toBeDefined();
   });
 
+  it('should dead-letter a message whose key and value together are too large to republish, and apply the next one', async () => {
+    const programId = uniqueId('PRG');
+    const largeId = uniqueId('m-large-key');
+    const validId = uniqueId('m');
+    const head = JSON.stringify({messageId: largeId, type: 'capacity_update', programId, note: ''});
+    // A value exactly at the value bound, kept as is, and a key that brings the source message
+    // just under the broker's 1 MiB: the dead letter's headers alone would push it over.
+    const value = `${head.slice(0, -2)}${'0'.repeat(1_000_000 - head.length)}"}`;
+
+    await kafka.publish(TREASURY_TOPIC, [{key: 'k'.repeat(48_400), value}]);
+    await producer.publishCapacityUpdate({
+      messageId: validId,
+      programId,
+      currency: EUR,
+      creditLimit: FIVE_MILLION,
+      eventTime: AT_10_00,
+    });
+
+    expect(await outcomeOf(validId)).toMatchObject({outcome: 'applied'});
+    expect(await outcomeOf(largeId)).toMatchObject({outcome: 'rejected'});
+  });
+
   describe('reconciliation snapshots', () => {
     const AT = (hour: number): Date => new Date(Date.UTC(2026, 8, 21, hour));
     const SEVEN_MILLION = 700_000_000n;

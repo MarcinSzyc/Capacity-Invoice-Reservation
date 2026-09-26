@@ -155,3 +155,4 @@ Beyond `CLAUDE.md §9`:
 | 2026-09-26 | implement (round 4) | review round 3 major fixed: a dead letter value past 1 000 000 bytes is left out, named by its source position |
 | 2026-09-26 | verify (round 4) | PASS: gate green at 5be2328 |
 | 2026-09-26 | review (round 4) | 2 findings (0/2/0) |
+| 2026-09-26 | implement (round 5) | review round 4 majors fixed: dead letter key bounded, stored payload bounded in bytes |

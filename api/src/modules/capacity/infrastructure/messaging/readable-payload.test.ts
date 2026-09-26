@@ -1,5 +1,6 @@
 import {
   ERROR_TEXT_MAX_LENGTH,
+  STORED_PAYLOAD_MAX_BYTES,
   readableString,
   storablePayload,
   storableText,
@@ -62,6 +63,17 @@ describe('storablePayload', () => {
   it('should drop a payload with a string or a key that is not well-formed Unicode', () => {
     expect(storablePayload({note: `a${LONE_SURROGATE}b`})).toBeNull();
     expect(storablePayload({[`k${LONE_SURROGATE}`]: 1})).toBeNull();
+  });
+
+  it('should drop a payload larger than the bound, in one string or across many', () => {
+    const oneString = {note: '0'.repeat(STORED_PAYLOAD_MAX_BYTES + 1)};
+    const manyStrings = {
+      notes: Array.from({length: 2}, () => '0'.repeat(STORED_PAYLOAD_MAX_BYTES / 2 + 1)),
+    };
+
+    expect(storablePayload(oneString)).toBeNull();
+    expect(storablePayload(manyStrings)).toBeNull();
+    expect(storablePayload({note: '0'.repeat(1_000)})).not.toBeNull();
   });
 
   it('should walk a payload wider than one call can take without throwing', () => {

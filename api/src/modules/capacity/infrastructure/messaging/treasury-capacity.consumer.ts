@@ -39,6 +39,12 @@ const RETRY_PAUSE_MS = 250;
  * Below the default with room for the bounded headers.
  */
 export const DEAD_LETTER_VALUE_MAX_BYTES = 1_000_000;
+/**
+ * The largest dead letter key republished as is. A treasury key is a program id; a key that is
+ * not UTF-8 comes back three bytes per byte, and a long one next to a value at its bound would
+ * push the dead letter past the broker's limit (review round 4 of S-08).
+ */
+export const DEAD_LETTER_KEY_MAX_BYTES = 1_000;
 
 type Attempted<T> =
   {readonly ok: true; readonly value: T} | {readonly ok: false; readonly error: string};
@@ -208,7 +214,8 @@ export class TreasuryCapacityConsumer implements OnApplicationBootstrap, OnModul
    * the dead letter or the record is written, `reject` throws, the offset stays uncommitted and
    * the message is delivered again, so an outage delays messages rather than setting them aside.
    * What a store would refuse every time is shaped before it gets there (bounded error, storable
-   * payload and ids, a dead letter value within the broker's size), so only an outage throws.
+   * payload and ids, a dead letter key and value within the broker's size), so only an outage
+   * throws.
    */
   private async setAside(
     message: InboundMessage,
@@ -263,24 +270,28 @@ export class TreasuryCapacityConsumer implements OnApplicationBootstrap, OnModul
 
   /**
    * ADR-0003: the original bytes, with what went wrong and where it came from in the headers. A
-   * value too large to republish is left out and named in `valueOmitted`: the source position
-   * still finds it on the treasury topic, and a dead letter the broker refuses would stall it.
+   * value or key too large to republish is left out and named in `valueOmitted` or `keyOmitted`:
+   * the source position still finds it on the treasury topic, and a dead letter the broker
+   * refuses would stall it. Bounded key, value and headers stay under the broker's 1 MiB.
    */
   private deadLetter(message: InboundMessage, error: string): Promise<void> {
     const value = message.value ?? Buffer.alloc(0);
-    const fits = value.length <= DEAD_LETTER_VALUE_MAX_BYTES;
-    const headers = {
-      error,
-      sourceTopic: message.topic,
-      sourcePartition: String(message.partition),
-      sourceOffset: message.offset,
-      correlationId: currentCorrelationId() ?? 'unknown',
-    };
+    const keyBytes = message.key === null ? 0 : Buffer.byteLength(message.key, 'utf8');
+    const valueFits = value.length <= DEAD_LETTER_VALUE_MAX_BYTES;
+    const keyFits = keyBytes <= DEAD_LETTER_KEY_MAX_BYTES;
     return this.source.publish(TREASURY_DEAD_LETTER_TOPIC, [
       {
-        key: message.key,
-        value: fits ? value : Buffer.alloc(0),
-        headers: fits ? headers : {...headers, valueOmitted: `${value.length} bytes`},
+        key: keyFits ? message.key : null,
+        value: valueFits ? value : Buffer.alloc(0),
+        headers: {
+          error,
+          sourceTopic: message.topic,
+          sourcePartition: String(message.partition),
+          sourceOffset: message.offset,
+          correlationId: currentCorrelationId() ?? 'unknown',
+          ...(valueFits ? {} : {valueOmitted: `${value.length} bytes`}),
+          ...(keyFits ? {} : {keyOmitted: `${keyBytes} bytes`}),
+        },
       },
     ]);
   }

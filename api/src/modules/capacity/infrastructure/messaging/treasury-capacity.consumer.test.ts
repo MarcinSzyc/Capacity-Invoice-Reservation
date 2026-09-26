@@ -18,7 +18,11 @@ import {Money} from '../../domain/money';
 import {CapacityReads, CapacityRepositories, UnitOfWork} from '../../domain/ports/unit-of-work';
 import {Program} from '../../domain/program';
 import {ERROR_TEXT_MAX_LENGTH} from './readable-payload';
-import {DEAD_LETTER_VALUE_MAX_BYTES, TreasuryCapacityConsumer} from './treasury-capacity.consumer';
+import {
+  DEAD_LETTER_KEY_MAX_BYTES,
+  DEAD_LETTER_VALUE_MAX_BYTES,
+  TreasuryCapacityConsumer,
+} from './treasury-capacity.consumer';
 import {TREASURY_DEAD_LETTER_TOPIC, TREASURY_TOPIC} from './treasury-topics';
 
 const PROGRAM_ID = 'PRG-1';
@@ -308,6 +312,22 @@ describe('TreasuryCapacityConsumer', () => {
     expect(capacity.repositories.treasuryMessages.byId.get('m-oversized')?.outcome).toBe(
       'rejected',
     );
+  });
+
+  it('should dead-letter a message whose key is too large to republish without its key', async () => {
+    const capacity = inMemoryCapacity();
+    const source = new FakeMessageSource();
+    const malformed = {...UPDATE, messageId: 'm-long-key', creditLimit: 'a lot'};
+
+    await consumerFor(capacity, source).handle({
+      ...inbound(malformed),
+      key: '\ufffd'.repeat(DEAD_LETTER_KEY_MAX_BYTES),
+    });
+
+    const deadLetter = source.published[0]?.messages[0];
+    expect(deadLetter?.key).toBeNull();
+    expect(deadLetter?.headers).toMatchObject({keyOmitted: expect.any(String) as string});
+    expect(capacity.repositories.treasuryMessages.byId.get('m-long-key')?.outcome).toBe('rejected');
   });
 
   it('should keep the original bytes of a dead letter that fits', async () => {
