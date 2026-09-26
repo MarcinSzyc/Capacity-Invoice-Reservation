@@ -1,11 +1,18 @@
 import {randomUUID} from 'node:crypto';
 import {Body, Controller, Get, HttpCode, HttpStatus, Inject, Param, Post} from '@nestjs/common';
-import {ApiAcceptedResponse, ApiNotFoundResponse, ApiOkResponse, ApiTags} from '@nestjs/swagger';
+import {
+  ApiAcceptedResponse,
+  ApiNoContentResponse,
+  ApiNotFoundResponse,
+  ApiOkResponse,
+  ApiTags,
+} from '@nestjs/swagger';
 import {mintToken} from '../../../../common/auth/mint-token';
 import {Public} from '../../../../common/auth/public.decorator';
 import {APP_CONFIG, AppConfig} from '../../../../config/config.module';
 import {CAPACITY_UPDATE_TYPE} from '../../application/apply-capacity-update.use-case';
 import {ListProgramMovements} from '../../application/list-program-movements.query';
+import {ResetState} from '../../application/reset-state.use-case';
 import {DevTreasuryProducer} from '../messaging/dev-treasury-producer';
 import {ProgramIdParams} from './availability.dto';
 import {
@@ -31,7 +38,17 @@ export class DevController {
     @Inject(APP_CONFIG) private readonly config: AppConfig,
     private readonly listProgramMovements: ListProgramMovements,
     private readonly producer: DevTreasuryProducer,
+    private readonly resetState: ResetState,
   ) {}
+
+  @Post('reset')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiNoContentResponse({
+    description: 'Every program, reservation, movement and treasury message is gone.',
+  })
+  reset(): Promise<void> {
+    return this.resetState.execute();
+  }
 
   @Get('token')
   @ApiOkResponse({type: DevTokenDto, description: 'A token the business routes accept.'})
