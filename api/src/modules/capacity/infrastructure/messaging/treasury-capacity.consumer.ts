@@ -32,6 +32,13 @@ const RESUBSCRIBE_AFTER_MS = 2_000;
 // ADR-0013: a message is tried this many times in one delivery before it is set aside.
 const ATTEMPTS = 3;
 const RETRY_PAUSE_MS = 250;
+/**
+ * The largest dead letter value republished as is. Kafka's default `message.max.bytes` is 1 MiB,
+ * and the value arrives decompressed while the dead letter goes out uncompressed, so a message
+ * the broker took from the treasury can be one it refuses from us (review round 3 of S-08).
+ * Below the default with room for the bounded headers.
+ */
+export const DEAD_LETTER_VALUE_MAX_BYTES = 1_000_000;
 
 type Attempted<T> =
   {readonly ok: true; readonly value: T} | {readonly ok: false; readonly error: string};
@@ -197,9 +204,11 @@ export class TreasuryCapacityConsumer implements OnApplicationBootstrap, OnModul
 
   /**
    * ADR-0013: after the last attempt the message is a rejection like any other: dead-lettered with
-   * the error, recorded, and consumption continues. If the broker or the database cannot take the
-   * dead letter or the record, `reject` throws, the offset stays uncommitted and the message is
-   * delivered again, so an outage delays messages rather than setting them aside.
+   * the error, recorded, and consumption continues. If the broker or the database is away when
+   * the dead letter or the record is written, `reject` throws, the offset stays uncommitted and
+   * the message is delivered again, so an outage delays messages rather than setting them aside.
+   * What a store would refuse every time is shaped before it gets there (bounded error, storable
+   * payload and ids, a dead letter value within the broker's size), so only an outage throws.
    */
   private async setAside(
     message: InboundMessage,
@@ -252,19 +261,26 @@ export class TreasuryCapacityConsumer implements OnApplicationBootstrap, OnModul
     this.logger.warn(`message rejected: ${error}`, CONTEXT);
   }
 
-  /** ADR-0003: the original bytes, with what went wrong and where it came from in the headers. */
+  /**
+   * ADR-0003: the original bytes, with what went wrong and where it came from in the headers. A
+   * value too large to republish is left out and named in `valueOmitted`: the source position
+   * still finds it on the treasury topic, and a dead letter the broker refuses would stall it.
+   */
   private deadLetter(message: InboundMessage, error: string): Promise<void> {
+    const value = message.value ?? Buffer.alloc(0);
+    const fits = value.length <= DEAD_LETTER_VALUE_MAX_BYTES;
+    const headers = {
+      error,
+      sourceTopic: message.topic,
+      sourcePartition: String(message.partition),
+      sourceOffset: message.offset,
+      correlationId: currentCorrelationId() ?? 'unknown',
+    };
     return this.source.publish(TREASURY_DEAD_LETTER_TOPIC, [
       {
         key: message.key,
-        value: message.value ?? Buffer.alloc(0),
-        headers: {
-          error,
-          sourceTopic: message.topic,
-          sourcePartition: String(message.partition),
-          sourceOffset: message.offset,
-          correlationId: currentCorrelationId() ?? 'unknown',
-        },
+        value: fits ? value : Buffer.alloc(0),
+        headers: fits ? headers : {...headers, valueOmitted: `${value.length} bytes`},
       },
     ]);
   }

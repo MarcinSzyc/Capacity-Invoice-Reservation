@@ -52,9 +52,10 @@ export const storablePayload = (payload: unknown): unknown => {
 };
 
 /**
- * A validation error names every field it refuses, so it grows with the message; unbounded it
- * can make the dead letter larger than the broker accepts, which stalls the partition as surely
- * as a record the database refuses (review round 2 of S-08). Enough to read what went wrong.
+ * A validation error names every field it refuses, so it grows with the message; unbounded, its
+ * header alone could make the dead letter larger than the broker accepts (review round 2 of
+ * S-08). The value has its own bound, `DEAD_LETTER_VALUE_MAX_BYTES`. Enough to read what went
+ * wrong.
  */
 export const ERROR_TEXT_MAX_LENGTH = 2_000;
 

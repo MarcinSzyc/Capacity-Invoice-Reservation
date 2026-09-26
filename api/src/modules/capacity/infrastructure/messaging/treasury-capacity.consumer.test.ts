@@ -18,7 +18,7 @@ import {Money} from '../../domain/money';
 import {CapacityReads, CapacityRepositories, UnitOfWork} from '../../domain/ports/unit-of-work';
 import {Program} from '../../domain/program';
 import {ERROR_TEXT_MAX_LENGTH} from './readable-payload';
-import {TreasuryCapacityConsumer} from './treasury-capacity.consumer';
+import {DEAD_LETTER_VALUE_MAX_BYTES, TreasuryCapacityConsumer} from './treasury-capacity.consumer';
 import {TREASURY_DEAD_LETTER_TOPIC, TREASURY_TOPIC} from './treasury-topics';
 
 const PROGRAM_ID = 'PRG-1';
@@ -286,6 +286,39 @@ describe('TreasuryCapacityConsumer', () => {
       ERROR_TEXT_MAX_LENGTH,
     );
     expect(capacity.repositories.treasuryMessages.byId.get('m-wide')?.outcome).toBe('rejected');
+  });
+
+  it('should dead-letter a message too large to republish with its source position instead of its bytes', async () => {
+    const capacity = inMemoryCapacity();
+    const source = new FakeMessageSource();
+    const oversized = {
+      ...UPDATE,
+      messageId: 'm-oversized',
+      note: '0'.repeat(DEAD_LETTER_VALUE_MAX_BYTES),
+    };
+
+    await consumerFor(capacity, source).handle(inbound(oversized));
+
+    const deadLetter = source.published[0]?.messages[0];
+    expect(deadLetter?.value?.length).toBe(0);
+    expect(deadLetter?.headers).toMatchObject({
+      sourceOffset: '7',
+      valueOmitted: expect.any(String) as string,
+    });
+    expect(capacity.repositories.treasuryMessages.byId.get('m-oversized')?.outcome).toBe(
+      'rejected',
+    );
+  });
+
+  it('should keep the original bytes of a dead letter that fits', async () => {
+    const source = new FakeMessageSource();
+    const malformed = {...UPDATE, messageId: 'm-small', creditLimit: 'a lot'};
+
+    await consumerFor(inMemoryCapacity(), source).handle(inbound(malformed));
+
+    const deadLetter = source.published[0]?.messages[0];
+    expect(deadLetter?.value?.toString('utf8')).toBe(JSON.stringify(malformed));
+    expect(deadLetter?.headers?.valueOmitted).toBeUndefined();
   });
 
   describe('a message whose handling fails (ADR-0013)', () => {

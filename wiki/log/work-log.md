@@ -3691,3 +3691,21 @@ Findings, most severe first:
     refusal as an outage.
 - Scratch reproductions were written under `api/src/` and deleted; the working tree holds only
   this entry and the slice log row.
+
+## 2026-09-26, implement S-08 (review round 3 fix), Opus
+- Major: the dead letter's value is the decompressed original, published uncompressed, so a
+  message the broker took (compressed, or just under 1 MiB) could come back refused as a dead
+  letter, with the partition stalled. A value above `DEAD_LETTER_VALUE_MAX_BYTES` (1 000 000,
+  below Kafka's 1 MiB default with room for the bounded headers) is now left out of the dead
+  letter, which carries `valueOmitted` with the size and keeps `sourceTopic`, `sourcePartition`
+  and `sourceOffset`, so the original is still found on the treasury topic. Every other dead
+  letter keeps its original bytes.
+- This departs from ADR-0003's "the original bytes" for oversized values only. It has real
+  alternatives (compress the dead-letter topic, raise the topic's `max.message.bytes`, omit the
+  value), so it goes to `/ship` as a proposed amendment of ADR-0003 for Marcin to confirm in the
+  PR, not as a decision taken here.
+- Tests: consumer unit tests red first (oversized value omitted; a fitting value kept as is);
+  real-broker integration test with a 1 040 000 byte message, shown to fail (the partition
+  stalls) with the bound raised past it, then green with the bound restored.
+- The two comments that claimed more than the code did are corrected: the set-aside comment
+  now separates an outage from what a store would refuse every time.
