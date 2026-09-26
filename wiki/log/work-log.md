@@ -3847,3 +3847,12 @@ Findings, most severe first:
   text corrected to what the test does (review rounds 1 to 3 minor). README's reconcile section
   says no message can stop consumption, and how.
 - Changelog row, slice status `done`, slice index and Home updated.
+
+## 2026-09-26, S-08 CI fix, Opus
+- PR #44's Gate failed on CI: the 20 000 reservation bound test's setup wrote everything in one
+  transaction and took 22 s against the 15 s timeout on the runner (4.8 s locally). The failure
+  was in the setup, not in the use case under test. The setup now writes in chunks of 2 000.
+- Margin to watch: the use case itself applied 20 000 releases by omission in 5.4 s locally, and
+  CI ran the 10 000 entry snapshot about twice as slow as local (10.1 s against 5.2 s), so on CI it
+  is likely near 11 s of the 15 s. A larger program, or a slower runner, would reach the timeout;
+  batching the snapshot's reads and writes would be the fix if it does.

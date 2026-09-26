@@ -20,6 +20,7 @@ const TEST_TIMEOUT_MS = 120_000;
 // A program's active reservations are not bounded by the list bound (review round 3 of S-06).
 const BEYOND_THE_BOUND = 2 * SNAPSHOT_RESERVATIONS_MAX;
 const CLIENT = 'client-bound';
+const SETUP_CHUNK = 2_000;
 
 describe('ApplyReconciliationSnapshot against PostgreSQL', () => {
   let prisma: PrismaService;
@@ -182,11 +183,16 @@ describe('ApplyReconciliationSnapshot against PostgreSQL', () => {
       const movements = reservations.map((reservation) =>
         program.reserve(held, CLIENT, reservation.reservationId, createdAt),
       );
-      await unitOfWork.run(async (repositories) => {
-        await repositories.programs.save(program);
-        await repositories.reservations.addAll(reservations);
-        await repositories.ledger.appendAll(movements);
-      });
+      // The setup is not what is measured, so it is written in chunks: 20 000 reservations and
+      // their movements in one transaction pass the 15 s timeout on a slow CI runner.
+      await unitOfWork.run(({programs}) => programs.save(program));
+      for (let start = 0; start < BEYOND_THE_BOUND; start += SETUP_CHUNK) {
+        const end = start + SETUP_CHUNK;
+        await unitOfWork.run(async ({reservations: store, ledger}) => {
+          await store.addAll(reservations.slice(start, end));
+          await ledger.appendAll(movements.slice(start, end));
+        });
+      }
       const useCase = new ApplyReconciliationSnapshot(
         unitOfWork,
         new SystemClock(),
