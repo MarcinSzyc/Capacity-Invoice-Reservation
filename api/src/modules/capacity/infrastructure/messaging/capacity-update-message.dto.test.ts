@@ -70,4 +70,20 @@ describe('parseCapacityUpdate', () => {
 
     expect(parsed).toEqual({ok: false, error: expect.stringContaining('extra') as string});
   });
+
+  it('should refuse identifiers that contain NUL', async () => {
+    for (const field of ['messageId', 'programId']) {
+      const parsed = await parseCapacityUpdate({...VALID, [field]: 'id\u0000'}, RECEIVED_AT);
+
+      expect(parsed).toMatchObject({ok: false, error: expect.stringContaining(field) as string});
+    }
+  });
+
+  it('should refuse identifiers that are not well-formed Unicode', async () => {
+    for (const field of ['messageId', 'programId']) {
+      const parsed = await parseCapacityUpdate({...VALID, [field]: 'id\udc00'}, RECEIVED_AT);
+
+      expect(parsed).toMatchObject({ok: false, error: expect.stringContaining(field) as string});
+    }
+  });
 });

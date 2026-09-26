@@ -374,6 +374,139 @@ describe('TreasuryCapacityConsumer', () => {
     expect((await deadLetterOf(nestedId)).headers.error).toMatch(/could not be parsed/);
   });
 
+  it('should dead-letter and record a message with NUL in a string, and apply the next one on the real store', async () => {
+    const programId = uniqueId('PRG');
+    const noteId = uniqueId('m-nul-note');
+    const programNulId = uniqueId('m-nul-program');
+    const validId = uniqueId('m');
+    const base = {type: 'capacity_update', currency: EUR, creditLimit: 1, eventTime: AT_10_00};
+    const withNote = {...base, messageId: noteId, programId, note: 'a\u0000b'};
+    const withNulProgram = {...base, messageId: programNulId, programId: `${programId}\u0000`};
+
+    await kafka.publish(TREASURY_TOPIC, [
+      {key: programId, value: JSON.stringify(withNote)},
+      {key: programId, value: JSON.stringify(withNulProgram)},
+    ]);
+    await producer.publishCapacityUpdate({
+      messageId: validId,
+      programId,
+      currency: EUR,
+      creditLimit: FIVE_MILLION,
+      eventTime: AT_10_00,
+    });
+
+    expect(await outcomeOf(validId)).toMatchObject({outcome: 'applied'});
+    expect(await outcomeOf(noteId)).toMatchObject({outcome: 'rejected', payload: null});
+    expect(await outcomeOf(programNulId)).toMatchObject({outcome: 'rejected', programId: null});
+  });
+
+  it('should dead-letter and record a message the store could not hold as sent, and apply the next one on the real store', async () => {
+    const programId = uniqueId('PRG');
+    const surrogateId = uniqueId('m-surrogate');
+    const idSurrogateId = uniqueId('m-id-surrogate');
+    const wideId = uniqueId('m-wide');
+    const validId = uniqueId('m');
+    const base = {type: 'capacity_update', programId, currency: EUR, creditLimit: 1};
+    const messages = [
+      {...base, messageId: surrogateId, note: 'a\ud800b'},
+      {...base, messageId: `${idSurrogateId}\udc00`, eventTime: AT_10_00},
+      {...base, messageId: wideId, note: Array.from({length: 200_000}, () => 0)},
+    ];
+
+    await kafka.publish(
+      TREASURY_TOPIC,
+      messages.map((message) => ({key: programId, value: JSON.stringify(message)})),
+    );
+    await producer.publishCapacityUpdate({
+      messageId: validId,
+      programId,
+      currency: EUR,
+      creditLimit: FIVE_MILLION,
+      eventTime: AT_10_00,
+    });
+
+    expect(await outcomeOf(validId)).toMatchObject({outcome: 'applied'});
+    expect(await outcomeOf(surrogateId)).toMatchObject({outcome: 'rejected', payload: null});
+    expect(await outcomeOf(wideId)).toMatchObject({outcome: 'rejected'});
+    expect((await deadLetterOf(idSurrogateId)).headers.error).toBeDefined();
+  });
+
+  it('should dead-letter and record a message whose error would not fit the broker, and apply the next one', async () => {
+    const programId = uniqueId('PRG');
+    const wideId = uniqueId('m-many-fields');
+    const validId = uniqueId('m');
+    const unknownFields = Object.fromEntries(
+      Array.from({length: 40_000}, (_, index) => [`k${index}`, 0]),
+    );
+    const refused = {messageId: wideId, type: 'capacity_update', programId, ...unknownFields};
+
+    await kafka.publish(TREASURY_TOPIC, [{key: programId, value: JSON.stringify(refused)}]);
+    await producer.publishCapacityUpdate({
+      messageId: validId,
+      programId,
+      currency: EUR,
+      creditLimit: FIVE_MILLION,
+      eventTime: AT_10_00,
+    });
+
+    expect(await outcomeOf(validId)).toMatchObject({outcome: 'applied'});
+    expect(await outcomeOf(wideId)).toMatchObject({outcome: 'rejected'});
+    expect(await deadLetterOf(wideId)).toBeDefined();
+  });
+
+  it('should dead-letter a message too large to republish by its source position, and apply the next one', async () => {
+    const programId = uniqueId('PRG');
+    const largeId = uniqueId('m-large');
+    const validId = uniqueId('m');
+    // Accepted by the broker, whose default limit is 1 MiB, but past what we republish as is.
+    const large = {
+      messageId: largeId,
+      type: 'capacity_update',
+      programId,
+      note: '0'.repeat(1_040_000),
+    };
+
+    await kafka.publish(TREASURY_TOPIC, [{key: programId, value: JSON.stringify(large)}]);
+    await producer.publishCapacityUpdate({
+      messageId: validId,
+      programId,
+      currency: EUR,
+      creditLimit: FIVE_MILLION,
+      eventTime: AT_10_00,
+    });
+
+    expect(await outcomeOf(validId)).toMatchObject({outcome: 'applied'});
+    expect(await outcomeOf(largeId)).toMatchObject({outcome: 'rejected'});
+    const deadLetter = await waitFor(
+      () =>
+        Promise.resolve(deadLetters.find((message) => message.headers.valueOmitted !== undefined)),
+      `dead letter of ${largeId}`,
+    );
+    expect(deadLetter.headers.sourceOffset).toBeDefined();
+  });
+
+  it('should dead-letter a message whose key and value together are too large to republish, and apply the next one', async () => {
+    const programId = uniqueId('PRG');
+    const largeId = uniqueId('m-large-key');
+    const validId = uniqueId('m');
+    const head = JSON.stringify({messageId: largeId, type: 'capacity_update', programId, note: ''});
+    // A value exactly at the value bound, kept as is, and a key that brings the source message
+    // just under the broker's 1 MiB: the dead letter's headers alone would push it over.
+    const value = `${head.slice(0, -2)}${'0'.repeat(1_000_000 - head.length)}"}`;
+
+    await kafka.publish(TREASURY_TOPIC, [{key: 'k'.repeat(48_400), value}]);
+    await producer.publishCapacityUpdate({
+      messageId: validId,
+      programId,
+      currency: EUR,
+      creditLimit: FIVE_MILLION,
+      eventTime: AT_10_00,
+    });
+
+    expect(await outcomeOf(validId)).toMatchObject({outcome: 'applied'});
+    expect(await outcomeOf(largeId)).toMatchObject({outcome: 'rejected'});
+  });
+
   describe('reconciliation snapshots', () => {
     const AT = (hour: number): Date => new Date(Date.UTC(2026, 8, 21, hour));
     const SEVEN_MILLION = 700_000_000n;

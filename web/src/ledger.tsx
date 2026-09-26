@@ -1,23 +1,4 @@
-export interface Availability {
-  readonly currency: string;
-  readonly limit: number;
-  readonly reserved: number;
-  readonly available: number;
-  readonly overcommitted: boolean;
-  readonly asOf: string | null;
-}
-
-export interface Movement {
-  readonly kind: string;
-  readonly amount: number;
-  readonly limitAfter: number;
-  readonly reservedAfter: number;
-  readonly availableAfter: number;
-  readonly releaseId: string | null;
-  readonly clientId: string | null;
-  readonly messageId: string | null;
-  readonly occurredAt: string;
-}
+import type {Availability, Movement} from './api';
 
 interface LedgerProps {
   readonly availability: Availability | null;

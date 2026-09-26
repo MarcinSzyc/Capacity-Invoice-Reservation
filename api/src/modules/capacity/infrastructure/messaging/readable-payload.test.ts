@@ -1,6 +1,21 @@
-import {readableString} from './readable-payload';
+import {
+  ERROR_TEXT_MAX_LENGTH,
+  STORED_PAYLOAD_MAX_BYTES,
+  readableString,
+  storablePayload,
+  storableText,
+} from './readable-payload';
 
 const LIMIT = 8;
+const NUL = '\u0000';
+const LONE_SURROGATE = '\ud800';
+const WIDER_THAN_A_CALL = 200_000;
+
+const nestedTo = (depth: number): unknown => {
+  let value: unknown = 'leaf';
+  for (let level = 0; level < depth; level += 1) value = [value];
+  return value;
+};
 
 describe('readableString', () => {
   it('should read a non-empty string that fits the bound', () => {
@@ -21,5 +36,75 @@ describe('readableString', () => {
     expect(readableString(null, 'messageId', LIMIT)).toBeNull();
     expect(readableString('m-1', 'messageId', LIMIT)).toBeNull();
     expect(readableString([], 'messageId', LIMIT)).toBeNull();
+  });
+
+  it('should not read an id that contains NUL', () => {
+    expect(readableString({messageId: `m-1${NUL}`}, 'messageId', LIMIT)).toBeNull();
+  });
+
+  it('should not read an id that is not well-formed Unicode', () => {
+    expect(readableString({messageId: `m-1${LONE_SURROGATE}`}, 'messageId', LIMIT)).toBeNull();
+  });
+});
+
+describe('storablePayload', () => {
+  it('should keep a payload that is plainly storable and drop one nested too deep or carrying NUL', () => {
+    const message = {messageId: 'm-1', activeReservations: [{invoiceId: 'INV-A', heldAmount: 1}]};
+
+    expect(storablePayload(message)).toBe(message);
+    expect(storablePayload({extra: nestedTo(30)})).not.toBeNull();
+    expect(storablePayload({extra: nestedTo(33)})).toBeNull();
+    expect(storablePayload({extra: nestedTo(2_850)})).toBeNull();
+    expect(storablePayload({note: `a${NUL}b`})).toBeNull();
+    expect(storablePayload({[`n${NUL}`]: 1})).toBeNull();
+    expect(storablePayload({list: [1, [`x${NUL}`]]})).toBeNull();
+  });
+
+  it('should drop a payload with a string or a key that is not well-formed Unicode', () => {
+    expect(storablePayload({note: `a${LONE_SURROGATE}b`})).toBeNull();
+    expect(storablePayload({[`k${LONE_SURROGATE}`]: 1})).toBeNull();
+  });
+
+  it('should drop a payload larger than the bound, in one string or across many', () => {
+    const oneString = {note: '0'.repeat(STORED_PAYLOAD_MAX_BYTES + 1)};
+    const manyStrings = {
+      notes: Array.from({length: 2}, () => '0'.repeat(STORED_PAYLOAD_MAX_BYTES / 2 + 1)),
+    };
+
+    expect(storablePayload(oneString)).toBeNull();
+    expect(storablePayload(manyStrings)).toBeNull();
+    expect(storablePayload({note: '0'.repeat(1_000)})).not.toBeNull();
+  });
+
+  it('should stop inside an array wider than the bound allows, without walking all of it', () => {
+    const wide = {note: new Array<number>(STORED_PAYLOAD_MAX_BYTES).fill(0)};
+    const entries = jest.spyOn(Object, 'entries');
+
+    expect(storablePayload(wide)).toBeNull();
+    expect(entries.mock.calls.some(([value]) => value === wide.note)).toBe(false);
+    entries.mockRestore();
+  });
+
+  it('should walk a payload wider than one call can take without throwing', () => {
+    const wide = {note: Array.from({length: WIDER_THAN_A_CALL}, () => 0)};
+
+    expect(storablePayload(wide)).toBe(wide);
+  });
+});
+
+describe('storableText', () => {
+  it('should remove NUL from an error text', () => {
+    expect(storableText(`Unexpected ${NUL} in JSON`)).toBe('Unexpected  in JSON');
+  });
+
+  it('should bound an error text that grows with the message', () => {
+    const long = 'property k should not exist; '.repeat(40_000);
+
+    expect(storableText(long).length).toBeLessThanOrEqual(ERROR_TEXT_MAX_LENGTH);
+    expect(storableText('short')).toBe('short');
+  });
+
+  it('should make an error text well-formed Unicode', () => {
+    expect(storableText(`got a${LONE_SURROGATE}`).isWellFormed()).toBe(true);
   });
 });

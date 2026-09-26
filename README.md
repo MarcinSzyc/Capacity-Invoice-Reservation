@@ -198,7 +198,10 @@ The snapshot is compared against its own moment, never applied as a wholesale re
 | an `asOf` older than the last one applied | records it `stale` and changes nothing |
 
 One snapshot lists at most 10 000 reservations, whose amounts may add up to at most
-9 007 199 254 740 991 minor units; a larger one is rejected and dead-lettered. A message that
+9 007 199 254 740 991 minor units; a larger one is rejected and dead-lettered. No treasury
+message can stop consumption by what it carries: one past 8 000 000 bytes is refused before it
+is parsed, and a dead letter too large for the broker is published without its bytes, naming
+them in `valueOmitted` or `keyOmitted` next to the source offset. A message that
 fails to apply is tried three times, then dead-lettered with its error and consumption moves on;
 every failed attempt is a row in `treasury_message_failures`, readable in pgweb
 ([ADR-0013](wiki/decisions/ADR-0013-treasury-messages-that-always-fail.md)).
