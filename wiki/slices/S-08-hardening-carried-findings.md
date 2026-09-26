@@ -146,3 +146,4 @@ Beyond `CLAUDE.md §9`:
 | 2026-09-26 | implement | done: items 1 to 11, npm run gate green |
 | 2026-09-26 | verify | PASS: gate green, all ten planned tests present and passing, cold start and README green |
 | 2026-09-26 | review (round 1) | 4 findings (0/2/2) |
+| 2026-09-26 | implement (round 2) | review round 1: both majors and the web minor fixed; the plan-text minor goes to ship |

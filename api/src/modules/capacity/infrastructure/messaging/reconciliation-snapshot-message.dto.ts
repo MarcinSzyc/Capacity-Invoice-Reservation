@@ -27,7 +27,7 @@ import {
   SNAPSHOT_RESERVATIONS_MAX,
 } from '../../domain/identifier-limits';
 import {IsCurrencyCode} from '../currency-code';
-import {WithoutNul} from './without-nul';
+import {StorableText} from './storable-text';
 
 /**
  * ADR-0006: every amount is an exact JSON integer. Each entry is held to it by its validator; the
@@ -40,7 +40,7 @@ const MAX_EXACT_JSON_INTEGER = BigInt(Number.MAX_SAFE_INTEGER);
 export class ListedReservationMessageDto {
   @IsString()
   @Length(1, INVOICE_ID_MAX_LENGTH)
-  @WithoutNul()
+  @StorableText()
   invoiceId!: string;
 
   /** Zero is legal: an active reservation may hold nothing (AC-15, amended). */
@@ -58,7 +58,7 @@ export class ListedReservationMessageDto {
 export class ReconciliationSnapshotMessageDto {
   @IsString()
   @Length(1, MESSAGE_ID_MAX_LENGTH)
-  @WithoutNul()
+  @StorableText()
   messageId!: string;
 
   @Equals(RECONCILIATION_SNAPSHOT_TYPE)
@@ -66,7 +66,7 @@ export class ReconciliationSnapshotMessageDto {
 
   @IsString()
   @Length(1, PROGRAM_ID_MAX_LENGTH)
-  @WithoutNul()
+  @StorableText()
   programId!: string;
 
   @IsCurrencyCode()

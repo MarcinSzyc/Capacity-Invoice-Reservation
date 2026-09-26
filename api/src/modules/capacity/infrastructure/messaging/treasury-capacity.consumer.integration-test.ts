@@ -400,6 +400,37 @@ describe('TreasuryCapacityConsumer', () => {
     expect(await outcomeOf(programNulId)).toMatchObject({outcome: 'rejected', programId: null});
   });
 
+  it('should dead-letter and record a message the store could not hold as sent, and apply the next one on the real store', async () => {
+    const programId = uniqueId('PRG');
+    const surrogateId = uniqueId('m-surrogate');
+    const idSurrogateId = uniqueId('m-id-surrogate');
+    const wideId = uniqueId('m-wide');
+    const validId = uniqueId('m');
+    const base = {type: 'capacity_update', programId, currency: EUR, creditLimit: 1};
+    const messages = [
+      {...base, messageId: surrogateId, note: 'a\ud800b'},
+      {...base, messageId: `${idSurrogateId}\udc00`, eventTime: AT_10_00},
+      {...base, messageId: wideId, note: Array.from({length: 200_000}, () => 0)},
+    ];
+
+    await kafka.publish(
+      TREASURY_TOPIC,
+      messages.map((message) => ({key: programId, value: JSON.stringify(message)})),
+    );
+    await producer.publishCapacityUpdate({
+      messageId: validId,
+      programId,
+      currency: EUR,
+      creditLimit: FIVE_MILLION,
+      eventTime: AT_10_00,
+    });
+
+    expect(await outcomeOf(validId)).toMatchObject({outcome: 'applied'});
+    expect(await outcomeOf(surrogateId)).toMatchObject({outcome: 'rejected', payload: null});
+    expect(await outcomeOf(wideId)).toMatchObject({outcome: 'rejected'});
+    expect((await deadLetterOf(idSurrogateId)).headers.error).toBeDefined();
+  });
+
   describe('reconciliation snapshots', () => {
     const AT = (hour: number): Date => new Date(Date.UTC(2026, 8, 21, hour));
     const SEVEN_MILLION = 700_000_000n;

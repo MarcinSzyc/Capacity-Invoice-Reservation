@@ -32,4 +32,25 @@ describe('createApi', () => {
     ]);
     expect(tokenCalls).toHaveLength(2);
   });
+
+  it('should log a call whose body fails mid-read instead of rejecting', async () => {
+    const broken = new Response('{}', {status: 200});
+    broken.text = () => Promise.reject(new Error('connection reset'));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((url: string) =>
+        Promise.resolve(
+          url.endsWith('/dev/token') ? new Response(JSON.stringify({token: 't'})) : broken,
+        ),
+      ),
+    );
+    const calls: CallRecord[] = [];
+    const api = createApi(BASE_URL, (call) => calls.push(call));
+
+    await expect(api.send('GET', '/programs/PRG-1/availability')).resolves.toEqual({
+      status: 200,
+      body: null,
+    });
+    expect(calls.map(({status, code}) => [status, code])).toEqual([[200, null]]);
+  });
 });
