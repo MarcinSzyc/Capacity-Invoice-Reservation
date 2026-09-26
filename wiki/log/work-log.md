@@ -3875,3 +3875,22 @@ Findings, most severe first:
   could repeat, now `crypto.randomUUID()`; the generator used to release on its own, now only the
   release generator releases, and only when asked.
 - README "See it working" and the glossary (`Dev endpoint`, `Demo page`) updated to match.
+
+## 2026-09-26, resilience scenarios on the demo page, Opus
+- Asked for by Marcin: a way to show people outside the team what the platform survives. A
+  Resilience scenarios panel under the release generator, run against the program shown (not a
+  separate one: Reset tidies up), five rows: a stampede of 25 reservations over the free capacity
+  (INV-01), the same invoice twice (AC-05), a repayment sent twice at once (AC-16), paying off
+  more than is left (AC-13), malformed requests and one without a token (AC-08, AC-32). Each says
+  what it tests and what it leaves in the request log and the ledger.
+- A result is "held up", "did not hold", or "could not run": a program that does not exist, or has
+  no free capacity left for a scenario's small reservation, is not a failure of the platform. The
+  first live run showed why: a stampede fills the program, and the scenarios after it reported a
+  failure that was not one.
+- Decision noted, not an ADR: the page now compares api's answers with what the criteria
+  promise, a check from the outside, not a rule computed on the client. A-17 ("computes
+  nothing") still holds for every number shown.
+- The api client can send a call without the token, for the 401 case. The generators, the
+  scenarios and the treasury panel fold under their titles, open by default.
+- Checked live against the local stack: all five held up; after a stampede the next scenario
+  said it could not run. 41 web tests green.
