@@ -3831,3 +3831,19 @@ Findings, most severe first:
 ## 2026-09-26, verify S-08 (round 6), Opus
 - VERIFY S-08: PASS, at d528dd8. `npm run gate` green: unit 219, web 10, integration 56, e2e 66,
   cold start 3. Prose check clean, no layer import moved. Findings: none new.
+
+## 2026-09-26, ship S-08, Opus
+- Review round 6 was stopped by Marcin before it reported ("lets stop it if we dont have any
+  blockers or majors ... its taking too long"). The last completed review, round 5, had one
+  major, fixed in d528dd8 and verified PASS (round 6 of verify). No known blocker or major is
+  open; the stopped round is recorded as not run, not as a pass. It had left a scratch test and
+  a Kafka container, both removed.
+- `wiki/plan/plan.md`: seven `extra` rows for S-08; the commit column backfilled for S-04 to
+  S-07 from their merge commits (29 rows), S-06's merge commit tagged `S-06`, which had been
+  missed.
+- ADR-0003: amendment proposed, not accepted: oversized dead letters carry their source position
+  instead of their bytes. Marcin decides it in the S-08 pull request.
+- Glossary `Dead letter` gains the two omission headers (review round 5 minor). Slice item 5's
+  text corrected to what the test does (review rounds 1 to 3 minor). README's reconcile section
+  says no message can stop consumption, and how.
+- Changelog row, slice status `done`, slice index and Home updated.
