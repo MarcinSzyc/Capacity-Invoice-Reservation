@@ -3827,3 +3827,7 @@ Findings, most severe first:
   before anything the broker does matters.
 - Minor (glossary `Dead letter` and the two omission headers): with the ADR-0003 amendment at
   `/ship`.
+
+## 2026-09-26, verify S-08 (round 6), Opus
+- VERIFY S-08: PASS, at d528dd8. `npm run gate` green: unit 219, web 10, integration 56, e2e 66,
+  cold start 3. Prose check clean, no layer import moved. Findings: none new.
