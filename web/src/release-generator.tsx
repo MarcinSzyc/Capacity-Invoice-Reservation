@@ -100,119 +100,126 @@ export const ReleaseGenerator = ({
 
   return (
     <section id="release-generator" aria-labelledby="release-generator-title">
-      <h2 id="release-generator-title">Release generator</h2>
-      <p className="hint">
-        Releases straight to the api over HTTP, as a client reporting a repayment would, only when
-        asked for.
-      </p>
-      <details className="box">
+      <details className="panel" open>
         <summary>
-          Release setup
-          <span className="summary-note">
-            {' '}
-            · every {releaseSeconds} s{releasing ? ' · running' : ''}
-          </span>
+          <h2 id="release-generator-title">Release generator</h2>
         </summary>
-        <div role="group" aria-label="Release setup">
-          <p className="hint">
-            Releases are sent as a client reporting a repayment would. Start releases the oldest
-            open reservation the generator made on this program, in full, one at each interval, with
-            the reason below. One release releases the invoice typed beside it, with the amount and
-            reason below.
-          </p>
-          <label>
-            Release every {releaseSeconds} s{' '}
+        <p className="hint">
+          Releases straight to the api over HTTP, as a client reporting a repayment would, only when
+          asked for.
+        </p>
+        <details className="box">
+          <summary>
+            Release setup
+            <span className="summary-note">
+              {' '}
+              · every {releaseSeconds} s{releasing ? ' · running' : ''}
+            </span>
+          </summary>
+          <div role="group" aria-label="Release setup">
+            <p className="hint">
+              Releases are sent as a client reporting a repayment would. Start releases the oldest
+              open reservation the generator made on this program, in full, one at each interval,
+              with the reason below. One release releases the invoice typed beside it, with the
+              amount and reason below.
+            </p>
+            <label>
+              Release every {releaseSeconds} s{' '}
+              <input
+                type="range"
+                min={FASTEST_SECONDS}
+                max={SLOWEST_SECONDS}
+                step={1}
+                value={releaseSeconds}
+                onChange={(event) => setReleaseSeconds(Number(event.target.value))}
+              />
+            </label>
+            <label>
+              Amount (minor units, empty releases all that is left){' '}
+              <input
+                inputMode="numeric"
+                value={manualAmount}
+                onChange={(event) => setManualAmount(event.target.value)}
+              />
+            </label>
+            <label>
+              Reason{' '}
+              <select
+                value={manualReason}
+                onChange={(event) => setManualReason(event.target.value)}
+              >
+                {REASONS.map((reason) => (
+                  <option key={reason} value={reason}>
+                    {reason}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+        </details>
+        <div className="actions">
+          <button
+            type="button"
+            className="primary"
+            aria-label={releasing ? 'Stop auto release' : 'Start auto release'}
+            onClick={() => setReleasing(!releasing)}
+          >
+            {releasing ? 'Stop' : 'Start'}
+          </button>
+          <span className="hint">
+            Releases the oldest reservation in full every {releaseSeconds} s until stopped.
+          </span>
+          <button
+            type="button"
+            className="primary"
+            disabled={manualInvoice.trim() === ''}
+            onClick={() => void releaseManually()}
+          >
+            One release
+          </button>
+          <span className="inline-field">
             <input
-              type="range"
-              min={FASTEST_SECONDS}
-              max={SLOWEST_SECONDS}
-              step={1}
-              value={releaseSeconds}
-              onChange={(event) => setReleaseSeconds(Number(event.target.value))}
+              aria-label="Invoice"
+              list="reserved-invoices"
+              value={manualInvoice}
+              placeholder="Invoice, e.g. INV-1a2b3c4d"
+              onChange={(event) => setManualInvoice(event.target.value)}
             />
-          </label>
-          <label>
-            Amount (minor units, empty releases all that is left){' '}
-            <input
-              inputMode="numeric"
-              value={manualAmount}
-              onChange={(event) => setManualAmount(event.target.value)}
-            />
-          </label>
-          <label>
-            Reason{' '}
-            <select value={manualReason} onChange={(event) => setManualReason(event.target.value)}>
-              {REASONS.map((reason) => (
-                <option key={reason} value={reason}>
-                  {reason}
-                </option>
-              ))}
-            </select>
-          </label>
+            <datalist id="reserved-invoices">
+              {reserved.list
+                .filter((held) => held.programId === programId)
+                .map((held) => (
+                  <option key={held.invoiceId} value={held.invoiceId}>
+                    {held.invoiceAmount}
+                  </option>
+                ))}
+            </datalist>
+            <span className="hint">Releases this invoice once, with a fresh release id.</span>
+          </span>
+          <button
+            type="button"
+            disabled={lastRelease === null}
+            onClick={() => void repeatLastRelease()}
+          >
+            Repeat last release
+          </button>
+          <span className="hint">
+            Sends the same release id again: api answers 409 with the original outcome and changes
+            nothing.
+          </span>
         </div>
+        <CurlBox
+          baseUrl={apiBaseUrl()}
+          commands={[
+            curl(
+              apiBaseUrl(),
+              'POST',
+              `/programs/${programId}/reservations/${manualInvoiceOrExample}/releases`,
+              manualReleaseExample,
+            ),
+          ]}
+        />
       </details>
-      <div className="actions">
-        <button
-          type="button"
-          className="primary"
-          aria-label={releasing ? 'Stop auto release' : 'Start auto release'}
-          onClick={() => setReleasing(!releasing)}
-        >
-          {releasing ? 'Stop' : 'Start'}
-        </button>
-        <span className="hint">
-          Releases the oldest reservation in full every {releaseSeconds} s until stopped.
-        </span>
-        <button
-          type="button"
-          className="primary"
-          disabled={manualInvoice.trim() === ''}
-          onClick={() => void releaseManually()}
-        >
-          One release
-        </button>
-        <span className="inline-field">
-          <input
-            aria-label="Invoice"
-            list="reserved-invoices"
-            value={manualInvoice}
-            placeholder="Invoice, e.g. INV-1a2b3c4d"
-            onChange={(event) => setManualInvoice(event.target.value)}
-          />
-          <datalist id="reserved-invoices">
-            {reserved.list
-              .filter((held) => held.programId === programId)
-              .map((held) => (
-                <option key={held.invoiceId} value={held.invoiceId}>
-                  {held.invoiceAmount}
-                </option>
-              ))}
-          </datalist>
-          <span className="hint">Releases this invoice once, with a fresh release id.</span>
-        </span>
-        <button
-          type="button"
-          disabled={lastRelease === null}
-          onClick={() => void repeatLastRelease()}
-        >
-          Repeat last release
-        </button>
-        <span className="hint">
-          Sends the same release id again: api answers 409 with the original outcome and changes
-          nothing.
-        </span>
-      </div>
-      <CurlBox
-        baseUrl={apiBaseUrl()}
-        commands={[
-          curl(
-            apiBaseUrl(),
-            'POST',
-            `/programs/${programId}/reservations/${manualInvoiceOrExample}/releases`,
-            manualReleaseExample,
-          ),
-        ]}
-      />
     </section>
   );
 };
