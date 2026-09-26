@@ -26,7 +26,7 @@ main {
   padding: 2rem 1rem;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  grid-template-areas: 'header' 'generator' 'release-generator' 'request-log' 'treasury' 'ledger';
+  grid-template-areas: 'header' 'generator' 'release-generator' 'resilience' 'request-log' 'treasury' 'ledger';
   gap: 1.5rem 2rem;
 }
 
@@ -39,6 +39,7 @@ main {
       'header header'
       'generator treasury'
       'release-generator treasury'
+      'resilience treasury'
       'request-log ledger';
     align-items: start;
   }
@@ -54,6 +55,10 @@ header {
 
 #release-generator {
   grid-area: release-generator;
+}
+
+#resilience {
+  grid-area: resilience;
 }
 
 #request-log {
@@ -370,4 +375,39 @@ details.box h3 {
   flex-wrap: wrap;
   gap: 0.75rem;
   align-items: center;
+}
+
+/* A whole panel folds under its title; the title keeps its heading size. */
+details.panel > summary {
+  cursor: pointer;
+  list-style-position: outside;
+}
+
+details.panel > summary > h2 {
+  display: inline;
+}
+
+/* One resilience scenario: what it does, what it leaves, and how it went. */
+.scenario {
+  border-top: 1px solid color-mix(in srgb, currentColor 15%, transparent);
+  padding-top: 0.25rem;
+}
+
+.scenario p {
+  margin: 0.2rem 0;
+}
+
+.outcome-passed {
+  color: #8fd694;
+  font-size: 0.9rem;
+}
+
+.outcome-failed {
+  color: var(--danger);
+  font-size: 0.9rem;
+}
+
+.outcome-not-run {
+  color: var(--attention);
+  font-size: 0.9rem;
 }

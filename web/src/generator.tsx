@@ -89,66 +89,70 @@ export const Generator = ({
 
   return (
     <section id="generator" aria-labelledby="generator-title">
-      <h2 id="generator-title">Request generator</h2>
-      <p className="hint">
-        Calls straight to the api over HTTP, the endpoints a client uses: a reservation of a random
-        invoice between the minimum and the maximum (minor units). It never releases: that is the
-        release generator's job, below.
-      </p>
-      <details className="box">
+      <details className="panel" open>
         <summary>
-          Request setup
-          <span className="summary-note">
-            {' '}
-            · every {intervalSeconds} s · {minimum} to {maximum}
-          </span>
+          <h2 id="generator-title">Request generator</h2>
         </summary>
-        <div role="group" aria-label="Request setup">
-          <label>
-            Every {intervalSeconds} s{' '}
-            <input
-              type="range"
-              min={FASTEST_SECONDS}
-              max={SLOWEST_SECONDS}
-              step={1}
-              value={intervalSeconds}
-              onChange={(event) => setIntervalSeconds(Number(event.target.value))}
-            />
-          </label>
-          <label>
-            Minimum amount{' '}
-            <input
-              inputMode="numeric"
-              value={minimum}
-              onChange={(event) => setMinimum(event.target.value)}
-            />
-          </label>
-          <label>
-            Maximum amount{' '}
-            <input
-              inputMode="numeric"
-              value={maximum}
-              onChange={(event) => setMaximum(event.target.value)}
-            />
-          </label>
+        <p className="hint">
+          Calls straight to the api over HTTP, the endpoints a client uses: a reservation of a
+          random invoice between the minimum and the maximum (minor units). It never releases: that
+          is the release generator's job, below.
+        </p>
+        <details className="box">
+          <summary>
+            Request setup
+            <span className="summary-note">
+              {' '}
+              · every {intervalSeconds} s · {minimum} to {maximum}
+            </span>
+          </summary>
+          <div role="group" aria-label="Request setup">
+            <label>
+              Every {intervalSeconds} s{' '}
+              <input
+                type="range"
+                min={FASTEST_SECONDS}
+                max={SLOWEST_SECONDS}
+                step={1}
+                value={intervalSeconds}
+                onChange={(event) => setIntervalSeconds(Number(event.target.value))}
+              />
+            </label>
+            <label>
+              Minimum amount{' '}
+              <input
+                inputMode="numeric"
+                value={minimum}
+                onChange={(event) => setMinimum(event.target.value)}
+              />
+            </label>
+            <label>
+              Maximum amount{' '}
+              <input
+                inputMode="numeric"
+                value={maximum}
+                onChange={(event) => setMaximum(event.target.value)}
+              />
+            </label>
+          </div>
+        </details>
+        <div className="actions">
+          <button type="button" className="primary" onClick={() => setRunning(!running)}>
+            {running ? 'Stop' : 'Start'}
+          </button>
+          <span className="hint">Sends a request every {intervalSeconds} s until stopped.</span>
+          <button type="button" className="primary" onClick={() => void step()}>
+            One request
+          </button>
+          <span className="hint">Sends a single request now.</span>
         </div>
+        <CurlBox
+          baseUrl={apiBaseUrl()}
+          commands={[
+            curl(apiBaseUrl(), 'POST', `/programs/${programId}/reservations`, reservationExample),
+          ]}
+        />
       </details>
-      <div className="actions">
-        <button type="button" className="primary" onClick={() => setRunning(!running)}>
-          {running ? 'Stop' : 'Start'}
-        </button>
-        <span className="hint">Sends a request every {intervalSeconds} s until stopped.</span>
-        <button type="button" className="primary" onClick={() => void step()}>
-          One request
-        </button>
-        <span className="hint">Sends a single request now.</span>
-      </div>
-      <CurlBox
-        baseUrl={apiBaseUrl()}
-        commands={[
-          curl(apiBaseUrl(), 'POST', `/programs/${programId}/reservations`, reservationExample),
-        ]}
-      />
     </section>
   );
 };

@@ -41,11 +41,12 @@ real treasury topic, on program `PRG-1` unless you type another id:
 |---|---|
 | Request generator | Start, Stop, One request: random reservations between a minimum and a maximum (1 000 to 10 000 minor units by default), every 1 to 10 s. It never releases |
 | Release generator | Start, Stop: releases the oldest reservation the generator made, in full, every 1 to 10 s. One release: the invoice you type, in full or in part. Repeat last release shows the `409` of a repeated `releaseId` |
+| Resilience scenarios | five stress situations run against the program shown, each with what it tests and what it leaves behind: a stampede of 25 reservations over the free capacity, the same invoice twice, a repayment sent twice at once, paying off more than is left, malformed requests and one without a token. Each run says whether api held up |
 | Treasury panel | Send, with New limit and Invoices each added or not: a new limit alone goes as a limit update, invoices go as a snapshot. Stale (an update dated 2000) and Duplicate (the last message again) |
 | Request log | the last 50 calls the page made, coloured by kind, with invoice, status and the error `code`; Clear empties it |
 | Live ledger | availability and the latest 100 movements, polled every second, coloured by kind; Reset empties the whole database |
 
-Every panel has a folded curl box with the call its settings make, one click to copy. A program
+The generators, the scenarios and the treasury panel fold under their titles. Every panel has a folded curl box with the call its settings make, one click to copy. A program
 exists only once the treasury has sent a first message for it: after a Reset, or for a new
 program id, send a New limit first.
 
