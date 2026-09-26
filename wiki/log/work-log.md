@@ -3534,3 +3534,18 @@ Findings, most severe first:
 - Tests beyond the plan, for `/ship`: `storableText` removes NUL
   (`readable-payload.test.ts`).
 - `npm run gate` green: unit 205, web 9, integration 52, e2e 66, cold start 3.
+
+## 2026-09-26, verify S-08, Opus
+- VERIFY S-08: PASS, at 9f82e69.
+- gate: `npm run gate` green: unit 205, web 9, integration 52, e2e 66, cold start 3.
+- coverage: no AC or INV claimed (the slice strengthens AC-25 and AC-38); all ten planned test
+  names present and passing, none skipped or focused.
+- Style and layers: prose check clean; no nested ternary and no braced one-line `if` in the
+  diff; no `@nestjs` in `domain/`, no ORM or Kafka import in `domain/` or `application/`.
+- Before verifying: the web fix had landed inside the implement docs commit because a background
+  commit did not run; the unpushed branch was split into `e1de323` (web) and `9f82e69` (docs).
+- Cold start on the default stack, after checking none of it existed: ready, `401` without a
+  token, `200` with one, `web` `200`. Live check of the major: a capacity update with NUL in
+  `programId` published through `/dev/treasury`, then a limit change; the limit change applied.
+  README reserve and snapshot steps answered as written. Stack taken down.
+- Findings: none.
