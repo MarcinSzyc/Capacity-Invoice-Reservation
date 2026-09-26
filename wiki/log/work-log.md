@@ -3713,3 +3713,45 @@ Findings, most severe first:
 ## 2026-09-26, verify S-08 (round 4), Opus
 - VERIFY S-08: PASS, at 5be2328. `npm run gate` green: unit 215, web 10, integration 55, e2e 66,
   cold start 3. Prose check clean, no layer import moved. Findings: none new.
+
+## 2026-09-26, review S-08 (round 4), Fable
+- REVIEW S-08: 2 findings (0/2/0), at 5f542bf against base e52d553, fresh context, attention on
+  5be2328. Not a pass.
+- Round 3 closed as reported, for the value: a message whose value is past 1 000 000 bytes is
+  dead-lettered with an empty value, `valueOmitted` and its source position, recorded `rejected`,
+  and the next message applied; a value of exactly 1 000 000 bytes plus a small key goes out as is
+  on the real broker. No catch-all was added around the record insert or the publish (local
+  decision 3 holds). The ADR-0003 departure and the item 5 slice text are left to `/ship` as
+  agreed and not raised.
+- Findings, most severe first:
+  - (major, spec) `api/src/modules/capacity/infrastructure/messaging/treasury-capacity.consumer.ts:281`
+    with `:35-41` and `api/src/messaging/kafka.service.ts:164`: the dead letter bounds its value
+    and its error but republishes the source key unbounded, and the key reaches it decoded as
+    UTF-8, so every byte that is not valid UTF-8 comes back as U+FFFD, three bytes. Reproduced
+    through the real consumer, broker and database, twice, no compression: (a) a malformed
+    capacity update with a key of 350 000 bytes of 0xFF, which the broker took; its dead letter
+    key is 1 050 000 bytes; (b) a plain ASCII value of exactly 1 000 000 bytes (so it is kept)
+    with a key of 47 800 bytes, which the broker took; the headers push the dead letter past the
+    limit. Both times kafkajs logged "The request included a message larger than the max message
+    size the server will accept" and `Crash: KafkaJSNonRetriableError`, no dead letter and no
+    record were written, and the next valid message on the partition was not applied within 90 s.
+    A-13 clauses 4 and 6 and the slice outcome; the comment at `:210-211` ("only an outage
+    throws") does not hold.
+  - (major, spec) `api/src/modules/capacity/infrastructure/messaging/readable-payload.ts:39-52`,
+    used at `treasury-capacity.consumer.ts:251`: `storablePayload` bounds depth and text but not
+    size, and jsonb refuses a string or a value past 268 435 455 bytes. Reproduced through the
+    real consumer, broker and database: a capacity update with an unknown field of 270 000 000
+    zeros, sent GZIP-compressed (the broker took it in 1.6 s), is refused by the DTO, its dead
+    letter goes out with the value omitted, then `recordOutcome` fails with PostgreSQL `54000`
+    "string too long to represent as jsonb string" on every delivery; kafkajs logs "Error when
+    calling eachMessage" and `Crash: KafkaJSNumberOfRetriesExceeded`, restarts the consumer, the
+    message is delivered again (a new dead letter each time) and the next valid message was not
+    applied within 90 s. Local decision 1 keeps a payload only when it is plainly storable; one
+    past what jsonb holds is not.
+- Observation, not counted: kafkajs has no LZ4, Snappy or ZSTD codec
+  (`node_modules/kafkajs/src/protocol/message/compression/index.js` throws
+  `KafkaJSNotImplemented`), so a treasury batch compressed with one of them fails the fetch
+  before any handler runs. That is the transport, not what a message contains, and outside this
+  slice; noted for Marcin.
+- Scratch reproductions were written under `api/src/` and deleted; the working tree holds only
+  this entry and the slice log row.
