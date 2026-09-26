@@ -76,6 +76,15 @@ describe('storablePayload', () => {
     expect(storablePayload({note: '0'.repeat(1_000)})).not.toBeNull();
   });
 
+  it('should stop inside an array wider than the bound allows, without walking all of it', () => {
+    const wide = {note: new Array<number>(STORED_PAYLOAD_MAX_BYTES).fill(0)};
+    const entries = jest.spyOn(Object, 'entries');
+
+    expect(storablePayload(wide)).toBeNull();
+    expect(entries.mock.calls.some(([value]) => value === wide.note)).toBe(false);
+    entries.mockRestore();
+  });
+
   it('should walk a payload wider than one call can take without throwing', () => {
     const wide = {note: Array.from({length: WIDER_THAN_A_CALL}, () => 0)};
 

@@ -42,10 +42,11 @@ export const STORED_PAYLOAD_MAX_BYTES = 16_000_000;
  * larger than the bound, or carrying a string or a key PostgreSQL refuses in jsonb
  * (`isStorableText`). A record that cannot be written stalls the partition (A-13 clause 4); the
  * dead letter keeps the bytes (ADR-0003). The walk is iterative, so it cannot overflow on the
- * input it guards against, and it stops as soon as the size is past the bound.
+ * input it guards against, and it counts each child as it queues it, so it stops inside a wide
+ * array at the bound rather than after queueing all of it.
  */
 export const storablePayload = (payload: unknown): unknown => {
-  const pending: {value: unknown; depth: number}[] = [{value: payload, depth: 0}];
+  const pending: Pending[] = [{value: payload, depth: 0}];
   let bytes = 0;
   for (let next = pending.pop(); next !== undefined; next = pending.pop()) {
     const {value, depth} = next;
@@ -54,16 +55,42 @@ export const storablePayload = (payload: unknown): unknown => {
     if (typeof value === 'string' && !isStorableText(value)) return null;
     if (typeof value !== 'object' || value === null) continue;
     if (depth >= STORED_PAYLOAD_MAX_DEPTH) return null;
-    const entries: [string, unknown][] = Object.entries(value);
-    if (entries.some(([key]) => !isStorableText(key))) return null;
-    // One push per child: spreading a wide array into one call overflows the stack.
-    for (const [key, child] of entries) {
-      bytes += Buffer.byteLength(key, 'utf8');
-      pending.push({value: child, depth: depth + 1});
-    }
+    const queued = queueChildren(value, depth + 1, pending, bytes);
+    if (queued === null) return null;
+    bytes = queued;
   }
   return payload;
 };
+
+interface Pending {
+  readonly value: unknown;
+  readonly depth: number;
+}
+
+/** Queues the children of one container; the running size, or null once past a bound. */
+const queueChildren = (
+  container: object,
+  depth: number,
+  pending: Pending[],
+  bytesSoFar: number,
+): number | null => {
+  const children = Array.isArray(container)
+    ? itemsOf(container)
+    : Object.keys(container).map((key) => ({key, value: Reflect.get(container, key) as unknown}));
+  let bytes = bytesSoFar;
+  for (const {key, value} of children) {
+    if (key !== null && !isStorableText(key)) return null;
+    bytes += key === null ? SCALAR_BYTES : Buffer.byteLength(key, 'utf8');
+    if (bytes > STORED_PAYLOAD_MAX_BYTES) return null;
+    pending.push({value, depth});
+  }
+  return bytes;
+};
+
+/** Lazily, so a wide array is not copied before the bound can stop the walk. */
+function* itemsOf(items: readonly unknown[]): Generator<{key: null; value: unknown}> {
+  for (const value of items) yield {key: null, value};
+}
 
 // Numbers, booleans and null are small; a string counts its UTF-8 bytes. Close enough for a
 // bound that sits two orders of magnitude from either side.
