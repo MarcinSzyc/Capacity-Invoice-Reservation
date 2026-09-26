@@ -3512,3 +3512,347 @@ Findings, most severe first:
 - The S-06 minor becomes a bound test of 20 000 active reservations released by omission; if it
   does not fit one transaction, making it fit is implement's job.
 - Commit column backfill for S-04 to S-07 goes to `/ship`. No ADR.
+
+## 2026-09-26, implement S-08, Opus
+- Items 1 to 4 (1dfd020): `storablePayload` is now a property of the payload, in
+  `readable-payload.ts`: null past depth 32 or with NUL in any string or key, iterative walk. The
+  `unparseable` mark is gone, so the parser and Prisma no longer need to overflow together.
+  `readableString` refuses NUL; error texts lose NUL before the record and the failure row;
+  `WithoutNul` (a `ValidateBy`, since a regex with `\u0000` trips `no-control-regex`) on
+  `messageId`, `programId`, `invoiceId` of both message DTOs. The integration test on the real
+  store was red first (the next valid message never applied), then green.
+- Item 5 (27a0ee4): 20 000 active client reservations released by omission in one transaction,
+  4.8 s against the 15 s timeout. Passed the first time: the requirement already held, the test
+  proves it. Setup writes the reservations in one transaction through the repositories, not
+  20 000 reservation requests.
+- Items 6 to 11 (web): invoices kept with their program id, a 404 drops one; the poll drops
+  answers after its cleanup; `fetch` failure is the only `API_UNREACHABLE`, a non-JSON body keeps
+  its status with no code; an empty token is asked for again; `availabilityOf` and `movementsOf`
+  narrow with guards, no cast left in `web/src` outside tests; the Stale comment corrected. The
+  generator timer test passed first (the S-07 fix was already there); checked it can fail by
+  putting the S-07 bug back: it failed, then the file was restored.
+- Tests beyond the plan, for `/ship`: `storableText` removes NUL
+  (`readable-payload.test.ts`).
+- `npm run gate` green: unit 205, web 9, integration 52, e2e 66, cold start 3.
+
+## 2026-09-26, verify S-08, Opus
+- VERIFY S-08: PASS, at 9f82e69.
+- gate: `npm run gate` green: unit 205, web 9, integration 52, e2e 66, cold start 3.
+- coverage: no AC or INV claimed (the slice strengthens AC-25 and AC-38); all ten planned test
+  names present and passing, none skipped or focused.
+- Style and layers: prose check clean; no nested ternary and no braced one-line `if` in the
+  diff; no `@nestjs` in `domain/`, no ORM or Kafka import in `domain/` or `application/`.
+- Before verifying: the web fix had landed inside the implement docs commit because a background
+  commit did not run; the unpushed branch was split into `e1de323` (web) and `9f82e69` (docs).
+- Cold start on the default stack, after checking none of it existed: ready, `401` without a
+  token, `200` with one, `web` `200`. Live check of the major: a capacity update with NUL in
+  `programId` published through `/dev/treasury`, then a limit change; the limit change applied.
+  README reserve and snapshot steps answered as written. Stack taken down.
+- Findings: none.
+
+## 2026-09-26, review S-08 (round 1), Fable
+- REVIEW S-08: 4 findings (0/2/2), at bd1ba58 against base e52d553, fresh context. Not a pass.
+- Closed as planned: NUL in a string, a key or an id no longer stalls (items 1 to 4, reproduced
+  green on the real store by the new integration test); `Infinity` from `1e999` and a
+  `__proto__` key are stored fine; release by omission of 20 000 holds (item 5); web items 6 to
+  11 do what the slice says, and each new render test fails on the old code. No catch-all was
+  added around the record insert (local decision 3 holds).
+- Findings, most severe first:
+  - (major, spec) `api/src/modules/capacity/infrastructure/messaging/readable-payload.ts:33-45`
+    with `capacity-update-message.dto.ts:28-39` and `reconciliation-snapshot-message.dto.ts:41-70`:
+    a lone UTF-16 surrogate (valid JSON `"\ud800"`) passes `storablePayload` and the DTOs, and
+    PostgreSQL refuses it in jsonb ("invalid input syntax for type json"). Reproduced through the
+    real consumer, broker and database: an unknown field `"a\ud800b"` gave 150 dead letters in 15 s
+    and no record, the next message on the partition never applied; a `messageId` ending in
+    `\udc00` fails three attempts (the applied record carries the payload), is set aside, its
+    record fails the same way, and it is delivered again forever (20 dead letters in 15 s). The
+    slice outcome ("no treasury message can stall its partition by what it contains", A-13
+    clauses 4 and 6) is not met; the store's refusals were enumerated as NUL only.
+  - (major, spec) `api/src/modules/capacity/infrastructure/messaging/readable-payload.ts:42`:
+    `pending.push(...entries.map(...))` spreads every child as a call argument, which throws
+    `RangeError: Maximum call stack size exceeded` from about 125 000 children on Node 24. A
+    capacity update with an unknown field `note` holding 200 000 zeros (400 KB, under the broker's
+    1 MB) is refused by the DTO, then `storablePayload` throws in `reject` before the dead letter,
+    outside any catch: no dead letter, no record, kafkajs logs `Crash: KafkaJSNonRetriableError`,
+    the next message never applied (reproduced on the real stack). New with S-08: before it the
+    payload was kept and Prisma stored it.
+  - (minor, standards) `web/src/api.ts:127`: `await response.text()` is now outside the catch; a
+    body that fails mid-read rejects `call`, so `send` logs nothing and `void poll()` and the
+    generator's `void latestStep.current()` end in an unhandled rejection. Before S-08 it was
+    caught and logged.
+  - (minor, spec) `wiki/slices/S-08-hardening-carried-findings.md:68`: item 5 still says the
+    20 000 reservations come from two snapshots of 10 000; the test writes client reservations
+    through the repositories. The plan correction is only in the work-log.
+- Scratch reproductions were written under `api/src/` and deleted; the working tree holds only
+  this entry and the slice log row.
+
+## 2026-09-26, implement S-08 (review round 1 fixes), Opus
+- Major 1: a lone UTF-16 surrogate is valid JSON and refused by jsonb, so the NUL guard was too
+  narrow. `isStorableText` (no NUL and `isWellFormed()`) is now the one test for what the store
+  can hold; `readableString`, `storablePayload` and the id validator use it, renamed
+  `StorableText` (`storable-text.ts`); `storableText` also applies `toWellFormed()` to error
+  texts. The api `tsconfig` moves to ES2024 for `isWellFormed`, which Node 24 has.
+- Major 2: the walk pushed every child through one spread call, which overflows from about
+  125 000 children; one push per child now.
+- Tests, unit red first: surrogate id, surrogate string and key, a 200 000-wide payload, a
+  well-formed error text, both DTOs. Integration on the real store: a surrogate in an unknown
+  field, a surrogate in `messageId`, a 200 000-wide field, then a valid message applied. The
+  integration test was written after the fix; the reviewer's reproductions on the old code are
+  its red.
+- Minor (web): a body that breaks off mid-read is logged with its status; red first.
+- Minor (slice text, item 5 setup): corrected at `/ship`, as S-07's was.
+
+## 2026-09-26, verify S-08 (round 2), Opus
+- VERIFY S-08: PASS, at d2b2a78. `npm run gate` green: unit 211, web 10, integration 53, e2e 66,
+  cold start 3. The compose stack took 941 s to turn healthy on this machine (24 to 36 s before);
+  it passed, noted as an observation of the Docker host, not of the code. Prose check clean, no
+  layer import moved. Findings: none new.
+
+## 2026-09-26, review S-08 (round 2), Fable
+- REVIEW S-08: 3 findings (0/1/2), at 0bab5ae against base e52d553, fresh context, attention on
+  d2b2a78. Not a pass.
+- Round 1 closed on the real store: a lone surrogate in a string, a key or an id is dropped from
+  the record or refused on sight, and a 200 000-wide payload is walked without throwing; the new
+  integration test proves both with the next message applied. Probed PostgreSQL directly through
+  `PrismaTreasuryMessageStore.recordOutcome` with Prisma-tagged objects (`$type` Json, DateTime,
+  Decimal, Bytes, FieldRef, Param, Raw), `toJSON` and `__proto__` keys, `1e999`, `5e-324`, a
+  30-digit integer, paired surrogates and noncharacters: every one stored. Text columns are
+  unbounded or fed only width-checked ids. No catch-all was added around the record insert (local
+  decision 3 holds). The web minor is closed: a body that breaks off mid-read is logged with its
+  status.
+- Findings, most severe first:
+  - (major, spec) `api/src/modules/capacity/infrastructure/messaging/treasury-capacity.consumer.ts:254-266`
+    with `capacity-update-message.dto.ts:71-73` and `reconciliation-snapshot-message.dto.ts:113,144-148`:
+    the dead letter carries the original bytes plus the whole validation error in its `error`
+    header, and that error names every unknown field ("property k00001 should not exist; ..."),
+    so it grows with the message. A capacity update with 40 000 short unknown fields (440 KB,
+    under the broker's 1 MB) makes a dead letter over the broker's `message.max.bytes`; the broker
+    refuses it ("The request included a message larger than the max message size the server will
+    accept"), `reject` throws before the record, kafkajs logs `Crash: KafkaJSNonRetriableError`,
+    no dead letter and no record exist, and the next message on the partition was never applied
+    (reproduced through the real consumer, broker and database). The same holds for one unknown
+    key of about 600 KB, or for snapshot entries each carrying an unknown key. Not new with S-08,
+    but inside its outcome ("no treasury message can stall its partition by what it contains",
+    A-13 clauses 4 and 6): the broker is the other store the rejection writes to, and ADR-0013
+    redelivers only while one of them is away, not when it refuses deterministically.
+  - (minor, standards) `api/src/modules/capacity/infrastructure/messaging/readable-payload.ts:55`
+    and `storable-text.ts:8`: `storableText` (sanitises an error text) and `StorableText` (the id
+    validator) differ only in case and do opposite things, and `storable-text.ts` does not export
+    `storableText`. A reader following the name lands in the wrong file.
+  - (minor, spec) `wiki/slices/S-08-hardening-carried-findings.md:68`: still open from round 1 by
+    decision; item 5 says the 20 000 reservations come from two snapshots of 10 000, the test
+    writes client reservations through the repositories. Carried to `/ship`.
+- Scratch reproductions were written under `api/src/` and deleted; the working tree holds only
+  this entry and the slice log row.
+
+## 2026-09-26, implement S-08 (review round 2 fixes), Opus
+- Major: a validation error names every refused field, so with 40 000 unknown fields the dead
+  letter's `error` header made it larger than the broker accepts; the publish failed before the
+  record and the partition stalled. `storableText` now also cuts the text at
+  `ERROR_TEXT_MAX_LENGTH` (2 000) before making it well-formed, and `reject` applies it once, so
+  the dead letter header, the record and the log carry the same bounded text. Unit tests red first
+  on behaviour (the constant added alone, then the cut); the real-broker integration test with
+  40 000 unknown fields was written before the fix and passes after it (the reviewer's
+  reproduction is its red).
+- Minor: the id validator is `StorableId` in `storable-id.ts`, no longer one letter of case away
+  from `storableText`.
+- Minor (slice text, item 5): `/ship`.
+
+## 2026-09-26, verify S-08 (round 3), Opus
+- VERIFY S-08: PASS, at 9cec1c1. `npm run gate` green: unit 213, web 10, integration 54, e2e 66,
+  cold start 3. Prose check clean, no layer import moved. Findings: none new.
+
+## 2026-09-26, review S-08 (round 3), Fable
+- REVIEW S-08: 1 finding (0/1/0), at 47d53a8 against base e52d553, fresh context, attention on
+  9cec1c1. Not a pass.
+- Round 2 closed as far as it reached: the `error` header, the record's error and the failure
+  row are one text cut at 2 000 characters, so a message with 40 000 unknown fields is
+  dead-lettered and recorded and the next one applied on the real broker. The validator is
+  `StorableId` in `storable-id.ts`, no stale name left. The record insert has no deterministic
+  refusal left that I could find: ids are width and text checked, `type` and `programId` go
+  through `readableString`, the payload through `storablePayload`, the error is bounded and
+  storable. No catch-all was added around the record insert or the publish (local decision 3
+  holds). The item 5 slice text is carried to `/ship` by decision and not raised again.
+- Findings:
+  - (major, spec) `api/src/modules/capacity/infrastructure/messaging/treasury-capacity.consumer.ts:256-269`
+    with `api/src/messaging/kafka.service.ts:88-91`: the dead letter is the decompressed value
+    plus up to about 2 KB of headers, published uncompressed, and nothing bounds it against what
+    the broker accepts; "the broker already accepted these bytes" does not hold. Reproduced
+    through the real consumer, broker and database, twice. (a) A capacity update with an unknown
+    field of 3 000 000 zeros, sent with GZIP compression (kafkajs, any treasury producer may
+    compress): the broker accepts it compressed, the consumer refuses it, the dead letter of 3 MB
+    is refused ("The request included a message larger than the max message size the server will
+    accept"), kafkajs logs `Crash: KafkaJSNonRetriableError`, no dead letter, no record, and the
+    next valid message on the partition was not applied within 20 s. (b) Without compression, a
+    source message of 1 048 509 bytes, the largest the broker took: the headers push the dead
+    letter over the limit, with the same result. The partition stalls by what a message contains
+    (A-13 clauses 4 and 6, the slice outcome); the comments at `readable-payload.ts:54-58` and
+    `treasury-capacity.consumer.ts:198-203` present the error bound as closing that and a
+    refusal as an outage.
+- Scratch reproductions were written under `api/src/` and deleted; the working tree holds only
+  this entry and the slice log row.
+
+## 2026-09-26, implement S-08 (review round 3 fix), Opus
+- Major: the dead letter's value is the decompressed original, published uncompressed, so a
+  message the broker took (compressed, or just under 1 MiB) could come back refused as a dead
+  letter, with the partition stalled. A value above `DEAD_LETTER_VALUE_MAX_BYTES` (1 000 000,
+  below Kafka's 1 MiB default with room for the bounded headers) is now left out of the dead
+  letter, which carries `valueOmitted` with the size and keeps `sourceTopic`, `sourcePartition`
+  and `sourceOffset`, so the original is still found on the treasury topic. Every other dead
+  letter keeps its original bytes.
+- This departs from ADR-0003's "the original bytes" for oversized values only. It has real
+  alternatives (compress the dead-letter topic, raise the topic's `max.message.bytes`, omit the
+  value), so it goes to `/ship` as a proposed amendment of ADR-0003 for Marcin to confirm in the
+  PR, not as a decision taken here.
+- Tests: consumer unit tests red first (oversized value omitted; a fitting value kept as is);
+  real-broker integration test with a 1 040 000 byte message, shown to fail (the partition
+  stalls) with the bound raised past it, then green with the bound restored.
+- The two comments that claimed more than the code did are corrected: the set-aside comment
+  now separates an outage from what a store would refuse every time.
+
+## 2026-09-26, verify S-08 (round 4), Opus
+- VERIFY S-08: PASS, at 5be2328. `npm run gate` green: unit 215, web 10, integration 55, e2e 66,
+  cold start 3. Prose check clean, no layer import moved. Findings: none new.
+
+## 2026-09-26, review S-08 (round 4), Fable
+- REVIEW S-08: 2 findings (0/2/0), at 5f542bf against base e52d553, fresh context, attention on
+  5be2328. Not a pass.
+- Round 3 closed as reported, for the value: a message whose value is past 1 000 000 bytes is
+  dead-lettered with an empty value, `valueOmitted` and its source position, recorded `rejected`,
+  and the next message applied; a value of exactly 1 000 000 bytes plus a small key goes out as is
+  on the real broker. No catch-all was added around the record insert or the publish (local
+  decision 3 holds). The ADR-0003 departure and the item 5 slice text are left to `/ship` as
+  agreed and not raised.
+- Findings, most severe first:
+  - (major, spec) `api/src/modules/capacity/infrastructure/messaging/treasury-capacity.consumer.ts:281`
+    with `:35-41` and `api/src/messaging/kafka.service.ts:164`: the dead letter bounds its value
+    and its error but republishes the source key unbounded, and the key reaches it decoded as
+    UTF-8, so every byte that is not valid UTF-8 comes back as U+FFFD, three bytes. Reproduced
+    through the real consumer, broker and database, twice, no compression: (a) a malformed
+    capacity update with a key of 350 000 bytes of 0xFF, which the broker took; its dead letter
+    key is 1 050 000 bytes; (b) a plain ASCII value of exactly 1 000 000 bytes (so it is kept)
+    with a key of 47 800 bytes, which the broker took; the headers push the dead letter past the
+    limit. Both times kafkajs logged "The request included a message larger than the max message
+    size the server will accept" and `Crash: KafkaJSNonRetriableError`, no dead letter and no
+    record were written, and the next valid message on the partition was not applied within 90 s.
+    A-13 clauses 4 and 6 and the slice outcome; the comment at `:210-211` ("only an outage
+    throws") does not hold.
+  - (major, spec) `api/src/modules/capacity/infrastructure/messaging/readable-payload.ts:39-52`,
+    used at `treasury-capacity.consumer.ts:251`: `storablePayload` bounds depth and text but not
+    size, and jsonb refuses a string or a value past 268 435 455 bytes. Reproduced through the
+    real consumer, broker and database: a capacity update with an unknown field of 270 000 000
+    zeros, sent GZIP-compressed (the broker took it in 1.6 s), is refused by the DTO, its dead
+    letter goes out with the value omitted, then `recordOutcome` fails with PostgreSQL `54000`
+    "string too long to represent as jsonb string" on every delivery; kafkajs logs "Error when
+    calling eachMessage" and `Crash: KafkaJSNumberOfRetriesExceeded`, restarts the consumer, the
+    message is delivered again (a new dead letter each time) and the next valid message was not
+    applied within 90 s. Local decision 1 keeps a payload only when it is plainly storable; one
+    past what jsonb holds is not.
+- Observation, not counted: kafkajs has no LZ4, Snappy or ZSTD codec
+  (`node_modules/kafkajs/src/protocol/message/compression/index.js` throws
+  `KafkaJSNotImplemented`), so a treasury batch compressed with one of them fails the fetch
+  before any handler runs. That is the transport, not what a message contains, and outside this
+  slice; noted for Marcin.
+- Scratch reproductions were written under `api/src/` and deleted; the working tree holds only
+  this entry and the slice log row.
+
+## 2026-09-26, implement S-08 (review round 4 fixes), Opus
+- Rather than one more input at a time, every byte a rejection writes is now bounded: the dead
+  letter's value (1 000 000 bytes, round 3), its key (`DEAD_LETTER_KEY_MAX_BYTES`, 1 000; a
+  treasury key is a program id), its headers (the error cut at 2 000 characters, round 2), and the
+  stored payload (`STORED_PAYLOAD_MAX_BYTES`, 16 000 000 UTF-8 bytes counted during the same
+  iterative walk, far above a 10 000 entry snapshot and far below jsonb's 256 MiB string limit).
+  A key past its bound is left out and named in `keyOmitted`, like the value.
+- Tests red first: unit (a string past the byte bound, many strings past it together, a key of
+  1 000 replacement characters). Real-broker integration: a value exactly at the value bound with
+  a 48 400-byte key; with the key bound raised it stalls the partition (checked, then restored),
+  with the fix the next message applies. The first key length tried (47 800) did not reach the
+  broker limit with our headers, so the test was tightened until it could fail. The 270 MB jsonb
+  case stays at unit level: a 270 MB message is too heavy for the gate.
+- Noted from the round 4 review, outside this slice: kafkajs ships no LZ4, Snappy or ZSTD codec,
+  so a treasury batch compressed with one of them would fail the fetch before any handler runs.
+  For `/ship` to list as a known limitation.
+
+## 2026-09-26, verify S-08 (round 5), Opus
+- VERIFY S-08: PASS, at 4474dde. `npm run gate` green: unit 217, web 10, integration 56, e2e 66,
+  cold start 3. Prose check clean, no layer import moved. Findings: none new.
+
+## 2026-09-26, review S-08 (round 5), Fable
+- REVIEW S-08: 2 findings (0/1/1), at 6a8e336 against base e52d553, fresh context, attention on
+  4474dde. Not a pass.
+- Round 4 closed as reported, for both majors: with the key left out past 1 000 bytes, the value
+  past 1 000 000 and the error cut at 2 000 characters (at most 6 000 bytes), a dead letter is at
+  most about 1 008 000 bytes, under the broker's 1 048 588; a legal key (a program id, at most 64
+  characters) and a legal snapshot (about 4.3 MB counted at worst) keep their key and payload. A
+  string past 16 000 000 bytes drops the payload before jsonb sees it. No catch-all was added
+  around the record insert or the publish (local decision 3 holds). Checked on the real store and
+  found harmless: a number past the double range (`1e999` parses to Infinity) and a `__proto__`
+  key are recorded `rejected` and the next message applied.
+- Findings, most severe first:
+  - (major, spec) `api/src/modules/capacity/infrastructure/messaging/readable-payload.ts:57`
+    with `:60-63`, called at `treasury-capacity.consumer.ts:258`: the walk materialises every
+    entry of a container (`Object.entries`) and pushes every child before the byte bound at
+    `:52-53` is checked, so one wide array exhausts the heap before the bound can stop it; the
+    doc comment at `:44-45` ("stops as soon as the size is past the bound") does not hold.
+    Reproduced through the real consumer, broker and database: a capacity update with an unknown
+    field of 40 000 000 zeros (80 MB, sent GZIP-compressed, taken by the broker) passes
+    `JSON.parse` and class-transformer (1.6 GB), then the process spends about 220 s in garbage
+    collection and dies with "JavaScript heap out of memory" in `Runtime_ObjectEntries`; no dead
+    letter, no record, the offset uncommitted, so on restart the same message kills it again. At
+    a 2 GB heap 20 000 000 zeros is enough; at 20 000 000 with 4 GB the walk alone takes 11.6 s
+    and 2.5 GB. Worse than a stalled partition: the whole service, HTTP included, goes down in a
+    loop. A-13 clauses 4 and 6 and the slice outcome.
+  - (minor, standards) `wiki/spec/glossary.md:267`: "Dead letter" says it is a copy of the
+    treasury message, but since rounds 3 and 4 it can carry neither value nor key, named instead
+    by the `valueOmitted` and `keyOmitted` headers, which no glossary entry explains. A reader of
+    the dead letter topic is not told why a dead letter is empty; can travel with the ADR-0003
+    amendment at `/ship`.
+- Scratch reproductions were written under `api/src/` and the scratchpad and deleted, and the
+  Kafka container the crashed run left behind was removed; the working tree holds only this entry
+  and the slice log row.
+
+## 2026-09-26, implement S-08 (review round 5 fix), Opus
+- Major: a GZIP message that decompresses to 80 MB cost 1.6 GB of heap in `JSON.parse` and
+  class-transformer before any bound of ours ran, and the walk's `Object.entries` finished the
+  heap: the process died and restarted into the same message. The bound that closes it is on the
+  raw bytes, before parsing: `TREASURY_MESSAGE_MAX_BYTES` (8 000 000, a 10 000 entry snapshot is
+  under 5 MB) refuses a larger message as malformed. It has no readable id, so it is dead-lettered
+  (value omitted past its own bound) and not recorded, like a message that is not JSON.
+- The walk also counts each child as it queues it and walks an array lazily, so it stops inside a
+  wide array at the payload bound instead of copying it first; the comment says so truthfully now.
+- Tests red first: the consumer never parses the oversized message and applies the next one; the
+  walk never calls `Object.entries` on a 16 000 000-element array. Spies on `JSON.parse` and
+  `Object.entries` are on built-ins, not our code. No real-broker test: publishing a compressed
+  80 MB message needs a codec our `KafkaService` does not send, and the raw bound is checked
+  before anything the broker does matters.
+- Minor (glossary `Dead letter` and the two omission headers): with the ADR-0003 amendment at
+  `/ship`.
+
+## 2026-09-26, verify S-08 (round 6), Opus
+- VERIFY S-08: PASS, at d528dd8. `npm run gate` green: unit 219, web 10, integration 56, e2e 66,
+  cold start 3. Prose check clean, no layer import moved. Findings: none new.
+
+## 2026-09-26, ship S-08, Opus
+- Review round 6 was stopped by Marcin before it reported ("lets stop it if we dont have any
+  blockers or majors ... its taking too long"). The last completed review, round 5, had one
+  major, fixed in d528dd8 and verified PASS (round 6 of verify). No known blocker or major is
+  open; the stopped round is recorded as not run, not as a pass. It had left a scratch test and
+  a Kafka container, both removed.
+- `wiki/plan/plan.md`: seven `extra` rows for S-08; the commit column backfilled for S-04 to
+  S-07 from their merge commits (29 rows), S-06's merge commit tagged `S-06`, which had been
+  missed.
+- ADR-0003: amendment proposed, not accepted: oversized dead letters carry their source position
+  instead of their bytes. Marcin decides it in the S-08 pull request.
+- Glossary `Dead letter` gains the two omission headers (review round 5 minor). Slice item 5's
+  text corrected to what the test does (review rounds 1 to 3 minor). README's reconcile section
+  says no message can stop consumption, and how.
+- Changelog row, slice status `done`, slice index and Home updated.
+
+## 2026-09-26, S-08 CI fix, Opus
+- PR #44's Gate failed on CI: the 20 000 reservation bound test's setup wrote everything in one
+  transaction and took 22 s against the 15 s timeout on the runner (4.8 s locally). The failure
+  was in the setup, not in the use case under test. The setup now writes in chunks of 2 000.
+- Margin to watch: the use case itself applied 20 000 releases by omission in 5.4 s locally, and
+  CI ran the 10 000 entry snapshot about twice as slow as local (10.1 s against 5.2 s), so on CI it
+  is likely near 11 s of the 15 s. A larger program, or a slower runner, would reach the timeout;
+  batching the snapshot's reads and writes would be the fix if it does.

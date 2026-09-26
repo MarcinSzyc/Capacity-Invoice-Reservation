@@ -1,7 +1,9 @@
 import {useState} from 'react';
+import {isRecord} from './api';
 import type {Api} from './api';
 
-// Older than anything the seed or this panel stamps, so the consumer records it as stale.
+// Older than anything the seed or this panel stamps: recorded stale on a program the treasury
+// has updated since. On a program id never announced it is the first update and announces it.
 const STALE_EVENT_TIME = '2000-01-01T00:00:00.000Z';
 const CAPACITY_UPDATE = 'capacity_update';
 const SNAPSHOT = 'reconciliation_snapshot';
@@ -41,9 +43,7 @@ export const TreasuryPanel = ({
 
   const publish = async (message: Message): Promise<void> => {
     const answer = await api.send('POST', '/dev/treasury', message);
-    if (answer.status === 202 && typeof answer.body === 'object' && answer.body !== null) {
-      setLast(answer.body as Message);
-    }
+    if (answer.status === 202 && isRecord(answer.body)) setLast(answer.body);
   };
 
   const common = (): Message => ({

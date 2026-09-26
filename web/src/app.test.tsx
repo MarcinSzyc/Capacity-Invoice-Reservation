@@ -3,6 +3,7 @@ import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import {App} from './app';
 
 const PROGRAM_ID = 'PRG-1';
+const OTHER_PROGRAM_ID = 'PRG-2';
 const TOKEN = 'token-for-the-page';
 const AVAILABILITY = {
   programId: PROGRAM_ID,
@@ -18,9 +19,12 @@ const CAPACITY_EXCEEDED = {code: 'CAPACITY_EXCEEDED', message: 'not enough', ava
 const json = (status: number, body: unknown): Response =>
   new Response(JSON.stringify(body), {status, headers: {'Content-Type': 'application/json'}});
 
+const pathOf = (request: string | URL | Request): string =>
+  new URL(request instanceof Request ? request.url : request).pathname;
+
 /** The api as the page sees it: every route it calls, answered from fixtures. */
 const fakeApi = (request: string | URL | Request, init?: RequestInit): Promise<Response> => {
-  const path = new URL(request instanceof Request ? request.url : request).pathname;
+  const path = pathOf(request);
   const method = init?.method ?? 'GET';
   if (path === '/dev/token') return Promise.resolve(json(200, {token: TOKEN}));
   if (path === `/programs/${PROGRAM_ID}/availability`) {
@@ -94,5 +98,51 @@ describe('App', () => {
     expect(within(row).getByText(`/programs/${PROGRAM_ID}/reservations`)).toBeInTheDocument();
     expect(within(row).getByText('422')).toBeInTheDocument();
     expect(within(row).getByText('CAPACITY_EXCEEDED')).toBeInTheDocument();
+  });
+
+  it('should ignore a poll answer for a program id no longer shown', async () => {
+    let answerSlowProgram: (response: Response) => void = () => undefined;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((request: string | URL | Request, init?: RequestInit) => {
+        const path = pathOf(request);
+        if (path === `/programs/${PROGRAM_ID}/availability`) {
+          return new Promise<Response>((resolve) => {
+            answerSlowProgram = resolve;
+          });
+        }
+        return fakeApi(request, init);
+      }),
+    );
+    render(<App />);
+
+    fireEvent.change(screen.getByLabelText('Program'), {target: {value: OTHER_PROGRAM_ID}});
+    await screen.findByText('The treasury has not announced this program yet.');
+    answerSlowProgram(json(200, AVAILABILITY));
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    expect(
+      screen.getByText('The treasury has not announced this program yet.'),
+    ).toBeInTheDocument();
+  });
+
+  it('should show no availability for a body that is not one', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((request: string | URL | Request, init?: RequestInit) => {
+        const path = pathOf(request);
+        if (path === `/programs/${PROGRAM_ID}/availability`) {
+          return Promise.resolve(json(200, {programId: PROGRAM_ID, limit: 'a lot'}));
+        }
+        return fakeApi(request, init);
+      }),
+    );
+    render(<App />);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    expect(
+      screen.getByText('The treasury has not announced this program yet.'),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('a lot')).toBeNull();
   });
 });

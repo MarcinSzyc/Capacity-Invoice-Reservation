@@ -17,7 +17,13 @@ import {
 import {Money} from '../../domain/money';
 import {CapacityReads, CapacityRepositories, UnitOfWork} from '../../domain/ports/unit-of-work';
 import {Program} from '../../domain/program';
-import {TreasuryCapacityConsumer} from './treasury-capacity.consumer';
+import {ERROR_TEXT_MAX_LENGTH} from './readable-payload';
+import {
+  DEAD_LETTER_KEY_MAX_BYTES,
+  DEAD_LETTER_VALUE_MAX_BYTES,
+  TREASURY_MESSAGE_MAX_BYTES,
+  TreasuryCapacityConsumer,
+} from './treasury-capacity.consumer';
 import {TREASURY_DEAD_LETTER_TOPIC, TREASURY_TOPIC} from './treasury-topics';
 
 const PROGRAM_ID = 'PRG-1';
@@ -54,6 +60,8 @@ const inbound = (payload: unknown): InboundMessage => ({
 const KEEP_WINDOW_MS = 30_000;
 // Deep enough to overflow the stack of class-transformer, found by review round 3 of S-06.
 const NESTING = 5_000;
+// Enough to make an unbounded validation error larger than the broker takes (review round 2 of S-08).
+const MANY_UNKNOWN_FIELDS = 40_000;
 
 const consumerFor = (
   capacity: InMemoryUnitOfWork,
@@ -265,6 +273,91 @@ describe('TreasuryCapacityConsumer', () => {
       TREASURY_DEAD_LETTER_TOPIC,
     ]);
     expect(byId.get('m-limit')?.outcome).toBe('applied');
+  });
+
+  it('should dead-letter a message with a bounded error, however many fields it refuses', async () => {
+    const capacity = inMemoryCapacity();
+    const source = new FakeMessageSource();
+    const unknownFields = Object.fromEntries(
+      Array.from({length: MANY_UNKNOWN_FIELDS}, (_, index) => [`k${index}`, 0]),
+    );
+
+    await consumerFor(capacity, source).handle(
+      inbound({...UPDATE, messageId: 'm-wide', ...unknownFields}),
+    );
+
+    const error = source.published[0]?.messages[0]?.headers?.error;
+    expect(typeof error === 'string' ? error.length : Infinity).toBeLessThanOrEqual(
+      ERROR_TEXT_MAX_LENGTH,
+    );
+    expect(capacity.repositories.treasuryMessages.byId.get('m-wide')?.outcome).toBe('rejected');
+  });
+
+  it('should dead-letter a message too large to republish with its source position instead of its bytes', async () => {
+    const capacity = inMemoryCapacity();
+    const source = new FakeMessageSource();
+    const oversized = {
+      ...UPDATE,
+      messageId: 'm-oversized',
+      note: '0'.repeat(DEAD_LETTER_VALUE_MAX_BYTES),
+    };
+
+    await consumerFor(capacity, source).handle(inbound(oversized));
+
+    const deadLetter = source.published[0]?.messages[0];
+    expect(deadLetter?.value?.length).toBe(0);
+    expect(deadLetter?.headers).toMatchObject({
+      sourceOffset: '7',
+      valueOmitted: expect.any(String) as string,
+    });
+    expect(capacity.repositories.treasuryMessages.byId.get('m-oversized')?.outcome).toBe(
+      'rejected',
+    );
+  });
+
+  it('should dead-letter a message whose key is too large to republish without its key', async () => {
+    const capacity = inMemoryCapacity();
+    const source = new FakeMessageSource();
+    const malformed = {...UPDATE, messageId: 'm-long-key', creditLimit: 'a lot'};
+
+    await consumerFor(capacity, source).handle({
+      ...inbound(malformed),
+      key: '\ufffd'.repeat(DEAD_LETTER_KEY_MAX_BYTES),
+    });
+
+    const deadLetter = source.published[0]?.messages[0];
+    expect(deadLetter?.key).toBeNull();
+    expect(deadLetter?.headers).toMatchObject({keyOmitted: expect.any(String) as string});
+    expect(capacity.repositories.treasuryMessages.byId.get('m-long-key')?.outcome).toBe('rejected');
+  });
+
+  it('should refuse a message larger than the bound before parsing it, and keep consuming', async () => {
+    const capacity = inMemoryCapacity();
+    const source = new FakeMessageSource();
+    const huge = Buffer.from(
+      `{"messageId":"m-huge","note":"${'0'.repeat(TREASURY_MESSAGE_MAX_BYTES)}"}`,
+    );
+    const parse = jest.spyOn(JSON, 'parse');
+
+    await consumerFor(capacity, source).handle({...inbound(UPDATE), value: huge});
+    const parsedHuge = parse.mock.calls.some(([text]) => text.length > TREASURY_MESSAGE_MAX_BYTES);
+    parse.mockRestore();
+    await consumerFor(capacity, source).handle(inbound(UPDATE));
+
+    expect(parsedHuge).toBe(false);
+    expect(source.published[0]?.messages[0]?.headers?.error).toMatch(/bytes/);
+    expect(capacity.repositories.treasuryMessages.byId.get('m-limit')?.outcome).toBe('applied');
+  });
+
+  it('should keep the original bytes of a dead letter that fits', async () => {
+    const source = new FakeMessageSource();
+    const malformed = {...UPDATE, messageId: 'm-small', creditLimit: 'a lot'};
+
+    await consumerFor(inMemoryCapacity(), source).handle(inbound(malformed));
+
+    const deadLetter = source.published[0]?.messages[0];
+    expect(deadLetter?.value?.toString('utf8')).toBe(JSON.stringify(malformed));
+    expect(deadLetter?.headers?.valueOmitted).toBeUndefined();
   });
 
   describe('a message whose handling fails (ADR-0013)', () => {

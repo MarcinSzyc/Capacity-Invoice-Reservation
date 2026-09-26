@@ -165,4 +165,27 @@ describe('parseReconciliationSnapshot', () => {
     expect(wrongType.ok).toBe(false);
     expect(notAnObject.ok).toBe(false);
   });
+
+  it('should refuse identifiers that contain NUL', async () => {
+    const withNul = [
+      {...VALID, messageId: 'id\u0000'},
+      {...VALID, programId: 'id\u0000'},
+      {...VALID, activeReservations: [{invoiceId: 'id\u0000', heldAmount: 1}]},
+    ];
+
+    for (const message of withNul) {
+      const parsed = await parseReconciliationSnapshot(message, RECEIVED_AT);
+
+      expect(parsed).toMatchObject({ok: false, error: expect.stringContaining('NUL') as string});
+    }
+  });
+
+  it('should refuse identifiers that are not well-formed Unicode', async () => {
+    const parsed = await parseReconciliationSnapshot(
+      {...VALID, activeReservations: [{invoiceId: 'id\ud800', heldAmount: 1}]},
+      RECEIVED_AT,
+    );
+
+    expect(parsed.ok).toBe(false);
+  });
 });

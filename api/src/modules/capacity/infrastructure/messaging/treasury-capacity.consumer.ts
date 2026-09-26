@@ -20,7 +20,7 @@ import {
   MESSAGE_TYPE_MAX_LENGTH,
   PROGRAM_ID_MAX_LENGTH,
 } from '../../domain/identifier-limits';
-import {readableString} from './readable-payload';
+import {readableString, storablePayload, storableText} from './readable-payload';
 import {
   TREASURY_CONSUMER_GROUP,
   TREASURY_DEAD_LETTER_TOPIC,
@@ -32,6 +32,25 @@ const RESUBSCRIBE_AFTER_MS = 2_000;
 // ADR-0013: a message is tried this many times in one delivery before it is set aside.
 const ATTEMPTS = 3;
 const RETRY_PAUSE_MS = 250;
+/**
+ * The largest dead letter value republished as is. Kafka's default `message.max.bytes` is 1 MiB,
+ * and the value arrives decompressed while the dead letter goes out uncompressed, so a message
+ * the broker took from the treasury can be one it refuses from us (review round 3 of S-08).
+ * Below the default with room for the bounded headers.
+ */
+export const DEAD_LETTER_VALUE_MAX_BYTES = 1_000_000;
+/**
+ * The largest dead letter key republished as is. A treasury key is a program id; a key that is
+ * not UTF-8 comes back three bytes per byte, and a long one next to a value at its bound would
+ * push the dead letter past the broker's limit (review round 4 of S-08).
+ */
+export const DEAD_LETTER_KEY_MAX_BYTES = 1_000;
+/**
+ * The largest treasury message parsed at all. A snapshot at its 10 000 entry bound is under
+ * 5 MB; a compressed message can decompress far past what the broker took, and parsing it costs
+ * gigabytes of heap before any other bound applies (review round 5 of S-08).
+ */
+export const TREASURY_MESSAGE_MAX_BYTES = 8_000_000;
 
 type Attempted<T> =
   {readonly ok: true; readonly value: T} | {readonly ok: false; readonly error: string};
@@ -118,8 +137,7 @@ export class TreasuryCapacityConsumer implements OnApplicationBootstrap, OnModul
 
     const update = await parsedOrRefused(() => parseCapacityUpdate(parsed.payload, receivedAt));
     if (!update.ok) {
-      const payload = storablePayload(update, parsed.payload);
-      return this.reject(message, {messageId, payload}, update.error, receivedAt);
+      return this.reject(message, {messageId, payload: parsed.payload}, update.error, receivedAt);
     }
 
     const readable = {messageId, payload: parsed.payload};
@@ -142,10 +160,7 @@ export class TreasuryCapacityConsumer implements OnApplicationBootstrap, OnModul
     receivedAt: Date,
   ): Promise<void> {
     const snapshot = await parsedOrRefused(() => parseReconciliationSnapshot(payload, receivedAt));
-    if (!snapshot.ok) {
-      const kept = storablePayload(snapshot, payload);
-      return this.reject(message, {messageId, payload: kept}, snapshot.error, receivedAt);
-    }
+    if (!snapshot.ok) return this.reject(message, {messageId, payload}, snapshot.error, receivedAt);
 
     const {programId} = snapshot.command;
     const attempted = await this.attempted(snapshot.command.messageId, () =>
@@ -190,7 +205,7 @@ export class TreasuryCapacityConsumer implements OnApplicationBootstrap, OnModul
       await this.rejectTreasuryMessage.recordFailure({
         messageId,
         attempt,
-        error,
+        error: storableText(error),
         failedAt: new Date(),
       });
     } catch (reason: unknown) {
@@ -201,9 +216,12 @@ export class TreasuryCapacityConsumer implements OnApplicationBootstrap, OnModul
 
   /**
    * ADR-0013: after the last attempt the message is a rejection like any other: dead-lettered with
-   * the error, recorded, and consumption continues. If the broker or the database cannot take the
-   * dead letter or the record, `reject` throws, the offset stays uncommitted and the message is
-   * delivered again, so an outage delays messages rather than setting them aside.
+   * the error, recorded, and consumption continues. If the broker or the database is away when
+   * the dead letter or the record is written, `reject` throws, the offset stays uncommitted and
+   * the message is delivered again, so an outage delays messages rather than setting them aside.
+   * What a store would refuse every time is shaped before it gets there (bounded error, storable
+   * payload and ids, a dead letter key and value within the broker's size), so only an outage
+   * throws.
    */
   private async setAside(
     message: InboundMessage,
@@ -228,9 +246,11 @@ export class TreasuryCapacityConsumer implements OnApplicationBootstrap, OnModul
   private async reject(
     message: InboundMessage,
     readable: {messageId: string | null; payload: unknown},
-    error: string,
+    refusal: string,
     receivedAt: Date,
   ): Promise<void> {
+    // One text for the dead letter, the record and the log: bounded and storable everywhere.
+    const error = storableText(refusal);
     if (readable.messageId === null) {
       await this.deadLetter(message, error);
       this.logger.warn(`message rejected: ${error}`, CONTEXT);
@@ -241,7 +261,7 @@ export class TreasuryCapacityConsumer implements OnApplicationBootstrap, OnModul
         messageId: readable.messageId,
         programId: readableString(readable.payload, 'programId', PROGRAM_ID_MAX_LENGTH),
         type: readableString(readable.payload, 'type', MESSAGE_TYPE_MAX_LENGTH),
-        payload: readable.payload,
+        payload: storablePayload(readable.payload),
         error,
         receivedAt,
       },
@@ -254,18 +274,29 @@ export class TreasuryCapacityConsumer implements OnApplicationBootstrap, OnModul
     this.logger.warn(`message rejected: ${error}`, CONTEXT);
   }
 
-  /** ADR-0003: the original bytes, with what went wrong and where it came from in the headers. */
+  /**
+   * ADR-0003: the original bytes, with what went wrong and where it came from in the headers. A
+   * value or key too large to republish is left out and named in `valueOmitted` or `keyOmitted`:
+   * the source position still finds it on the treasury topic, and a dead letter the broker
+   * refuses would stall it. Bounded key, value and headers stay under the broker's 1 MiB.
+   */
   private deadLetter(message: InboundMessage, error: string): Promise<void> {
+    const value = message.value ?? Buffer.alloc(0);
+    const keyBytes = message.key === null ? 0 : Buffer.byteLength(message.key, 'utf8');
+    const valueFits = value.length <= DEAD_LETTER_VALUE_MAX_BYTES;
+    const keyFits = keyBytes <= DEAD_LETTER_KEY_MAX_BYTES;
     return this.source.publish(TREASURY_DEAD_LETTER_TOPIC, [
       {
-        key: message.key,
-        value: message.value ?? Buffer.alloc(0),
+        key: keyFits ? message.key : null,
+        value: valueFits ? value : Buffer.alloc(0),
         headers: {
           error,
           sourceTopic: message.topic,
           sourcePartition: String(message.partition),
           sourceOffset: message.offset,
           correlationId: currentCorrelationId() ?? 'unknown',
+          ...(valueFits ? {} : {valueOmitted: `${value.length} bytes`}),
+          ...(keyFits ? {} : {keyOmitted: `${keyBytes} bytes`}),
         },
       },
     ]);
@@ -285,6 +316,12 @@ export class TreasuryCapacityConsumer implements OnApplicationBootstrap, OnModul
 
 const parseJson = (value: Buffer | null): ParsedJson => {
   if (value === null) return {ok: false, error: 'message has no value'};
+  if (value.length > TREASURY_MESSAGE_MAX_BYTES) {
+    return {
+      ok: false,
+      error: `message is ${value.length} bytes, more than the ${TREASURY_MESSAGE_MAX_BYTES} a treasury message may carry`,
+    };
+  }
   try {
     return {ok: true, payload: JSON.parse(value.toString('utf8'))};
   } catch (reason: unknown) {
@@ -300,21 +337,14 @@ const parseJson = (value: Buffer | null): ParsedJson => {
  */
 const parsedOrRefused = async <T extends {readonly ok: boolean}>(
   parse: () => Promise<T>,
-): Promise<T | {readonly ok: false; readonly error: string; readonly unparseable: true}> => {
+): Promise<T | {readonly ok: false; readonly error: string}> => {
   try {
     return await parse();
   } catch (reason: unknown) {
     const detail = reason instanceof Error ? reason.message : String(reason);
-    return {ok: false, error: `message could not be parsed: ${detail}`, unparseable: true};
+    return {ok: false, error: `message could not be parsed: ${detail}`};
   }
 };
-
-/**
- * What broke the parser breaks Prisma's JSON serialiser too, so such a message is recorded
- * without its payload; the dead letter still carries the original bytes (ADR-0003).
- */
-const storablePayload = (refused: object, payload: unknown): unknown =>
-  'unparseable' in refused ? null : payload;
 
 const readableMessageId = (payload: unknown): string | null =>
   readableString(payload, 'messageId', MESSAGE_ID_MAX_LENGTH);

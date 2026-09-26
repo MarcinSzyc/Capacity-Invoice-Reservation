@@ -1,6 +1,6 @@
 # ADR-0003: Kafka client library and topic layout
 
-- Status: accepted
+- Status: accepted; amendment proposed 2026-09-26, see Amendments
 - Date: proposed 2026-09-19, accepted 2026-09-19
 - Slice: S-01 (broker in compose, readiness check), S-02 (consumer)
 - Related: A-03, A-04, A-11, A-13, AC-23, AC-24, AC-25, INV-05, INV-07
@@ -74,3 +74,29 @@ Per-program ordering across both message types comes from one partition per key.
 real treasury contract replaces the DTOs and the topic name, not the use cases (A-11). If the
 treasury insists on two topics, the consumer becomes two subscriptions of the same class and
 INV-07's per-fact monotonic checks carry the ordering burden.
+
+## Amendments
+
+### 2026-09-26, proposed in S-08, awaiting Marcin in the S-08 pull request
+
+**Context.** A dead letter carries the original bytes, but the service reads them decompressed
+and publishes them uncompressed, and adds headers. A message the broker accepted (compressed, or
+just under its 1 MiB `message.max.bytes`, or with a key that is not UTF-8 and triples when
+decoded) could come back refused as a dead letter; the offset then stays uncommitted and the
+partition stalls for good (A-13 clauses 4 and 6). Found by review rounds 3 and 4 of S-08.
+
+**Options.** (1) Leave an oversized value or key out of the dead letter and name it in a header,
+the source topic, partition and offset still finding the original. (2) Publish dead letters
+compressed; smaller, but a value that does not compress still does not fit. (3) Raise
+`max.message.bytes` on the dead-letter topic; an infrastructure setting a real treasury broker
+may not grant, and no finite value covers a compressed input.
+
+**Proposed decision.** Option 1, implemented in S-08: a value past 1 000 000 bytes is left out
+with `valueOmitted`, a key past 1 000 bytes with `keyOmitted`; the error header is cut at 2 000
+characters. Every other dead letter keeps its original bytes. A message past 8 000 000 bytes is
+refused before parsing and dead-lettered by the same rule.
+
+**Consequence.** For an oversized message the dead-letter topic is an index, not a copy: the
+original is read from the treasury topic by its source position, while the treasury topic's
+retention keeps it.
+

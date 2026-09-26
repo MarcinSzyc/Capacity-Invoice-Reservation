@@ -1,7 +1,7 @@
 # S-08 Hardening: the carried review findings
 
 - Outcome: no treasury message can stall its partition by what it contains, the demo page shows only the program it is asked about, and the snapshot path is proved at the scale its bound promises; every finding carried out of the S-06 and S-07 reviews is closed.
-- Status: planned
+- Status: done 2026-09-26
 - AC: none new. Strengthens AC-25 (a malformed message is dead-lettered and the next one applied) and AC-38 (the demo page), both already `done`.
 - INV: none
 - Risk: medium. No new rule, but it changes what the treasury consumer writes when it refuses a message, the one path whose failure stalls a partition (A-13 clause 4). Runs on Opus per `CLAUDE.md §8`.
@@ -64,8 +64,9 @@ Checked against `main` at 1d0b189, after S-07:
 
 `api`, reconciliation at scale:
 
-5. **Release by omission past the list bound.** A bound test with 20 000 active reservations
-   (two snapshots of 10 000 at an earlier `asOf`) and a third snapshot listing none: all 20 000
+5. **Release by omission past the list bound.** A bound test with 20 000 active client
+   reservations (written in one transaction through the repositories, corrected at ship) and a
+   snapshot listing none: all 20 000
    released by adjustment in one transaction. If it does not fit the 15 s transaction timeout,
    the implementation makes it fit (for example batching the reads); the test is the
    requirement, the mechanism is `/implement`'s.
@@ -142,3 +143,22 @@ Beyond `CLAUDE.md §9`:
 | Date | Gate | Result |
 |---|---|---|
 | 2026-09-25 | plan | slice written for the S-06 and S-07 carried findings, at Marcin's request |
+| 2026-09-25 | implement | started on Opus |
+| 2026-09-26 | implement | done: items 1 to 11, npm run gate green |
+| 2026-09-26 | verify | PASS: gate green, all ten planned tests present and passing, cold start and README green |
+| 2026-09-26 | review (round 1) | 4 findings (0/2/2) |
+| 2026-09-26 | implement (round 2) | review round 1: both majors and the web minor fixed; the plan-text minor goes to ship |
+| 2026-09-26 | verify (round 2) | PASS: gate green at d2b2a78 |
+| 2026-09-26 | review (round 2) | 3 findings (0/1/2) |
+| 2026-09-26 | implement (round 3) | review round 2 major fixed: error text bounded for the dead letter and the record; validator renamed StorableId |
+| 2026-09-26 | verify (round 3) | PASS: gate green at 9cec1c1 |
+| 2026-09-26 | review (round 3) | 1 findings (0/1/0) |
+| 2026-09-26 | implement (round 4) | review round 3 major fixed: a dead letter value past 1 000 000 bytes is left out, named by its source position |
+| 2026-09-26 | verify (round 4) | PASS: gate green at 5be2328 |
+| 2026-09-26 | review (round 4) | 2 findings (0/2/0) |
+| 2026-09-26 | implement (round 5) | review round 4 majors fixed: dead letter key bounded, stored payload bounded in bytes |
+| 2026-09-26 | verify (round 5) | PASS: gate green at 4474dde |
+| 2026-09-26 | review (round 5) | 2 findings (0/1/1) |
+| 2026-09-26 | implement (round 6) | review round 5 major fixed: a treasury message past 8 000 000 bytes is refused before parsing; the walk stops inside a wide array |
+| 2026-09-26 | verify (round 6) | PASS: gate green at d528dd8 |
+| 2026-09-26 | ship | done; review round 6 stopped by Marcin before it reported, round 5's major fixed and verified; ADR-0003 amendment proposed |
