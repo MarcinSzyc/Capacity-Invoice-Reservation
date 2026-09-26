@@ -3755,3 +3755,20 @@ Findings, most severe first:
   slice; noted for Marcin.
 - Scratch reproductions were written under `api/src/` and deleted; the working tree holds only
   this entry and the slice log row.
+
+## 2026-09-26, implement S-08 (review round 4 fixes), Opus
+- Rather than one more input at a time, every byte a rejection writes is now bounded: the dead
+  letter's value (1 000 000 bytes, round 3), its key (`DEAD_LETTER_KEY_MAX_BYTES`, 1 000; a
+  treasury key is a program id), its headers (the error cut at 2 000 characters, round 2), and the
+  stored payload (`STORED_PAYLOAD_MAX_BYTES`, 16 000 000 UTF-8 bytes counted during the same
+  iterative walk, far above a 10 000 entry snapshot and far below jsonb's 256 MiB string limit).
+  A key past its bound is left out and named in `keyOmitted`, like the value.
+- Tests red first: unit (a string past the byte bound, many strings past it together, a key of
+  1 000 replacement characters). Real-broker integration: a value exactly at the value bound with
+  a 48 400-byte key; with the key bound raised it stalls the partition (checked, then restored),
+  with the fix the next message applies. The first key length tried (47 800) did not reach the
+  broker limit with our headers, so the test was tightened until it could fail. The 270 MB jsonb
+  case stays at unit level: a 270 MB message is too heavy for the gate.
+- Noted from the round 4 review, outside this slice: kafkajs ships no LZ4, Snappy or ZSTD codec,
+  so a treasury batch compressed with one of them would fail the fetch before any handler runs.
+  For `/ship` to list as a known limitation.

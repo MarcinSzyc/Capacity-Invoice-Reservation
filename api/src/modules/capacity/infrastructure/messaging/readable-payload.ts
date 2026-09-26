@@ -31,25 +31,45 @@ export const readableString = (
 export const STORED_PAYLOAD_MAX_DEPTH = 32;
 
 /**
- * The payload as it can be kept on the record, or null when it cannot: nested past the bound, or
- * carrying a string or a key PostgreSQL refuses in jsonb (`isStorableText`). A record that cannot be
- * written stalls the partition (A-13 clause 4); the dead letter keeps the bytes (ADR-0003). The
- * walk is iterative, so it cannot overflow on the input it guards against.
+ * A snapshot at its 10 000 entry bound is about 1.5 MB of JSON. The bound is far above that and
+ * far below what jsonb holds (256 MiB for one string), so a legal message is always kept and a
+ * pathological one never reaches the database (review round 4 of S-08).
+ */
+export const STORED_PAYLOAD_MAX_BYTES = 16_000_000;
+
+/**
+ * The payload as it can be kept on the record, or null when it cannot: nested past the bound,
+ * larger than the bound, or carrying a string or a key PostgreSQL refuses in jsonb
+ * (`isStorableText`). A record that cannot be written stalls the partition (A-13 clause 4); the
+ * dead letter keeps the bytes (ADR-0003). The walk is iterative, so it cannot overflow on the
+ * input it guards against, and it stops as soon as the size is past the bound.
  */
 export const storablePayload = (payload: unknown): unknown => {
   const pending: {value: unknown; depth: number}[] = [{value: payload, depth: 0}];
+  let bytes = 0;
   for (let next = pending.pop(); next !== undefined; next = pending.pop()) {
     const {value, depth} = next;
+    bytes += approximateBytes(value);
+    if (bytes > STORED_PAYLOAD_MAX_BYTES) return null;
     if (typeof value === 'string' && !isStorableText(value)) return null;
     if (typeof value !== 'object' || value === null) continue;
     if (depth >= STORED_PAYLOAD_MAX_DEPTH) return null;
     const entries: [string, unknown][] = Object.entries(value);
     if (entries.some(([key]) => !isStorableText(key))) return null;
     // One push per child: spreading a wide array into one call overflows the stack.
-    for (const [, child] of entries) pending.push({value: child, depth: depth + 1});
+    for (const [key, child] of entries) {
+      bytes += Buffer.byteLength(key, 'utf8');
+      pending.push({value: child, depth: depth + 1});
+    }
   }
   return payload;
 };
+
+// Numbers, booleans and null are small; a string counts its UTF-8 bytes. Close enough for a
+// bound that sits two orders of magnitude from either side.
+const SCALAR_BYTES = 8;
+const approximateBytes = (value: unknown): number =>
+  typeof value === 'string' ? Buffer.byteLength(value, 'utf8') : SCALAR_BYTES;
 
 /**
  * A validation error names every field it refuses, so it grows with the message; unbounded, its
