@@ -3776,3 +3776,37 @@ Findings, most severe first:
 ## 2026-09-26, verify S-08 (round 5), Opus
 - VERIFY S-08: PASS, at 4474dde. `npm run gate` green: unit 217, web 10, integration 56, e2e 66,
   cold start 3. Prose check clean, no layer import moved. Findings: none new.
+
+## 2026-09-26, review S-08 (round 5), Fable
+- REVIEW S-08: 2 findings (0/1/1), at 6a8e336 against base e52d553, fresh context, attention on
+  4474dde. Not a pass.
+- Round 4 closed as reported, for both majors: with the key left out past 1 000 bytes, the value
+  past 1 000 000 and the error cut at 2 000 characters (at most 6 000 bytes), a dead letter is at
+  most about 1 008 000 bytes, under the broker's 1 048 588; a legal key (a program id, at most 64
+  characters) and a legal snapshot (about 4.3 MB counted at worst) keep their key and payload. A
+  string past 16 000 000 bytes drops the payload before jsonb sees it. No catch-all was added
+  around the record insert or the publish (local decision 3 holds). Checked on the real store and
+  found harmless: a number past the double range (`1e999` parses to Infinity) and a `__proto__`
+  key are recorded `rejected` and the next message applied.
+- Findings, most severe first:
+  - (major, spec) `api/src/modules/capacity/infrastructure/messaging/readable-payload.ts:57`
+    with `:60-63`, called at `treasury-capacity.consumer.ts:258`: the walk materialises every
+    entry of a container (`Object.entries`) and pushes every child before the byte bound at
+    `:52-53` is checked, so one wide array exhausts the heap before the bound can stop it; the
+    doc comment at `:44-45` ("stops as soon as the size is past the bound") does not hold.
+    Reproduced through the real consumer, broker and database: a capacity update with an unknown
+    field of 40 000 000 zeros (80 MB, sent GZIP-compressed, taken by the broker) passes
+    `JSON.parse` and class-transformer (1.6 GB), then the process spends about 220 s in garbage
+    collection and dies with "JavaScript heap out of memory" in `Runtime_ObjectEntries`; no dead
+    letter, no record, the offset uncommitted, so on restart the same message kills it again. At
+    a 2 GB heap 20 000 000 zeros is enough; at 20 000 000 with 4 GB the walk alone takes 11.6 s
+    and 2.5 GB. Worse than a stalled partition: the whole service, HTTP included, goes down in a
+    loop. A-13 clauses 4 and 6 and the slice outcome.
+  - (minor, standards) `wiki/spec/glossary.md:267`: "Dead letter" says it is a copy of the
+    treasury message, but since rounds 3 and 4 it can carry neither value nor key, named instead
+    by the `valueOmitted` and `keyOmitted` headers, which no glossary entry explains. A reader of
+    the dead letter topic is not told why a dead letter is empty; can travel with the ADR-0003
+    amendment at `/ship`.
+- Scratch reproductions were written under `api/src/` and the scratchpad and deleted, and the
+  Kafka container the crashed run left behind was removed; the working tree holds only this entry
+  and the slice log row.
