@@ -16,7 +16,7 @@ import {
 } from '../../application/apply-capacity-update.use-case';
 import {MESSAGE_ID_MAX_LENGTH, PROGRAM_ID_MAX_LENGTH} from '../../domain/identifier-limits';
 import {IsCurrencyCode} from '../currency-code';
-import {WithoutNul} from './without-nul';
+import {StorableText} from './storable-text';
 
 /**
  * The capacity update as the treasury sends it (A-11): amounts are integer minor units, times
@@ -27,7 +27,7 @@ import {WithoutNul} from './without-nul';
 export class CapacityUpdateMessageDto {
   @IsString()
   @Length(1, MESSAGE_ID_MAX_LENGTH)
-  @WithoutNul()
+  @StorableText()
   messageId!: string;
 
   @Equals(CAPACITY_UPDATE_TYPE)
@@ -35,7 +35,7 @@ export class CapacityUpdateMessageDto {
 
   @IsString()
   @Length(1, PROGRAM_ID_MAX_LENGTH)
-  @WithoutNul()
+  @StorableText()
   programId!: string;
 
   @IsCurrencyCode()

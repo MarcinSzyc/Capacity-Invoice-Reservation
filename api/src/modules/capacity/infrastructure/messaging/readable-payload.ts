@@ -1,6 +1,12 @@
 const NUL = '\u0000';
 
 /**
+ * What PostgreSQL can hold in a text or jsonb value: no NUL, and well-formed Unicode (a lone
+ * UTF-16 surrogate such as `"\ud800"` is valid JSON and refused by jsonb).
+ */
+export const isStorableText = (text: string): boolean => !text.includes(NUL) && text.isWellFormed();
+
+/**
  * A rejected message is recorded under whatever of its ids can still be read, and "readable"
  * includes "fits the column": an id that does not would fail the insert, roll back, leave the
  * offset uncommitted and stall the partition (A-13, AC-25).
@@ -13,7 +19,7 @@ export const readableString = (
   if (typeof payload !== 'object' || payload === null || Array.isArray(payload)) return null;
   const value: unknown = (payload as Record<string, unknown>)[field];
   if (typeof value !== 'string' || value === '' || value.length > maxLength) return null;
-  if (value.includes(NUL)) return null;
+  if (!isStorableText(value)) return null;
   return value;
 };
 
@@ -26,7 +32,7 @@ export const STORED_PAYLOAD_MAX_DEPTH = 32;
 
 /**
  * The payload as it can be kept on the record, or null when it cannot: nested past the bound, or
- * carrying NUL in a string or a key, which PostgreSQL refuses in jsonb. A record that cannot be
+ * carrying a string or a key PostgreSQL refuses in jsonb (`isStorableText`). A record that cannot be
  * written stalls the partition (A-13 clause 4); the dead letter keeps the bytes (ADR-0003). The
  * walk is iterative, so it cannot overflow on the input it guards against.
  */
@@ -34,15 +40,16 @@ export const storablePayload = (payload: unknown): unknown => {
   const pending: {value: unknown; depth: number}[] = [{value: payload, depth: 0}];
   for (let next = pending.pop(); next !== undefined; next = pending.pop()) {
     const {value, depth} = next;
-    if (typeof value === 'string' && value.includes(NUL)) return null;
+    if (typeof value === 'string' && !isStorableText(value)) return null;
     if (typeof value !== 'object' || value === null) continue;
     if (depth >= STORED_PAYLOAD_MAX_DEPTH) return null;
     const entries: [string, unknown][] = Object.entries(value);
-    if (entries.some(([key]) => key.includes(NUL))) return null;
-    pending.push(...entries.map(([, child]) => ({value: child, depth: depth + 1})));
+    if (entries.some(([key]) => !isStorableText(key))) return null;
+    // One push per child: spreading a wide array into one call overflows the stack.
+    for (const [, child] of entries) pending.push({value: child, depth: depth + 1});
   }
   return payload;
 };
 
-/** An error text can quote the input it refused; PostgreSQL refuses NUL in text columns. */
-export const storableText = (text: string): string => text.replaceAll(NUL, '');
+/** An error text can quote the input it refused, so it is made storable rather than refused. */
+export const storableText = (text: string): string => text.replaceAll(NUL, '').toWellFormed();

@@ -179,4 +179,13 @@ describe('parseReconciliationSnapshot', () => {
       expect(parsed).toMatchObject({ok: false, error: expect.stringContaining('NUL') as string});
     }
   });
+
+  it('should refuse identifiers that are not well-formed Unicode', async () => {
+    const parsed = await parseReconciliationSnapshot(
+      {...VALID, activeReservations: [{invoiceId: 'id\ud800', heldAmount: 1}]},
+      RECEIVED_AT,
+    );
+
+    expect(parsed.ok).toBe(false);
+  });
 });

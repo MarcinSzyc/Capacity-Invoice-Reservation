@@ -3585,3 +3585,19 @@ Findings, most severe first:
     through the repositories. The plan correction is only in the work-log.
 - Scratch reproductions were written under `api/src/` and deleted; the working tree holds only
   this entry and the slice log row.
+
+## 2026-09-26, implement S-08 (review round 1 fixes), Opus
+- Major 1: a lone UTF-16 surrogate is valid JSON and refused by jsonb, so the NUL guard was too
+  narrow. `isStorableText` (no NUL and `isWellFormed()`) is now the one test for what the store
+  can hold; `readableString`, `storablePayload` and the id validator use it, renamed
+  `StorableText` (`storable-text.ts`); `storableText` also applies `toWellFormed()` to error
+  texts. The api `tsconfig` moves to ES2024 for `isWellFormed`, which Node 24 has.
+- Major 2: the walk pushed every child through one spread call, which overflows from about
+  125 000 children; one push per child now.
+- Tests, unit red first: surrogate id, surrogate string and key, a 200 000-wide payload, a
+  well-formed error text, both DTOs. Integration on the real store: a surrogate in an unknown
+  field, a surrogate in `messageId`, a 200 000-wide field, then a valid message applied. The
+  integration test was written after the fix; the reviewer's reproductions on the old code are
+  its red.
+- Minor (web): a body that breaks off mid-read is logged with its status; red first.
+- Minor (slice text, item 5 setup): corrected at `/ship`, as S-07's was.

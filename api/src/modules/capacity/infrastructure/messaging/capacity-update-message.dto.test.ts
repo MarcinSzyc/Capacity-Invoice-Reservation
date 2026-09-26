@@ -78,4 +78,12 @@ describe('parseCapacityUpdate', () => {
       expect(parsed).toMatchObject({ok: false, error: expect.stringContaining(field) as string});
     }
   });
+
+  it('should refuse identifiers that are not well-formed Unicode', async () => {
+    for (const field of ['messageId', 'programId']) {
+      const parsed = await parseCapacityUpdate({...VALID, [field]: 'id\udc00'}, RECEIVED_AT);
+
+      expect(parsed).toMatchObject({ok: false, error: expect.stringContaining(field) as string});
+    }
+  });
 });

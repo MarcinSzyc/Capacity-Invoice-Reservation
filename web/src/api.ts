@@ -124,7 +124,9 @@ export const createApi = (baseUrl: string, onCall: (record: CallRecord) => void)
       ...(body === undefined ? {} : {body: JSON.stringify(body)}),
     }).catch(() => null);
     if (response === null) return {status: UNREACHABLE, body: {code: 'API_UNREACHABLE'}};
-    return {status: response.status, body: jsonOrNull(await response.text())};
+    // A body that breaks off mid-read is logged with its status rather than lost as a rejection.
+    const text = await response.text().catch(() => '');
+    return {status: response.status, body: jsonOrNull(text)};
   };
 
   return {
