@@ -16,7 +16,7 @@ because they share the gate and the review.
 
 ## What the shipped code does today
 
-Checked against `main` at 1d0b189, after S-07:
+Checked against `main` at 74e55d7, after S-07:
 
 - `RejectTreasuryMessage.execute` publishes the dead letter, then writes the record with
   `programId`, `type`, `payload` and `error`. If the insert fails, `handle` rejects, the offset
@@ -148,17 +148,17 @@ Beyond `CLAUDE.md §9`:
 | 2026-09-26 | verify | PASS: gate green, all ten planned tests present and passing, cold start and README green |
 | 2026-09-26 | review (round 1) | 4 findings (0/2/2) |
 | 2026-09-26 | implement (round 2) | review round 1: both majors and the web minor fixed; the plan-text minor goes to ship |
-| 2026-09-26 | verify (round 2) | PASS: gate green at d2b2a78 |
+| 2026-09-26 | verify (round 2) | PASS: gate green at 783559e |
 | 2026-09-26 | review (round 2) | 3 findings (0/1/2) |
 | 2026-09-26 | implement (round 3) | review round 2 major fixed: error text bounded for the dead letter and the record; validator renamed StorableId |
-| 2026-09-26 | verify (round 3) | PASS: gate green at 9cec1c1 |
+| 2026-09-26 | verify (round 3) | PASS: gate green at 902f8ee |
 | 2026-09-26 | review (round 3) | 1 findings (0/1/0) |
 | 2026-09-26 | implement (round 4) | review round 3 major fixed: a dead letter value past 1 000 000 bytes is left out, named by its source position |
-| 2026-09-26 | verify (round 4) | PASS: gate green at 5be2328 |
+| 2026-09-26 | verify (round 4) | PASS: gate green at 4b4eb5e |
 | 2026-09-26 | review (round 4) | 2 findings (0/2/0) |
 | 2026-09-26 | implement (round 5) | review round 4 majors fixed: dead letter key bounded, stored payload bounded in bytes |
-| 2026-09-26 | verify (round 5) | PASS: gate green at 4474dde |
+| 2026-09-26 | verify (round 5) | PASS: gate green at b595333 |
 | 2026-09-26 | review (round 5) | 2 findings (0/1/1) |
 | 2026-09-26 | implement (round 6) | review round 5 major fixed: a treasury message past 8 000 000 bytes is refused before parsing; the walk stops inside a wide array |
-| 2026-09-26 | verify (round 6) | PASS: gate green at d528dd8 |
+| 2026-09-26 | verify (round 6) | PASS: gate green at f82fc9c |
 | 2026-09-26 | ship | done; review round 6 stopped by Marcin before it reported, round 5's major fixed and verified; ADR-0003 amendment proposed |

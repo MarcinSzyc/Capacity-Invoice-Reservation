@@ -10,7 +10,7 @@
 ## Revision of 2026-09-23
 
 The slice was first written on 2026-09-19, before any code existed and before ADR-0009 was
-decided. S-04 shipped today (tag `S-04`, merge 60d7f42) and the ADR was accepted the same day.
+decided. S-04 shipped today (tag `S-04`, merge ef51215) and the ADR was accepted the same day.
 This revision reconciles the file with both, so `/implement` runs without a design
 conversation. What changed against the first version:
 

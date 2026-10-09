@@ -69,17 +69,17 @@ Beyond `CLAUDE.md §9`:
 | 2026-09-19 | plan | slice written |
 | 2026-09-21 | implement | slice started, branch `slice/S-02-programs-from-the-treasury` |
 | 2026-09-21 | implement | built test first, 11/11 planned tests present, `npm run gate:quick` green, e2e and smoke green, broker restart checked by hand |
-| 2026-09-21 | verify | PASS, gate green on 95ed588, 10/10 AC and 1/1 INV covered at the planned level, 2 minor findings for `/ship` |
+| 2026-09-21 | verify | PASS, gate green on 42218d6, 10/10 AC and 1/1 INV covered at the planned level, 2 minor findings for `/ship` |
 | 2026-09-21 | review | 6 findings (0/2/4): consumer rejection path writes unbounded ids into bounded columns and stalls the partition (major), glossary lacks outcome vocabulary (major, `/spec`), four minors; back to `/implement` |
 | 2026-09-21 | implement (review fixes) | 4 of 6 findings fixed test first (1 major, 3 minors), glossary to `/spec`, tooling tree entry to `/ship`; `npm run gate:quick` green |
-| 2026-09-21 | verify (second pass) | PASS, gate green on d9b15e7, 10/10 AC and 1/1 INV, review round 1 fixes confirmed, 2 minor findings for `/ship` |
+| 2026-09-21 | verify (second pass) | PASS, gate green on 641f846, 10/10 AC and 1/1 INV, review round 1 fixes confirmed, 2 minor findings for `/ship` |
 | 2026-09-21 | review (second pass) | 6 findings (1/0/5): OpenAPI publishes the three amounts as `number` against ADR-0006 `integer` (blocker), five minors (lint gap for `common` in domain, unused `duplicate` enum value, `announce` not in glossary, repeated column widths, tooling tree entry); back to `/implement` |
 | 2026-09-21 | implement (review fixes, round 2) | blocker and 3 minors fixed test first, "Announce" added to the glossary via `/spec`, tooling tree entry stays with `/ship`; `npm run gate:quick` green |
-| 2026-09-21 | verify (third pass) | FAIL on 08274fb: `docker compose up --wait` exits 1 once the seed one-shot has exited (0) on a warm image, smoke red; everything else green, 10/10 AC and 1/1 INV |
+| 2026-09-21 | verify (third pass) | FAIL on 7ed2101: `docker compose up --wait` exits 1 once the seed one-shot has exited (0) on a warm image, smoke red; everything else green, 10/10 AC and 1/1 INV |
 | 2026-09-21 | implement (review fixes, round 3) | `web` depends on `seed` completing, so `docker compose up --wait` exits 0 on a warm image (was 1 three times); `npm run smoke` green 3 of 3, `npm run gate:quick` green |
-| 2026-09-21 | verify (fourth pass) | PASS, gate green on 747c517, README start command exits 0 from clean, 10/10 AC and 1/1 INV, 3 minor findings for `/ship` |
+| 2026-09-21 | verify (fourth pass) | PASS, gate green on cfe6022, README start command exits 0 from clean, 10/10 AC and 1/1 INV, 3 minor findings for `/ship` |
 | 2026-09-21 | review (third pass) | PASS, 6 findings (0/0/6), all minor: two glossary ambiguities for `/spec` (dead letter of a reused id, zero limit), duplicated `jsonInteger`, slice schema line still lists `duplicate`, zoneless `--event-time` in the dev producer, tooling tree entry for `/ship` |
 | 2026-09-21 | implement (review fixes, round 4) | 4 minors fixed test first, 2 spec sentences decided (A-06 zero limit, duplicate wins), 1 left for `/ship`; `npm run gate:quick` green |
-| 2026-09-21 | verify (fifth pass) | PASS, gate green on 4e169b9 after review fixes round 4, 10/10 AC and 1/1 INV, 3 minor findings for `/ship` |
+| 2026-09-21 | verify (fifth pass) | PASS, gate green on 5b50082 after review fixes round 4, 10/10 AC and 1/1 INV, 3 minor findings for `/ship` |
 | 2026-09-21 | review (fourth pass) | PASS, 6 findings (0/0/6), all minor: dead-letter publish inside the database transaction, stale versus rejected on a currency change for `/spec`, glossary Duplicate rule without a Changes row for `/spec`, one tautological assertion in the AC-40 test, `jsonInteger` label in the availability mapper, tooling tree entry for `/ship` |
 | 2026-09-21 | ship | AC-20, AC-23, AC-24, AC-25, AC-32, AC-33, AC-35, AC-36, AC-37, AC-40 and INV-10 closed, changelog and checklist written, README updated, PR proposed |
