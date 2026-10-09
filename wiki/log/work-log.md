@@ -3894,3 +3894,72 @@ Findings, most severe first:
   scenarios and the treasury panel fold under their titles, open by default.
 - Checked live against the local stack: all five held up; after a stampede the next scenario
   said it could not run. 41 web tests green.
+
+## 2026-10-08, history rewritten to one author address, Opus
+- Asked for by Marcin: 151 commits and the tags `S-01` to `S-05` carried a work address as
+  author, committer or tagger. The whole history was rewritten so every one of them carries
+  `szyc.marcin@gmail.com`. Trees and commit messages are unchanged; every hash changed.
+- The commit hashes in `wiki/plan/plan.md` and the slice files now point at the rewritten
+  commits. The entries above in this log are not edited, as the log is append-only, so the
+  hashes they quote are from the old history. This table maps each of them to its new hash:
+
+| Old | New |
+|---|---|
+| 08274fb | 7ed2101 |
+| 0bab5ae | f2e3940 |
+| 0f491ba | d7aed93 |
+| 1d0b189 | 74e55d7 |
+| 1dfd020 | 6d3d769 |
+| 1efa91b | c86bd8c |
+| 27a0ee4 | 8e43ddf |
+| 2d159f6 | 75e09b9 |
+| 2f1bdbe | b9308e6 |
+| 3090d8b | eef29cd |
+| 36f36ba | 2b31e9d |
+| 38780e6 | 5bb0c46 |
+| 3d6102c | 1f13ba3 |
+| 4215d1c | a97d7e1 |
+| 443c5d0 | c6e99fd |
+| 4474dde | b595333 |
+| 47d53a8 | 35dce1b |
+| 49c34c0 | 8fe88fb |
+| 4bd138b | 1cb731d |
+| 4e169b9 | 5b50082 |
+| 5033a33 | deebf88 |
+| 5545f3a | 839ed38 |
+| 5be2328 | 4b4eb5e |
+| 5dfc519 | 2a7937e |
+| 5ef50ac | 95637d5 |
+| 5f542bf | 2a48779 |
+| 6053ba4 | e1b0057 |
+| 60d7f42 | ef51215 |
+| 6624ac6 | 96b2a4b |
+| 6a8e336 | ec4ed41 |
+| 6af3675 | 3fe7cf9 |
+| 747c517 | cfe6022 |
+| 7a3181b | 264261c |
+| 7c6a0f8 | c4f1ca0 |
+| 7e2d03d | 7df9f4d |
+| 844a7b0 | 33fdba3 |
+| 84cf460 | a6bf826 |
+| 932febc | 2e60ce2 |
+| 95ed588 | 42218d6 |
+| 9cec1c1 | 902f8ee |
+| 9f82e69 | 28c5803 |
+| aadded9 | 14a45b9 |
+| b88c97d | bb99a84 |
+| b8de6a6 | 74c5e52 |
+| bd1ba58 | dcef435 |
+| c206c30 | 2999052 |
+| c94f8d5 | 597442a |
+| caffd7e | 4fd126b |
+| ccad5c3 | 6fe971e |
+| ce12815 | 6b8da8f |
+| d2b2a78 | 783559e |
+| d528dd8 | f82fc9c |
+| d94bd05 | a2187b4 |
+| d98a421 | bd9ba34 |
+| d9b15e7 | 641f846 |
+| e1de323 | 80f2cd3 |
+| e3a805e | 0909acb |
+| e52d553 | a45cab9 |

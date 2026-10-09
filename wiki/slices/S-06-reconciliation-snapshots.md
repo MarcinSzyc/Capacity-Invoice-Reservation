@@ -9,7 +9,7 @@
 
 ## What the shipped code already gives this slice
 
-Checked against `main` at c206c30, after S-05, rather than assumed:
+Checked against `main` at 2999052, after S-05, rather than assumed:
 
 - `reservations.source` is already a Postgres enum with both values, `client` and `reconciliation`; no migration for it.
 - `programs.as_of` exists, `Program` carries `asOf`, the program repository and mapper persist it, and the availability mapper already returns it (null so far). AC-31 needs the value set, not a new field.
@@ -165,11 +165,11 @@ Beyond `CLAUDE.md §9`:
 | 2026-09-25 | plan | AC-42, AC-43, AC-44 added from the A-12 amendment (#38); their three untagged tests become the tagged ones |
 | 2026-09-25 | implement | started on Opus 5.5 by Marcin's decision (the slice is `risk: high`, `CLAUDE.md §8` asks for Fable) |
 | 2026-09-25 | implement | first pass: all twelve tagged tests pass; stopped on a conflict between INV-02 and ADR-0012 (a snapshot may list `held` above `reservedAmount`) |
-| 2026-09-25 | verify | PASS at b88c97d: gate green, 9/9 AC and 3/3 INV at the planned level, two minors (README snapshot contract owed by ship, a kafkajs warning in dev:treasury) |
-| 2026-09-25 | review | REVIEW S-06: 9 findings (2/3/4) at b88c97d; blockers: a nested-array entry stalls the partition, a reopen after re-denomination mixes currencies (INV-08) |
+| 2026-09-25 | verify | PASS at bb99a84: gate green, 9/9 AC and 3/3 INV at the planned level, two minors (README snapshot contract owed by ship, a kafkajs warning in dev:treasury) |
+| 2026-09-25 | review | REVIEW S-06: 9 findings (2/3/4) at bb99a84; blockers: a nested-array entry stalls the partition, a reopen after re-denomination mixes currencies (INV-08) |
 | 2026-09-25 | plan | correction: the amended INV-02 moves to S-06, closed by the property with snapshot corrections among releases |
-| 2026-09-25 | verify | PASS at e3a805e: gate green, 9/9 AC and 4/4 INV at the planned level, no new findings |
-| 2026-09-25 | review | REVIEW S-06: 7 findings (1/1/5) at 7e2d03d, round 2, on Opus (Fable out of credits); round 1 all closed; blocker: a snapshot changes a reservation created at its own `asOf`, against ADR-0010 |
-| 2026-09-25 | verify | PASS at 36f36ba: gate green, 9/9 AC and 4/4 INV, no new findings |
-| 2026-09-25 | review | REVIEW S-06: 6 findings (0/1/5) at 2f1bdbe, round 3, on Opus (Fable out of credits); round 2 closed except the parse left outside the attempts; major: a deeply nested message overflows the parser's stack and stalls the partition |
+| 2026-09-25 | verify | PASS at 0909acb: gate green, 9/9 AC and 4/4 INV at the planned level, no new findings |
+| 2026-09-25 | review | REVIEW S-06: 7 findings (1/1/5) at 7df9f4d, round 2, on Opus (Fable out of credits); round 1 all closed; blocker: a snapshot changes a reservation created at its own `asOf`, against ADR-0010 |
+| 2026-09-25 | verify | PASS at 2b31e9d: gate green, 9/9 AC and 4/4 INV, no new findings |
+| 2026-09-25 | review | REVIEW S-06: 6 findings (0/1/5) at b9308e6, round 3, on Opus (Fable out of credits); round 2 closed except the parse left outside the attempts; major: a deeply nested message overflows the parser's stack and stalls the partition |
 | 2026-09-25 | ship | done, over review round 3's one major by Marcin's decision (edge case); six findings carried as known limitations |

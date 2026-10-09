@@ -9,7 +9,7 @@
 
 ## What the shipped code already gives this slice
 
-Checked against `main` at 844a7b0, after S-06, rather than assumed:
+Checked against `main` at 33fdba3, after S-06, rather than assumed:
 
 - `web/` is the S-01 placeholder: `app.tsx` lists links to health and the documentation views, `api.ts` exports `apiBaseUrl()` read from `VITE_API_BASE_URL`, two Vitest render tests. The nginx container serves the built bundle; compose builds it with the `api` port baked in.
 - `configureApp` already enables CORS for `WEB_ORIGIN` outside production. Anything the page calls is covered.
@@ -94,6 +94,6 @@ Beyond `CLAUDE.md §9`:
 | 2026-09-25 | verify | PASS: gate green, 2/2 AC tagged at planned level, one minor owed to /ship (README web row) |
 | 2026-09-25 | review (round 1) | 8 findings (0/1/7): carried S-06 major holds only on the in-memory store, Prisma overflows storing the payload |
 | 2026-09-25 | implement (round 2) | review round 1 major fixed: an unparseable message is recorded without its payload; seven minors carried |
-| 2026-09-25 | verify (round 2) | PASS: gate green at 7a3181b, coverage unchanged |
+| 2026-09-25 | verify (round 2) | PASS: gate green at 264261c, coverage unchanged |
 | 2026-09-25 | review (round 2) | 9 findings (0/1/8): round 1 major closed; a NUL in any string still stalls the partition on the real store |
 | 2026-09-25 | ship | done, over review round 2's one major by Marcin's standing decision (a review without blockers ships); eight minors carried |
